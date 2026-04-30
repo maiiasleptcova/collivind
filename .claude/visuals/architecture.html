@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Collivind — Architecture Approaches</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { padding: 40px 60px; font-family: Inter, -apple-system, system-ui, sans-serif; background: #0a0a0f; color: #e0e0e8; line-height: 1.6; }
+  h1 { font-size: 28px; font-weight: 700; color: #fff; margin-bottom: 8px; }
+  .subtitle { color: #8888aa; font-size: 15px; margin-bottom: 40px; }
+  .approaches { display: flex; gap: 24px; margin-bottom: 40px; }
+  .card {
+    flex: 1; background: #14141f; border: 1px solid #2a2a3a; border-radius: 16px;
+    padding: 28px; position: relative; display: flex; flex-direction: column;
+  }
+  .card.recommended { border-color: #6366f1; }
+  .card.recommended::after {
+    content: '\2605 RECOMMENDED'; position: absolute; top: -12px; right: 20px;
+    background: #6366f1; color: #fff; font-size: 11px; font-weight: 700;
+    padding: 3px 12px; border-radius: 20px; letter-spacing: 0.5px;
+  }
+  .card h2 { font-size: 18px; color: #fff; margin-bottom: 4px; }
+  .tag { display: inline-block; font-size: 11px; padding: 2px 10px; border-radius: 12px; margin-bottom: 16px; font-weight: 600; }
+  .tag.a { background: #1e3a5f; color: #60a5fa; }
+  .tag.b { background: #312e81; color: #a78bfa; }
+  .tag.c { background: #1a3a2a; color: #6ee7b7; }
+  .card > p { font-size: 13px; color: #aaaacc; margin-bottom: 16px; }
+  .pros-cons { display: flex; gap: 16px; margin-bottom: 16px; }
+  .pros-cons > div { flex: 1; }
+  .pros-cons h4 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .pros-cons h4.pro { color: #6ee7b7; }
+  .pros-cons h4.con { color: #f87171; }
+  .pros-cons ul { list-style: none; padding: 0; }
+  .pros-cons li { font-size: 12px; color: #9999bb; padding: 3px 0; padding-left: 16px; position: relative; }
+  .pros-cons li::before { content: ''; position: absolute; left: 0; top: 10px; width: 6px; height: 6px; border-radius: 50%; }
+  .pro li::before { background: #6ee7b7; }
+  .con li::before { background: #f87171; }
+  .stack { font-size: 12px; color: #7777aa; border-top: 1px solid #1f1f2f; padding-top: 12px; margin-top: auto; }
+  .stack span { display: inline-block; background: #1a1a2a; padding: 2px 8px; border-radius: 6px; margin: 2px; font-size: 11px; color: #aaaacc; }
+
+  .diagram-section { margin-top: 20px; }
+  .diagram-section > h2 { font-size: 20px; color: #fff; margin-bottom: 20px; }
+  .arch-diagram {
+    background: #14141f; border: 1px solid #2a2a3a; border-radius: 16px;
+    padding: 32px; text-align: center;
+  }
+  .layer { display: flex; justify-content: center; gap: 16px; margin: 12px 0; flex-wrap: wrap; }
+  .layer-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #555577; margin: 20px 0 8px; text-align: left; }
+  .box {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 20px; border-radius: 10px; font-size: 13px; font-weight: 600;
+  }
+  .box.client { background: #1e293b; color: #60a5fa; border: 1px solid #334155; }
+  .box.mcp { background: #312e81; color: #a5b4fc; border: 1px solid #4338ca; }
+  .box.core { background: #1a1a2e; color: #c4b5fd; border: 1px solid #3b1f5e; }
+  .box.storage { background: #1a3a2a; color: #6ee7b7; border: 1px solid #2d5a3f; }
+  .box.docker { background: #1c1917; color: #fdba74; border: 1px solid #44403c; }
+  .arrow { color: #444466; font-size: 20px; margin: 4px 0; }
+  .note { font-size: 11px; color: #666688; margin-top: 12px; font-style: italic; }
+</style>
+</head>
+<body>
+
+<h1>Collivind — Architecture Approaches</h1>
+<p class="subtitle">Three approaches for building an AI coding session memory layer with graph-based knowledge</p>
+
+<div class="approaches">
+  <div class="card">
+    <h2>A — Monolith MCP Server</h2>
+    <span class="tag a">SIMPLEST</span>
+    <p>Single Python process serves MCP tools, manages Qdrant/Neo4j connections, runs embeddings. Everything in one server.</p>
+    <div class="pros-cons">
+      <div class="pro">
+        <h4 class="pro">Pros</h4>
+        <ul>
+          <li>Fastest to build and ship</li>
+          <li>Single process to debug</li>
+          <li>Simple Docker Compose</li>
+        </ul>
+      </div>
+      <div class="con">
+        <h4 class="con">Cons</h4>
+        <ul>
+          <li>Hard to swap backends later</li>
+          <li>Enterprise fork = major rewrite</li>
+          <li>Tight coupling everywhere</li>
+        </ul>
+      </div>
+    </div>
+    <div class="stack">
+      <span>Python</span><span>MCP SDK</span><span>Qdrant</span><span>Neo4j</span><span>HuggingFace</span>
+    </div>
+  </div>
+
+  <div class="card recommended">
+    <h2>B — Layered Core + MCP Shell</h2>
+    <span class="tag b">BALANCED</span>
+    <p>Core library with pluggable storage interfaces. MCP server is a thin shell that calls the core. Enterprise swaps backends via config.</p>
+    <div class="pros-cons">
+      <div class="pro">
+        <h4 class="pro">Pros</h4>
+        <ul>
+          <li>Pluggable backends from day 1</li>
+          <li>Enterprise = config change</li>
+          <li>Core is testable in isolation</li>
+          <li>Clean separation of concerns</li>
+        </ul>
+      </div>
+      <div class="con">
+        <h4 class="con">Cons</h4>
+        <ul>
+          <li>More upfront design work</li>
+          <li>Interface abstraction overhead</li>
+        </ul>
+      </div>
+    </div>
+    <div class="stack">
+      <span>Python</span><span>MCP SDK</span><span>Qdrant</span><span>Neo4j</span><span>HuggingFace</span><span>Interfaces</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>C — Microservices</h2>
+    <span class="tag c">MOST SCALABLE</span>
+    <p>Separate services for vector search, graph, embeddings, and MCP gateway. Each independently deployable.</p>
+    <div class="pros-cons">
+      <div class="pro">
+        <h4 class="pro">Pros</h4>
+        <ul>
+          <li>Maximum flexibility</li>
+          <li>Each service scales independently</li>
+          <li>Cloud-native from the start</li>
+        </ul>
+      </div>
+      <div class="con">
+        <h4 class="con">Cons</h4>
+        <ul>
+          <li>Way over-engineered for v1</li>
+          <li>5+ Docker containers locally</li>
+          <li>Complex networking and debugging</li>
+          <li>Slow to ship</li>
+        </ul>
+      </div>
+    </div>
+    <div class="stack">
+      <span>Python</span><span>gRPC</span><span>MCP SDK</span><span>Qdrant</span><span>Neo4j</span><span>HuggingFace</span><span>Gateway</span>
+    </div>
+  </div>
+</div>
+
+<div class="diagram-section">
+  <h2>Recommended: Approach B — Layered Architecture</h2>
+  <div class="arch-diagram">
+    <div class="layer-label">AI Coding Assistants</div>
+    <div class="layer">
+      <div class="box client">Claude Code</div>
+      <div class="box client" style="opacity:0.4">Copilot (future)</div>
+      <div class="box client" style="opacity:0.4">Codex (future)</div>
+    </div>
+    <div class="arrow">&darr; MCP Protocol (stdio) &darr;</div>
+
+    <div class="layer-label">MCP Server Layer (thin shell)</div>
+    <div class="layer">
+      <div class="box mcp">MCP Tool Handlers</div>
+      <div class="box mcp">Claude Code Skill (extraction hooks)</div>
+    </div>
+    <div class="arrow">&darr; Python API calls &darr;</div>
+
+    <div class="layer-label">Core Library (collivind-core)</div>
+    <div class="layer">
+      <div class="box core">Memory Manager</div>
+      <div class="box core">Graph Engine</div>
+      <div class="box core">Embedding Service</div>
+      <div class="box core">Search &amp; Retrieval</div>
+    </div>
+    <div class="arrow">&darr; Storage Interfaces (pluggable) &darr;</div>
+
+    <div class="layer-label">Storage Backends</div>
+    <div class="layer">
+      <div class="box storage">VectorStore Interface</div>
+      <div class="box storage">GraphStore Interface</div>
+      <div class="box storage">EmbeddingProvider Interface</div>
+    </div>
+    <div class="arrow">&darr;</div>
+
+    <div class="layer-label">Docker Containers (local) / Cloud APIs (enterprise)</div>
+    <div class="layer">
+      <div class="box docker">Qdrant</div>
+      <div class="box docker">Neo4j</div>
+      <div class="box docker">sentence-transformers</div>
+    </div>
+    <p class="note">Enterprise swaps Docker containers for managed cloud services — same core library, different config</p>
+  </div>
+</div>
+
+</body>
+</html>
