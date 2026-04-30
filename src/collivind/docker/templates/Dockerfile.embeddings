@@ -1,0 +1,15 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install torch CPU version first to save space, then sentence-transformers
+RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir \
+    sentence-transformers \
+    fastapi \
+    uvicorn \
+    pydantic
+
+COPY embedding_server.py .
+
+CMD ["uvicorn", "embedding_server:app", "--host", "0.0.0.0", "--port", "8090"]
