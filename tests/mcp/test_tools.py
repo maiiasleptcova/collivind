@@ -8,11 +8,12 @@ def test_tools_list():
     tools = CollivindTools(manager)
     tool_list = tools.get_tool_list()
     
-    assert len(tool_list) == 9
+    assert len(tool_list) == 10
     names = [t["name"] for t in tool_list]
     assert "collivind_status" in names
     assert "collivind_add_memory" in names
     assert "collivind_batch_add" in names
+    assert "collivind_find_contradictions" in names
 
 def test_add_memory_tool():
     manager = MagicMock()

@@ -77,7 +77,18 @@ class MemoryManager:
                 if not rel_create.source_id:
                     rel_create.source_id = memory_node.id
                 self.graph_store.create_relationship(rel_create)
-                
+
+        # 7. Check for contradictions
+        contradictions = self.search_engine.find_contradictions(memory_node)
+        for contra in contradictions:
+            self.graph_store.create_relationship(RelationshipCreate(
+                source_id=memory_node.id,
+                target_id=contra.memory.id,
+                type=RelType.CONTRADICTS,
+                confidence=contra.vector_score,
+                source="auto_detection"
+            ))
+
         return memory_node
 
     def invalidate(self, memory_id: str, superseded_by: str, reason: str) -> None:

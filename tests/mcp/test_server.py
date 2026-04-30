@@ -41,4 +41,4 @@ def test_server_tools_list(mock_http, mock_neo, mock_qdrant, mock_load):
     
     assert response["id"] == 2
     assert "tools" in response["result"]
-    assert len(response["result"]["tools"]) == 9
+    assert len(response["result"]["tools"]) == 10

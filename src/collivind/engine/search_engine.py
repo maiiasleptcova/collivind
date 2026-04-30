@@ -98,5 +98,39 @@ class SearchEngine:
             
         # Sort by final score descending
         results.sort(key=lambda x: x.score, reverse=True)
-        
+
         return results[:query.limit]
+
+    def find_contradictions(self, memory: MemoryNode, threshold: float = 0.75) -> List[SearchResult]:
+        """Find existing memories that might contradict a new one.
+
+        Uses vector similarity to find semantically similar memories,
+        then checks if they have the same category but different content,
+        which is a signal of potential contradiction.
+        """
+        vector = self.embedding_provider.embed(memory.content)
+        similar = self.vector_store.search(
+            vector=vector,
+            limit=5,
+            filters={"project_id": memory.project_id},
+            threshold=threshold
+        )
+
+        candidates = []
+        for res in similar:
+            existing = self.graph_store.get_memory(res["id"])
+            if not existing or existing.id == memory.id:
+                continue
+            # Skip already invalidated memories
+            if existing.valid_to is not None:
+                continue
+            # Same category + high similarity but different content = potential contradiction
+            if existing.category == memory.category and existing.content != memory.content:
+                candidates.append(SearchResult(
+                    memory=existing,
+                    score=res["score"],
+                    vector_score=res["score"],
+                    graph_score=0.0
+                ))
+
+        return candidates

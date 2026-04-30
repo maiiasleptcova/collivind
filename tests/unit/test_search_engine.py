@@ -41,3 +41,146 @@ def test_search_engine_hybrid_scoring():
     assert results[1].memory.id == "mem-2"
     assert results[0].score == pytest.approx(0.56)
     assert results[1].score == pytest.approx(0.48)
+
+
+def test_find_contradictions():
+    """Test that find_contradictions identifies similar memories with same category but different content."""
+    from unittest.mock import MagicMock
+    from collivind.config import SearchConfig
+
+    vector_store = MagicMock()
+    graph_store = MagicMock()
+    embedding_provider = MagicMock()
+    config = SearchConfig()
+
+    engine = SearchEngine(vector_store, graph_store, embedding_provider, config)
+
+    target = MemoryNode(
+        content="We use PostgreSQL for the database",
+        summary="DB choice",
+        category=MemoryCategory.DECISION,
+        project_id="test"
+    )
+
+    existing = MemoryNode(
+        content="We use MongoDB for the database",
+        summary="DB choice",
+        category=MemoryCategory.DECISION,
+        project_id="test"
+    )
+
+    embedding_provider.embed.return_value = [0.1] * 384
+    vector_store.search.return_value = [{"id": existing.id, "score": 0.85}]
+    graph_store.get_memory.return_value = existing
+
+    results = engine.find_contradictions(target)
+    assert len(results) == 1
+    assert results[0].memory.id == existing.id
+    assert results[0].vector_score == 0.85
+
+
+def test_find_contradictions_skips_same_content():
+    """Test that identical content is not flagged as contradiction."""
+    from unittest.mock import MagicMock
+    from collivind.config import SearchConfig
+
+    vector_store = MagicMock()
+    graph_store = MagicMock()
+    embedding_provider = MagicMock()
+    config = SearchConfig()
+
+    engine = SearchEngine(vector_store, graph_store, embedding_provider, config)
+
+    target = MemoryNode(
+        content="We use PostgreSQL for the database",
+        summary="DB choice",
+        category=MemoryCategory.DECISION,
+        project_id="test"
+    )
+
+    # Same content as target -- should not be flagged
+    existing = MemoryNode(
+        content="We use PostgreSQL for the database",
+        summary="DB choice",
+        category=MemoryCategory.DECISION,
+        project_id="test"
+    )
+
+    embedding_provider.embed.return_value = [0.1] * 384
+    vector_store.search.return_value = [{"id": existing.id, "score": 0.95}]
+    graph_store.get_memory.return_value = existing
+
+    results = engine.find_contradictions(target)
+    assert len(results) == 0
+
+
+def test_find_contradictions_skips_invalidated():
+    """Test that already-invalidated memories are skipped."""
+    from unittest.mock import MagicMock
+    from collivind.config import SearchConfig
+    from datetime import datetime, timezone
+
+    vector_store = MagicMock()
+    graph_store = MagicMock()
+    embedding_provider = MagicMock()
+    config = SearchConfig()
+
+    engine = SearchEngine(vector_store, graph_store, embedding_provider, config)
+
+    target = MemoryNode(
+        content="We use PostgreSQL for the database",
+        summary="DB choice",
+        category=MemoryCategory.DECISION,
+        project_id="test"
+    )
+
+    # This memory has been invalidated (valid_to is set)
+    existing = MemoryNode(
+        content="We use MongoDB for the database",
+        summary="DB choice",
+        category=MemoryCategory.DECISION,
+        project_id="test",
+        valid_to=datetime.now(timezone.utc)
+    )
+
+    embedding_provider.embed.return_value = [0.1] * 384
+    vector_store.search.return_value = [{"id": existing.id, "score": 0.85}]
+    graph_store.get_memory.return_value = existing
+
+    results = engine.find_contradictions(target)
+    assert len(results) == 0
+
+
+def test_find_contradictions_skips_different_category():
+    """Test that memories with different categories are not flagged."""
+    from unittest.mock import MagicMock
+    from collivind.config import SearchConfig
+
+    vector_store = MagicMock()
+    graph_store = MagicMock()
+    embedding_provider = MagicMock()
+    config = SearchConfig()
+
+    engine = SearchEngine(vector_store, graph_store, embedding_provider, config)
+
+    target = MemoryNode(
+        content="We use PostgreSQL for the database",
+        summary="DB choice",
+        category=MemoryCategory.DECISION,
+        project_id="test"
+    )
+
+    # Different category -- should not be flagged
+    existing = MemoryNode(
+        content="PostgreSQL is a relational database",
+        summary="DB info",
+        category=MemoryCategory.FACT,
+        project_id="test"
+    )
+
+    embedding_provider.embed.return_value = [0.1] * 384
+    vector_store.search.return_value = [{"id": existing.id, "score": 0.85}]
+    graph_store.get_memory.return_value = existing
+
+    results = engine.find_contradictions(target)
+    assert len(results) == 0
