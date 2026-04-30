@@ -28,6 +28,10 @@ class QdrantVectorStore(VectorStore):
         except UnexpectedResponse as e:
             raise CollivindError(f"Qdrant initialization failed: {e}")
 
+    def delete_collection(self) -> None:
+        """Delete the entire collection."""
+        self.client.delete_collection(self.config.collection_name)
+
     def upsert(self, id: str, vector: List[float], payload: Dict[str, Any]) -> None:
         try:
             self.client.upsert(
