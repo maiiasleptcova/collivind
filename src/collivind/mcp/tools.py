@@ -141,6 +141,17 @@ class CollivindTools:
                 }
             },
             {
+                "name": "collivind_find_contradictions",
+                "description": "Find memories that potentially contradict a given memory.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "memory_id": {"type": "string", "description": "ID of the memory to check against"}
+                    },
+                    "required": ["memory_id"]
+                }
+            },
+            {
                 "name": "collivind_batch_add",
                 "description": "Add multiple memories in batch.",
                 "inputSchema": {
@@ -282,6 +293,18 @@ class CollivindTools:
                     limit=args.get("limit", 50)
                 )
                 return json.dumps([m.to_dict() for m in timeline], indent=2)
+
+            elif name == "collivind_find_contradictions":
+                memory = self.memory_manager.graph_store.get_memory(args["memory_id"])
+                if not memory:
+                    return json.dumps({"error": "Memory not found"})
+                contradictions = self.memory_manager.search_engine.find_contradictions(memory)
+                return json.dumps([{
+                    "id": c.memory.id,
+                    "content": c.memory.content,
+                    "category": c.memory.category.value,
+                    "similarity": c.vector_score
+                } for c in contradictions], indent=2)
 
             elif name == "collivind_batch_add":
                 ids = self.memory_manager.batch_add_memories(args["memories"])
