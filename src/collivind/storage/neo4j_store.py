@@ -37,6 +37,11 @@ class Neo4jGraphStore(GraphStore):
                     # Ignore if constraint already exists or not supported in this Neo4j version exactly
                     pass
 
+    def clear_all(self) -> None:
+        """Delete all nodes and relationships from the database."""
+        with self.driver.session(database=self.config.database) as session:
+            session.run("MATCH (n) DETACH DELETE n")
+
     def create_memory(self, data: MemoryCreate) -> MemoryNode:
         memory = MemoryNode(
             content=data.content,
