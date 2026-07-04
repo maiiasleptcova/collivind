@@ -48,7 +48,7 @@ def _read_settings(tmp_path):
 def test_install_hooks_creates_settings(tmp_path, monkeypatch):
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
     events = install_hooks(enable_stop=True, enable_precompact=True, save_interval=10)
-    assert set(events) == {"Stop", "PreCompact"}
+    assert set(events) == {"Stop", "PreCompact", "SessionStart"}
 
     settings = _read_settings(tmp_path)
     stop_cmds = [h["command"] for e in settings["hooks"]["Stop"] for h in e["hooks"]]
@@ -87,7 +87,7 @@ def test_install_hooks_preserves_existing_settings(tmp_path, monkeypatch):
 
 def test_install_hooks_respects_disabled_flags(tmp_path, monkeypatch):
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
-    events = install_hooks(enable_stop=False, enable_precompact=True)
+    events = install_hooks(enable_stop=False, enable_precompact=True, enable_session_start=False)
     assert events == ["PreCompact"]
     settings = _read_settings(tmp_path)
     assert "Stop" not in settings["hooks"]
@@ -104,3 +104,47 @@ def test_install_hooks_rejects_corrupt_settings(tmp_path, monkeypatch):
 
     with pytest.raises(click.ClickException):
         install_hooks()
+
+
+def test_session_start_emits_context_index(monkeypatch):
+    from collivind.models import MemoryCategory, MemoryNode
+
+    manager = __import__("unittest.mock", fromlist=["MagicMock"]).MagicMock()
+    manager.get_timeline.return_value = [
+        MemoryNode(content="We picked Postgres over Mongo for transactions",
+                   summary="Postgres chosen for transactions",
+                   category=MemoryCategory.DECISION),
+    ]
+    monkeypatch.setattr("collivind.cli.commands.hook._load_manager", lambda: manager)
+
+    result = CliRunner().invoke(hook, ["session-start"])
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    ctx = payload["hookSpecificOutput"]["additionalContext"]
+    assert payload["hookSpecificOutput"]["hookEventName"] == "SessionStart"
+    assert "[decision] Postgres chosen" in ctx
+
+
+def test_session_start_silent_when_empty_or_broken(monkeypatch):
+    manager = __import__("unittest.mock", fromlist=["MagicMock"]).MagicMock()
+    manager.get_timeline.return_value = []
+    monkeypatch.setattr("collivind.cli.commands.hook._load_manager", lambda: manager)
+    result = CliRunner().invoke(hook, ["session-start"])
+    assert result.exit_code == 0
+    assert result.output.strip() == ""
+
+    def boom():
+        raise RuntimeError("backend down")
+    monkeypatch.setattr("collivind.cli.commands.hook._load_manager", boom)
+    result = CliRunner().invoke(hook, ["session-start"])
+    assert result.exit_code == 0
+    assert result.output.strip() == ""
+
+
+def test_install_hooks_registers_session_start(tmp_path, monkeypatch):
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    events = install_hooks()
+    assert "SessionStart" in events
+    settings = _read_settings(tmp_path)
+    cmds = [h["command"] for e in settings["hooks"]["SessionStart"] for h in e["hooks"]]
+    assert cmds == ["collivind hook session-start"]

@@ -52,6 +52,7 @@ class HooksConfig:
     save_interval: int = 15
     enable_precompact: bool = True
     enable_stop: bool = True
+    enable_session_start: bool = True
 
 @dataclass
 class CollivindConfig:
@@ -138,6 +139,7 @@ temporal_decay_max = 0.3
 save_interval = 15
 enable_precompact = true
 enable_stop = true
+enable_session_start = true
 """
 
 
