@@ -1,11 +1,13 @@
 import click
-from collivind.version import __version__
-from collivind.cli.commands.init import init
-from collivind.cli.commands.status import status
-from collivind.cli.commands.hook import hook
-from collivind.cli.commands.search import search
-from collivind.cli.commands.reset import reset
+
 from collivind.cli.commands.docker import docker
+from collivind.cli.commands.hook import hook
+from collivind.cli.commands.init import init
+from collivind.cli.commands.reset import reset
+from collivind.cli.commands.search import search
+from collivind.cli.commands.status import status
+from collivind.version import __version__
+
 
 @click.group()
 @click.version_option(version=__version__)

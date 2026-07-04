@@ -1,6 +1,8 @@
 import pytest
+
 from collivind.config import EmbeddingsConfig
 from collivind.storage.embedding_service import HttpEmbeddingProvider
+
 
 @pytest.fixture
 def provider():

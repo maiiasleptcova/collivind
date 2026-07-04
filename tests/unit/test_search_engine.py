@@ -1,8 +1,11 @@
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
+
 from collivind.config import SearchConfig
 from collivind.engine.search_engine import SearchEngine
-from collivind.models import SearchQuery, MemoryNode, MemoryCategory
+from collivind.models import MemoryCategory, MemoryNode, SearchQuery
+
 
 def test_search_engine_hybrid_scoring():
     vector_store = MagicMock()
@@ -46,6 +49,7 @@ def test_search_engine_hybrid_scoring():
 def test_find_contradictions():
     """Test that find_contradictions identifies similar memories with same category but different content."""
     from unittest.mock import MagicMock
+
     from collivind.config import SearchConfig
 
     vector_store = MagicMock()
@@ -82,6 +86,7 @@ def test_find_contradictions():
 def test_find_contradictions_skips_same_content():
     """Test that identical content is not flagged as contradiction."""
     from unittest.mock import MagicMock
+
     from collivind.config import SearchConfig
 
     vector_store = MagicMock()
@@ -116,9 +121,10 @@ def test_find_contradictions_skips_same_content():
 
 def test_find_contradictions_skips_invalidated():
     """Test that already-invalidated memories are skipped."""
-    from unittest.mock import MagicMock
-    from collivind.config import SearchConfig
     from datetime import datetime, timezone
+    from unittest.mock import MagicMock
+
+    from collivind.config import SearchConfig
 
     vector_store = MagicMock()
     graph_store = MagicMock()
@@ -154,6 +160,7 @@ def test_find_contradictions_skips_invalidated():
 def test_find_contradictions_skips_different_category():
     """Test that memories with different categories are not flagged."""
     from unittest.mock import MagicMock
+
     from collivind.config import SearchConfig
 
     vector_store = MagicMock()

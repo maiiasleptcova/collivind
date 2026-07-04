@@ -1,18 +1,37 @@
 import json
-from typing import Dict, Any, List
+from typing import Any, Dict, List, Optional
 
+from collivind.engine.extractor import build_extraction_prompt, parse_extraction_response
 from collivind.engine.memory_manager import MemoryManager
-from collivind.docker.health import check_all_services
 from collivind.models import (
-    MemoryCreate, MemoryCategory,
-    EntityCreate, EntityType,
-    RelationshipCreate, RelType,
-    SearchQuery
+    EntityCreate,
+    EntityType,
+    MemoryCategory,
+    MemoryCreate,
+    RelationshipCreate,
+    RelType,
+    SearchQuery,
 )
 
+
 class CollivindTools:
-    def __init__(self, memory_manager: MemoryManager):
+    def __init__(self, memory_manager: MemoryManager, session_id: Optional[str] = None):
         self.memory_manager = memory_manager
+        self.session_id = session_id
+
+    def _backend_health(self) -> Dict[str, Any]:
+        backends = {
+            "vector_store": self.memory_manager.vector_store,
+            "graph_store": self.memory_manager.graph_store,
+            "embedding_provider": self.memory_manager.embedding_provider,
+        }
+        status = {"mode": self.memory_manager.config.mode}
+        for name, backend in backends.items():
+            try:
+                status[name] = backend.health_check()
+            except Exception as e:
+                status[name] = {"status": "error", "message": str(e)}
+        return status
 
     def get_tool_list(self) -> List[Dict[str, Any]]:
         return [
@@ -66,7 +85,7 @@ class CollivindTools:
             },
             {
                 "name": "collivind_search",
-                "description": "Semantic + graph hybrid search.",
+                "description": "Semantic + graph hybrid search with optional filters and pagination.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -74,7 +93,13 @@ class CollivindTools:
                         "category": {"type": "string"},
                         "project_id": {"type": "string", "default": "default"},
                         "limit": {"type": "integer", "default": 10},
-                        "include_graph": {"type": "boolean", "default": True}
+                        "offset": {"type": "integer", "default": 0},
+                        "include_graph": {"type": "boolean", "default": True},
+                        "tags": {"type": "array", "items": {"type": "string"}},
+                        "entity_names": {"type": "array", "items": {"type": "string"}},
+                        "session_id": {"type": "string", "description": "Filter by session"},
+                        "date_from": {"type": "string", "description": "ISO datetime"},
+                        "date_to": {"type": "string", "description": "ISO datetime"}
                     },
                     "required": ["query"]
                 }
@@ -135,7 +160,9 @@ class CollivindTools:
                     "properties": {
                         "project_id": {"type": "string", "default": "default"},
                         "entity_name": {"type": "string"},
-                        "limit": {"type": "integer", "default": 50}
+                        "session_id": {"type": "string", "description": "Filter by session"},
+                        "limit": {"type": "integer", "default": 50},
+                        "offset": {"type": "integer", "default": 0}
                     },
                     "required": ["project_id"]
                 }
@@ -191,7 +218,13 @@ class CollivindTools:
                                         }
                                     },
                                     "tags": {"type": "array", "items": {"type": "string"}},
-                                    "confidence": {"type": "number", "default": 1.0}
+                                    "confidence": {"type": "number", "default": 1.0},
+                                    "session_id": {
+                                        "type": "string",
+                                        "description": "Session that produced this memory",
+                                    },
+                                    "user_id": {"type": "string", "default": "local"},
+                                    "source": {"type": "string", "default": "manual"}
                                 },
                                 "required": ["content", "summary", "category"]
                             }
@@ -199,14 +232,52 @@ class CollivindTools:
                     },
                     "required": ["memories"]
                 }
+            },
+            {
+                "name": "collivind_get_version_chain",
+                "description": "Get the full version history of a memory.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "memory_id": {"type": "string"}
+                    },
+                    "required": ["memory_id"]
+                }
+            },
+            {
+                "name": "collivind_extract",
+                "description": (
+                    "Extract structured memories from raw text using LLM. "
+                    "Returns the extraction prompt — send it to the LLM, "
+                    "then pass the response to collivind_extract_save."
+                ),
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "text": {"type": "string", "description": "Raw text to extract from"},
+                        "project_id": {"type": "string", "default": "default"}
+                    },
+                    "required": ["text"]
+                }
+            },
+            {
+                "name": "collivind_extract_save",
+                "description": "Save LLM extraction results as memories.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "llm_response": {"type": "string", "description": "JSON from LLM extraction"},
+                        "project_id": {"type": "string", "default": "default"}
+                    },
+                    "required": ["llm_response"]
+                }
             }
         ]
 
     def handle_call(self, name: str, args: Dict[str, Any]) -> str:
         try:
             if name == "collivind_status":
-                status = check_all_services(self.memory_manager.config)
-                return json.dumps(status, indent=2)
+                return json.dumps(self._backend_health(), indent=2)
 
             elif name == "collivind_add_memory":
                 # Parse entities
@@ -234,29 +305,54 @@ class CollivindTools:
                     category=MemoryCategory(args["category"]),
                     project_id=args.get("project_id", "default"),
                     confidence=args.get("confidence", 1.0),
-                    tags=args.get("tags", [])
+                    tags=args.get("tags", []),
+                    session_id=args.get("session_id", self.session_id),
                 )
                 
                 memory = self.memory_manager.add_memory(mem_create, entities=entities, relationships=relationships)
                 return json.dumps({"status": "success", "memory_id": memory.id})
 
             elif name == "collivind_search":
+                date_from = None
+                date_to = None
+                if args.get("date_from"):
+                    from datetime import datetime
+                    date_from = datetime.fromisoformat(args["date_from"])
+                if args.get("date_to"):
+                    from datetime import datetime
+                    date_to = datetime.fromisoformat(args["date_to"])
+                offset = args.get("offset", 0)
+                fetch_limit = args.get("limit", 10) + offset
                 q = SearchQuery(
                     query=args["query"],
                     category=args.get("category"),
                     project_id=args.get("project_id", "default"),
-                    limit=args.get("limit", 10),
-                    include_graph=args.get("include_graph", True)
+                    limit=fetch_limit,
+                    include_graph=args.get("include_graph", True),
+                    tags=args.get("tags"),
+                    entity_names=args.get("entity_names"),
+                    session_id=args.get("session_id"),
+                    date_from=date_from,
+                    date_to=date_to,
                 )
                 results = self.memory_manager.search(q)
-                return json.dumps([
-                    {
-                        "id": r.memory.id,
-                        "content": r.memory.content,
-                        "score": r.score,
-                        "related_entities": r.related_entities
-                    } for r in results
-                ], indent=2)
+                limit = args.get("limit", 10)
+                page = results[offset:offset + limit]
+                return json.dumps({
+                    "results": [
+                        {
+                            "id": r.memory.id,
+                            "content": r.memory.content,
+                            "score": r.score,
+                            "version": r.memory.version,
+                            "session_id": r.memory.session_id,
+                            "related_entities": r.related_entities,
+                        } for r in page
+                    ],
+                    "total": len(results),
+                    "offset": offset,
+                    "has_more": len(results) > offset + limit,
+                }, indent=2)
 
             elif name == "collivind_get_context":
                 context = self.memory_manager.get_context(
@@ -287,12 +383,23 @@ class CollivindTools:
                 return json.dumps(entity_data, indent=2)
 
             elif name == "collivind_get_timeline":
+                offset = args.get("offset", 0)
+                limit = args.get("limit", 50)
                 timeline = self.memory_manager.get_timeline(
                     project_id=args.get("project_id", "default"),
                     entity=args.get("entity_name"),
-                    limit=args.get("limit", 50)
+                    limit=limit + offset,
                 )
-                return json.dumps([m.to_dict() for m in timeline], indent=2)
+                sid = args.get("session_id")
+                if sid:
+                    timeline = [m for m in timeline if m.session_id == sid]
+                page = timeline[offset:offset + limit]
+                return json.dumps({
+                    "results": [m.to_dict() for m in page],
+                    "total": len(timeline),
+                    "offset": offset,
+                    "has_more": len(timeline) > offset + limit,
+                }, indent=2)
 
             elif name == "collivind_find_contradictions":
                 memory = self.memory_manager.graph_store.get_memory(args["memory_id"])
@@ -307,8 +414,65 @@ class CollivindTools:
                 } for c in contradictions], indent=2)
 
             elif name == "collivind_batch_add":
-                ids = self.memory_manager.batch_add_memories(args["memories"])
+                memories = []
+                for mem in args["memories"]:
+                    normalized = dict(mem)
+                    if self.session_id:
+                        normalized.setdefault("session_id", self.session_id)
+                    memories.append(normalized)
+                ids = self.memory_manager.batch_add_memories(memories)
                 return json.dumps({"status": "success", "memory_ids": ids})
+
+            elif name == "collivind_get_version_chain":
+                chain = self.memory_manager.get_version_chain(args["memory_id"])
+                return json.dumps([
+                    {
+                        "id": m.id,
+                        "content": m.content,
+                        "version": m.version,
+                        "valid_from": m.valid_from.isoformat() if m.valid_from else None,
+                        "valid_to": m.valid_to.isoformat() if m.valid_to else None,
+                        "superseded_by": m.superseded_by,
+                    } for m in chain
+                ], indent=2)
+
+            elif name == "collivind_extract":
+                prompt = build_extraction_prompt(
+                    args["text"],
+                    project_id=args.get("project_id", "default"),
+                )
+                return json.dumps({
+                    "status": "prompt_ready",
+                    "prompt": prompt,
+                    "instructions": (
+                        "Send this prompt to your LLM, then pass the JSON response "
+                        "to collivind_extract_save to store the extracted memories."
+                    ),
+                }, indent=2)
+
+            elif name == "collivind_extract_save":
+                results = parse_extraction_response(args["llm_response"])
+                if not results:
+                    return json.dumps({"status": "no_memories", "count": 0})
+                project_id = args.get("project_id", "default")
+                ids = []
+                for r in results:
+                    entities = [
+                        EntityCreate(name=e["name"], type=EntityType(e["type"]))
+                        for e in r.entities
+                    ]
+                    mem_create = MemoryCreate(
+                        content=r.content,
+                        summary=r.summary,
+                        category=MemoryCategory(r.category),
+                        project_id=project_id,
+                        confidence=r.confidence,
+                        tags=r.tags,
+                        session_id=self.session_id,
+                    )
+                    node = self.memory_manager.add_memory(mem_create, entities=entities)
+                    ids.append(node.id)
+                return json.dumps({"status": "success", "count": len(ids), "memory_ids": ids})
 
             else:
                 return json.dumps({"error": f"Unknown tool: {name}"})

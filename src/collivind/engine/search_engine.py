@@ -1,10 +1,13 @@
-from typing import List, Dict, Any
+import math
 from datetime import datetime, timezone
+from typing import Dict, List
 
 from collivind.config import SearchConfig
-from collivind.storage.interfaces import VectorStore, EmbeddingProvider, GraphStore
+from collivind.engine.enrichment import build_enriched_query
 from collivind.engine.graph_engine import GraphEngine
-from collivind.models import SearchQuery, SearchResult, MemoryNode
+from collivind.models import MemoryNode, SearchQuery, SearchResult
+from collivind.storage.interfaces import EmbeddingProvider, GraphStore, VectorStore
+
 
 class SearchEngine:
     def __init__(
@@ -20,94 +23,122 @@ class SearchEngine:
         self.config = config
         self.graph_engine = GraphEngine(graph_store)
 
+    def _compute_temporal_decay(self, memory: MemoryNode, now: datetime) -> float:
+        age_days = (now - memory.created_at).total_seconds() / 86400
+        decay = 1.0 - self.config.temporal_decay_rate * math.log1p(age_days)
+        return max(1.0 - self.config.temporal_decay_max, min(1.0, decay))
+
+    def _passes_filters(self, memory: MemoryNode, query: SearchQuery, now: datetime) -> bool:
+        if memory.valid_to and memory.valid_to < now:
+            return False
+        if query.project_id and memory.project_id != query.project_id:
+            return False
+        if query.category and memory.category.value != query.category:
+            return False
+        if query.tags and not set(query.tags).intersection(memory.tags):
+            return False
+        if query.session_id and memory.session_id != query.session_id:
+            return False
+        if query.date_from and memory.created_at < query.date_from:
+            return False
+        if query.date_to and memory.created_at > query.date_to:
+            return False
+        return True
+
     def search(self, query: SearchQuery) -> List[SearchResult]:
-        # 1. Vector Search
-        vector = self.embedding_provider.embed(query.query)
-        
-        # We fetch more candidates than limit to allow re-ranking and filtering
+        enriched = build_enriched_query(
+            query.query,
+            category=query.category,
+            tags=query.tags,
+            entity_names=query.entity_names,
+        )
+        vector = self.embedding_provider.embed(enriched)
+
+        vector_filters = dict(query.filters)
+        if query.project_id:
+            vector_filters["project_id"] = query.project_id
+
         raw_vector_results = self.vector_store.search(
             vector=vector,
-            limit=query.limit * 2,
-            filters=query.filters,
+            limit=query.limit * 3,
+            filters=vector_filters,
             threshold=self.config.similarity_threshold
         )
-        
+
         candidates: Dict[str, SearchResult] = {}
-        
         now = datetime.now(timezone.utc)
-        
+
         for res in raw_vector_results:
             mem_id = res["id"]
             memory = self.graph_store.get_memory(mem_id)
             if not memory:
                 continue
-                
-            # Temporal filtering: skip if superseded or valid_to is in the past
-            if memory.valid_to and memory.valid_to < now:
+            if not self._passes_filters(memory, query, now):
                 continue
-                
-            # Filter by category if requested
-            if query.category and memory.category != query.category:
-                continue
-                
+
+            decay = self._compute_temporal_decay(memory, now)
             candidates[mem_id] = SearchResult(
                 memory=memory,
-                score=0.0, # Computed later
+                score=0.0,
                 vector_score=res["score"],
-                graph_score=0.0
+                graph_score=0.0,
+                temporal_decay=decay,
             )
-            
-        # 2. Graph Expansion
+
+        if query.entity_names:
+            for ent_name in query.entity_names:
+                related = self.graph_store.find_related_memories(ent_name, limit=query.limit)
+                for mem in related:
+                    if mem.id in candidates or not self._passes_filters(mem, query, now):
+                        continue
+                    decay = self._compute_temporal_decay(mem, now)
+                    candidates[mem.id] = SearchResult(
+                        memory=mem,
+                        score=0.0,
+                        vector_score=0.0,
+                        graph_score=0.2,
+                        temporal_decay=decay,
+                        related_entities=[ent_name],
+                    )
+
         if query.include_graph and candidates:
             expanded = self.graph_engine.get_expanded_memories(list(candidates.keys()))
-            
+
             for mem_id, data in expanded.items():
                 memory = data["memory"]
-                
-                # Temporal filtering
-                if memory.valid_to and memory.valid_to < now:
+                if not self._passes_filters(memory, query, now):
                     continue
-                if query.category and memory.category != query.category:
-                    continue
-                    
+
                 shared_entities = data["shared_entities"]
-                
+
                 if mem_id in candidates:
                     candidates[mem_id].graph_score += len(shared_entities) * 0.1
                     candidates[mem_id].related_entities.extend(shared_entities)
                 else:
+                    decay = self._compute_temporal_decay(memory, now)
                     candidates[mem_id] = SearchResult(
                         memory=memory,
                         score=0.0,
-                        vector_score=0.0, # Baseline penalty, or fetch vector score
+                        vector_score=0.0,
                         graph_score=len(shared_entities) * 0.1,
-                        related_entities=shared_entities
+                        related_entities=shared_entities,
+                        temporal_decay=decay,
                     )
 
-        # 3. Re-ranking
         results = []
         for res in candidates.values():
-            # Normalize graph score slightly (cap at 1.0)
             norm_graph_score = min(res.graph_score, 1.0)
-            
-            res.score = (
-                (res.vector_score * self.config.vector_weight) +
-                (norm_graph_score * self.config.graph_weight)
+            base_score = (
+                (res.vector_score * self.config.vector_weight)
+                + (norm_graph_score * self.config.graph_weight)
             )
+            res.score = base_score * res.temporal_decay
             results.append(res)
-            
-        # Sort by final score descending
-        results.sort(key=lambda x: x.score, reverse=True)
 
+        results.sort(key=lambda x: x.score, reverse=True)
         return results[:query.limit]
 
     def find_contradictions(self, memory: MemoryNode, threshold: float = 0.75) -> List[SearchResult]:
-        """Find existing memories that might contradict a new one.
-
-        Uses vector similarity to find semantically similar memories,
-        then checks if they have the same category but different content,
-        which is a signal of potential contradiction.
-        """
         vector = self.embedding_provider.embed(memory.content)
         similar = self.vector_store.search(
             vector=vector,
@@ -121,10 +152,8 @@ class SearchEngine:
             existing = self.graph_store.get_memory(res["id"])
             if not existing or existing.id == memory.id:
                 continue
-            # Skip already invalidated memories
             if existing.valid_to is not None:
                 continue
-            # Same category + high similarity but different content = potential contradiction
             if existing.category == memory.category and existing.content != memory.content:
                 candidates.append(SearchResult(
                     memory=existing,

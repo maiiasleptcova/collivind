@@ -1,7 +1,8 @@
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Dict, Any, Optional
+from typing import Any, Dict
+
 
 class RelType(str, Enum):
     # Memory -> Entity
@@ -28,9 +29,10 @@ class RelType(str, Enum):
 
 @dataclass
 class RelationshipEdge:
-    source_id: str
-    target_id: str
-    type: RelType
+    id: str = ""
+    source_id: str = ""
+    target_id: str = ""
+    type: RelType = RelType.RELATES_TO
     confidence: float = 1.0
     source: str = "manual"
     properties: Dict[str, Any] = field(default_factory=dict)

@@ -1,8 +1,7 @@
 import click
 
 from collivind.config import load_config
-from collivind.storage.qdrant_store import QdrantVectorStore
-from collivind.storage.neo4j_store import Neo4jGraphStore
+from collivind.storage.factory import create_graph_store, create_vector_store
 
 
 @click.command()
@@ -11,20 +10,22 @@ def reset():
     """Reset all Collivind data (memories, entities, relationships)."""
     config = load_config()
 
-    click.echo("Clearing Qdrant collection... ", nl=False)
+    click.echo(f"Mode: {config.mode}")
+
+    click.echo("Clearing vector store... ", nl=False)
     try:
-        qdrant = QdrantVectorStore(config.qdrant, config.embeddings.dimension)
-        qdrant.delete_collection()
-        qdrant.initialize()
+        vector = create_vector_store(config)
+        vector.delete_collection()
+        vector.initialize()
         click.secho("done", fg="green")
     except Exception as e:
         click.secho(f"failed: {e}", fg="red")
 
-    click.echo("Clearing Neo4j database... ", nl=False)
+    click.echo("Clearing graph store... ", nl=False)
     try:
-        neo4j = Neo4jGraphStore(config.neo4j)
-        neo4j.clear_all()
-        neo4j.initialize()
+        graph = create_graph_store(config)
+        graph.initialize()
+        graph.clear_all()
         click.secho("done", fg="green")
     except Exception as e:
         click.secho(f"failed: {e}", fg="red")

@@ -1,7 +1,10 @@
-import pytest
 import uuid
+
+import pytest
+
 from collivind.config import QdrantConfig
 from collivind.storage.qdrant_store import QdrantVectorStore
+
 
 @pytest.fixture
 def store():

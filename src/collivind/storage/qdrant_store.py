@@ -1,17 +1,43 @@
-from typing import List, Dict, Any, Optional
+import logging
+import time
+from typing import Any, Dict, List, Optional
+
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
 from qdrant_client.http.exceptions import UnexpectedResponse
 
 from collivind.config import QdrantConfig
-from collivind.storage.interfaces import VectorStore
 from collivind.exceptions import CollivindError
+from collivind.storage.interfaces import VectorStore
+
+logger = logging.getLogger(__name__)
+
+
+def _retry(fn, max_retries=3, base_delay=0.5):
+    """Retry with exponential backoff."""
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            return fn()
+        except Exception as e:
+            last_error = e
+            if attempt < max_retries - 1:
+                delay = base_delay * (2 ** attempt)
+                logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying in {delay}s...")
+                time.sleep(delay)
+    raise last_error
+
 
 class QdrantVectorStore(VectorStore):
     def __init__(self, config: QdrantConfig, dimension: int):
         self.config = config
         self.dimension = dimension
-        self.client = QdrantClient(host=config.host, port=config.port)
+        if config.url and config.api_key:
+            self.client = QdrantClient(url=config.url, api_key=config.api_key)
+        elif config.url:
+            self.client = QdrantClient(url=config.url)
+        else:
+            self.client = QdrantClient(host=config.host, port=config.port)
 
     def initialize(self) -> None:
         """Create collection if it doesn't exist."""
@@ -33,7 +59,7 @@ class QdrantVectorStore(VectorStore):
         self.client.delete_collection(self.config.collection_name)
 
     def upsert(self, id: str, vector: List[float], payload: Dict[str, Any]) -> None:
-        try:
+        def _do_upsert():
             self.client.upsert(
                 collection_name=self.config.collection_name,
                 points=[
@@ -44,10 +70,18 @@ class QdrantVectorStore(VectorStore):
                     )
                 ]
             )
-        except UnexpectedResponse as e:
-            raise CollivindError(f"Qdrant upsert failed: {e}")
 
-    def search(self, vector: List[float], limit: int = 10, filters: Optional[Dict[str, Any]] = None, threshold: float = 0.3) -> List[Dict[str, Any]]:
+        try:
+            _retry(_do_upsert)
+        except UnexpectedResponse as e:
+            raise CollivindError(f"Qdrant upsert failed after retries: {e}")
+        except Exception as e:
+            raise CollivindError(f"Qdrant upsert failed after retries: {e}")
+
+    def search(
+        self, vector: List[float], limit: int = 10,
+        filters: Optional[Dict[str, Any]] = None, threshold: float = 0.3,
+    ) -> List[Dict[str, Any]]:
         # Basic filter conversion (only handles simple exact matches for now)
         qdrant_filter = None
         if filters:
@@ -61,24 +95,29 @@ class QdrantVectorStore(VectorStore):
                 )
             qdrant_filter = qmodels.Filter(must=must_conditions)
 
-        try:
-            results = self.client.search(
+        def _do_search():
+            response = self.client.query_points(
                 collection_name=self.config.collection_name,
-                query_vector=vector,
+                query=vector,
                 query_filter=qdrant_filter,
                 limit=limit,
-                score_threshold=threshold
+                score_threshold=threshold,
             )
             return [
                 {
-                    "id": str(res.id),
-                    "score": res.score,
-                    "payload": res.payload
+                    "id": str(p.id),
+                    "score": p.score,
+                    "payload": p.payload
                 }
-                for res in results
+                for p in response.points
             ]
+
+        try:
+            return _retry(_do_search)
         except UnexpectedResponse as e:
-            raise CollivindError(f"Qdrant search failed: {e}")
+            raise CollivindError(f"Qdrant search failed after retries: {e}")
+        except Exception as e:
+            raise CollivindError(f"Qdrant search failed after retries: {e}")
 
     def delete(self, id: str) -> None:
         try:

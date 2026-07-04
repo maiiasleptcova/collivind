@@ -1,6 +1,9 @@
+from typing import Any, Dict
+
 import httpx
-from typing import Dict, Any
+
 from collivind.config import CollivindConfig
+
 
 def check_qdrant_health(config: CollivindConfig) -> Dict[str, Any]:
     """Checks if Qdrant is healthy via its HTTP API."""
