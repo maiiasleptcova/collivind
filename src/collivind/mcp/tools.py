@@ -115,7 +115,7 @@ class CollivindTools:
                         "query": {"type": "string"},
                         "project_id": {"type": "string", "default": "default"},
                         "limit": {"type": "integer", "default": 10},
-                        "max_tokens": {"type": "integer", "description": "Approximate token budget for the context block"}
+                        "max_tokens": {"type": "integer", "description": "Approximate token budget for the block"}
                     },
                     "required": ["query"]
                 }

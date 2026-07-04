@@ -156,6 +156,43 @@ def export_cmd(project, output):
     click.secho(f"Exported {len(records)} memories from '{project}'", fg="green", err=True)
 
 
+@click.command()
+@click.argument("directory", type=click.Path(file_okay=False))
+@click.option("--project", "-p", default="default")
+def sync(directory, project):
+    """Two-way sync with a shared directory — commit it to git to share.
+
+    Imports teammates' records from <dir>/<project>.jsonl, then writes the
+    merged set back in stable order so git diffs stay reviewable.
+    """
+    from pathlib import Path
+
+    path = Path(directory) / f"{project}.jsonl"
+    try:
+        manager = _manager()
+        imported = 0
+        if path.exists():
+            records = []
+            for n, line in enumerate(path.read_text().splitlines(), 1):
+                if not line.strip():
+                    continue
+                try:
+                    records.append(json.loads(line))
+                except json.JSONDecodeError as e:
+                    _fail(f"{path}:{n} is not valid JSON: {e}")
+            imported = manager.import_memories(records)
+
+        # ponytail: content-level dedup is the merge; ids differ per machine.
+        # Preserving ids + conflict resolution is the future sync-server's job.
+        merged = manager.export_memories(project_id=project)
+        merged.sort(key=lambda r: (r.get("created_at") or "", r["id"]))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("".join(json.dumps(r) + "\n" for r in merged))
+    except Exception as e:
+        _fail(f"Sync failed: {e}")
+    click.secho(f"Merged {imported} records from {path.name}; wrote {len(merged)} memories back", fg="green")
+
+
 @click.command(name="import")
 @click.argument("source", type=click.File("r"))
 def import_cmd(source):

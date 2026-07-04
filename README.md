@@ -104,12 +104,24 @@ collivind invalidate <id> -r outdated  # Mark outdated, keep history
 collivind forget <id>       # Delete permanently (with confirmation)
 collivind export -p proj -o mem.jsonl  # Backup / portability
 collivind import mem.jsonl  # Re-import (deduplication applies)
+collivind sync ./shared-memory  # Two-way team sync via a git-tracked dir
 collivind reset             # Wipe all data (with confirmation)
 collivind docker up|down|logs  # Container management (docker mode)
 collivind hook install      # Register Claude Code hooks
 ```
 
 Memory verbs take `--json` for scripting and agent use.
+
+## Team Sharing
+
+Share memory with your team through any git repo — no server required:
+
+```bash
+collivind sync ~/team-repo/memory   # import teammates' knowledge, write yours back
+cd ~/team-repo && git add memory && git commit -m "memory sync" && git push
+```
+
+Each sync imports records you don't have yet (deduplication merges near-duplicates and skips exact ones) and rewrites the file in stable order, so git diffs show exactly what knowledge was added — reviewable in PRs like any other change. Every memory keeps its `user_id`, and searches can be scoped per contributor (`user_id` filter on `collivind_search`).
 
 ## How It Works
 
