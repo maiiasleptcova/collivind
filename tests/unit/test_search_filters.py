@@ -133,3 +133,20 @@ def test_combined_filters():
 
     assert len(results) == 1
     assert results[0].memory.id == "m1"
+
+
+def test_user_id_filter():
+    from datetime import datetime, timezone
+    from unittest.mock import MagicMock
+
+    from collivind.config import SearchConfig
+    from collivind.engine.search_engine import SearchEngine
+    from collivind.models import MemoryCategory, MemoryNode, SearchQuery
+
+    engine = SearchEngine(MagicMock(), MagicMock(), MagicMock(), SearchConfig())
+    memory = MemoryNode(content="x", summary="x", category=MemoryCategory.FACT, user_id="alice")
+    now = datetime.now(timezone.utc)
+
+    assert engine._passes_filters(memory, SearchQuery(query="q", user_id="alice"), now)
+    assert not engine._passes_filters(memory, SearchQuery(query="q", user_id="bob"), now)
+    assert engine._passes_filters(memory, SearchQuery(query="q"), now)  # unscoped

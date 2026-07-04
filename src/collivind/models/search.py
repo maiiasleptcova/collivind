@@ -16,6 +16,7 @@ class SearchQuery:
     tags: Optional[List[str]] = None
     entity_names: Optional[List[str]] = None
     session_id: Optional[str] = None
+    user_id: Optional[str] = None
     date_from: Optional[datetime] = None
     date_to: Optional[datetime] = None
 
