@@ -126,6 +126,13 @@ vector_weight = 0.7
 graph_weight = 0.3
 similarity_threshold = 0.3
 dedup_threshold = 0.92
+temporal_decay_rate = 0.01
+temporal_decay_max = 0.3
+
+# --- Docker (docker mode only) ---
+# [docker]
+# compose_project = "collivind"
+# auto_start = true
 
 [hooks]
 save_interval = 15
