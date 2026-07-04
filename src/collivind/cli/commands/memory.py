@@ -84,10 +84,11 @@ def get(memory_id, as_json):
 @click.argument("query")
 @click.option("--project", "-p", default="default")
 @click.option("--limit", "-l", default=10)
-def context(query, project, limit):
+@click.option("--max-tokens", default=None, type=int, help="Approximate token budget")
+def context(query, project, limit, max_tokens):
     """Formatted context block for a query (pipe into prompts/scripts)."""
     try:
-        click.echo(_manager().get_context(query, project_id=project, limit=limit))
+        click.echo(_manager().get_context(query, project_id=project, limit=limit, max_tokens=max_tokens))
     except Exception as e:
         _fail(f"Context failed: {e}")
 

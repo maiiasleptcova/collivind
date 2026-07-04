@@ -42,14 +42,13 @@ def get_claude_settings_path() -> Path:
     return Path.home() / ".claude" / "settings.json"
 
 
-def install_hooks(enable_stop: bool = True, enable_precompact: bool = True,
-                  save_interval: int = 15, enable_session_start: bool = True) -> list[str]:
-    """Register collivind hooks in ~/.claude/settings.json. Idempotent.
+def get_codex_hooks_path() -> Path:
+    return Path.home() / ".codex" / "hooks.json"
 
-    Replaces any existing collivind entries (so threshold changes apply),
-    preserves everything else in the file. Returns the list of events registered.
-    """
-    settings_path = get_claude_settings_path()
+
+def _merge_hook_entries(settings_path: Path, wanted: dict) -> None:
+    """Merge collivind hook commands into a hooks JSON file. Idempotent:
+    replaces existing collivind entries, preserves everything else."""
     settings = {}
     if settings_path.exists():
         try:
@@ -58,14 +57,6 @@ def install_hooks(enable_stop: bool = True, enable_precompact: bool = True,
             raise click.ClickException(
                 f"{settings_path} is not valid JSON; fix it manually and re-run."
             )
-
-    wanted = {}
-    if enable_stop:
-        wanted["Stop"] = f"collivind hook stop --threshold {save_interval}"
-    if enable_precompact:
-        wanted["PreCompact"] = "collivind hook precompact"
-    if enable_session_start:
-        wanted["SessionStart"] = "collivind hook session-start"
 
     hooks = settings.setdefault("hooks", {})
     for event, command in wanted.items():
@@ -78,7 +69,43 @@ def install_hooks(enable_stop: bool = True, enable_precompact: bool = True,
 
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(json.dumps(settings, indent=2) + "\n")
+
+
+def install_hooks(enable_stop: bool = True, enable_precompact: bool = True,
+                  save_interval: int = 15, enable_session_start: bool = True,
+                  tool: str = "claude") -> list[str]:
+    """Register collivind hooks for a tool. Returns the events registered.
+
+    Claude Code gets all hooks; Codex gets SessionStart only — its
+    additionalContext support is documented, Stop/PreCompact injection isn't.
+    """
+    if tool == "codex":
+        wanted = {"SessionStart": "collivind hook session-start"} if enable_session_start else {}
+        settings_path = get_codex_hooks_path()
+    else:
+        wanted = {}
+        if enable_stop:
+            wanted["Stop"] = f"collivind hook stop --threshold {save_interval}"
+        if enable_precompact:
+            wanted["PreCompact"] = "collivind hook precompact"
+        if enable_session_start:
+            wanted["SessionStart"] = "collivind hook session-start"
+        settings_path = get_claude_settings_path()
+
+    if wanted:
+        _merge_hook_entries(settings_path, wanted)
     return list(wanted)
+
+
+def install_all_hooks(cfg) -> dict:
+    """Install hooks for Claude Code, plus Codex when ~/.codex exists."""
+    results = {"claude": install_hooks(cfg.enable_stop, cfg.enable_precompact,
+                                       cfg.save_interval, cfg.enable_session_start)}
+    if get_codex_hooks_path().parent.exists():
+        results["codex"] = install_hooks(cfg.enable_stop, cfg.enable_precompact,
+                                         cfg.save_interval, cfg.enable_session_start,
+                                         tool="codex")
+    return results
 
 def read_state() -> dict:
     state_file = get_state_file()
@@ -153,17 +180,25 @@ def session_start(project, limit):
 
 
 @hook.command()
-def install():
-    """Register collivind hooks in ~/.claude/settings.json."""
+@click.option("--tool", type=click.Choice(["claude", "codex", "auto"]), default="auto",
+              help="Which agent to register hooks for (auto = Claude Code + Codex if present)")
+def install(tool):
+    """Register collivind hooks (Claude Code settings.json / Codex hooks.json)."""
     from collivind.config import load_config
 
     cfg = load_config().hooks
-    events = install_hooks(cfg.enable_stop, cfg.enable_precompact, cfg.save_interval,
-                           cfg.enable_session_start)
-    if events:
-        click.secho(f"Registered hooks: {', '.join(events)}", fg="green")
+    if tool == "auto":
+        results = install_all_hooks(cfg)
     else:
+        results = {tool: install_hooks(cfg.enable_stop, cfg.enable_precompact,
+                                       cfg.save_interval, cfg.enable_session_start, tool=tool)}
+
+    registered = {t: ev for t, ev in results.items() if ev}
+    if not registered:
         click.secho("All hooks disabled in config; nothing registered.", fg="yellow")
+        return
+    for t, events in registered.items():
+        click.secho(f"{t}: registered {', '.join(events)}", fg="green")
 
 
 @hook.command()

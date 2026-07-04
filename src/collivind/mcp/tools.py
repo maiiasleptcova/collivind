@@ -113,7 +113,8 @@ class CollivindTools:
                     "properties": {
                         "query": {"type": "string"},
                         "project_id": {"type": "string", "default": "default"},
-                        "limit": {"type": "integer", "default": 10}
+                        "limit": {"type": "integer", "default": 10},
+                        "max_tokens": {"type": "integer", "description": "Approximate token budget for the context block"}
                     },
                     "required": ["query"]
                 }
@@ -359,7 +360,8 @@ class CollivindTools:
                 context = self.memory_manager.get_context(
                     query_str=args["query"],
                     project_id=args.get("project_id", "default"),
-                    limit=args.get("limit", 10)
+                    limit=args.get("limit", 10),
+                    max_tokens=args.get("max_tokens")
                 )
                 return context
 

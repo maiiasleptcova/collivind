@@ -148,3 +148,29 @@ def test_install_hooks_registers_session_start(tmp_path, monkeypatch):
     settings = _read_settings(tmp_path)
     cmds = [h["command"] for e in settings["hooks"]["SessionStart"] for h in e["hooks"]]
     assert cmds == ["collivind hook session-start"]
+
+
+def test_install_hooks_codex_session_start_only(tmp_path, monkeypatch):
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    events = install_hooks(tool="codex")
+    assert events == ["SessionStart"]
+
+    with open(tmp_path / ".codex" / "hooks.json") as f:
+        settings = json.load(f)
+    assert list(settings["hooks"].keys()) == ["SessionStart"]
+    cmds = [h["command"] for e in settings["hooks"]["SessionStart"] for h in e["hooks"]]
+    assert cmds == ["collivind hook session-start"]
+
+
+def test_install_all_hooks_detects_codex(tmp_path, monkeypatch):
+    from collivind.cli.commands.hook import install_all_hooks
+    from collivind.config import HooksConfig
+
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    results = install_all_hooks(HooksConfig())
+    assert "codex" not in results  # no ~/.codex dir
+
+    (tmp_path / ".codex").mkdir()
+    results = install_all_hooks(HooksConfig())
+    assert results["codex"] == ["SessionStart"]
+    assert set(results["claude"]) == {"Stop", "PreCompact", "SessionStart"}

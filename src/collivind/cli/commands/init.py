@@ -36,19 +36,14 @@ def init():
 
 
 def _register_hooks(config):
-    """Register Claude Code hooks in ~/.claude/settings.json."""
-    from collivind.cli.commands.hook import install_hooks
+    """Register agent hooks (Claude Code always, Codex when present)."""
+    from collivind.cli.commands.hook import install_all_hooks
 
-    click.echo("Registering Claude Code hooks... ", nl=False)
+    click.echo("Registering agent hooks... ", nl=False)
     try:
-        events = install_hooks(
-            config.hooks.enable_stop,
-            config.hooks.enable_precompact,
-            config.hooks.save_interval,
-            config.hooks.enable_session_start,
-        )
-        if events:
-            click.secho(f"done ({', '.join(events)})", fg="green")
+        results = {t: ev for t, ev in install_all_hooks(config.hooks).items() if ev}
+        if results:
+            click.secho("done (" + "; ".join(f"{t}: {', '.join(ev)}" for t, ev in results.items()) + ")", fg="green")
         else:
             click.secho("skipped (disabled in config)", fg="yellow")
     except Exception as e:

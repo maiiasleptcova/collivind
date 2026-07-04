@@ -174,3 +174,22 @@ def test_cli_import_rejects_bad_json(tmp_path):
     with patch("collivind.cli.commands.memory._manager", return_value=MagicMock()):
         result = CliRunner().invoke(import_cmd, [str(bad)])
     assert result.exit_code == 1
+
+
+def test_get_context_respects_max_tokens():
+    from collivind.models import SearchResult
+
+    manager, _, _, _ = _make_manager()
+    big = _node(content="x" * 4000)
+    small = _node(id="m-2", content="y" * 40)
+    results = [
+        SearchResult(memory=small, score=0.9, vector_score=0.9, graph_score=0.0),
+        SearchResult(memory=big, score=0.8, vector_score=0.8, graph_score=0.0),
+    ]
+    with patch.object(manager, "search", return_value=results):
+        unbudgeted = manager.get_context("q")
+        budgeted = manager.get_context("q", max_tokens=100)
+
+    assert "x" * 100 in unbudgeted
+    assert "y" * 40 in budgeted
+    assert "x" * 100 not in budgeted  # big result dropped to fit the budget

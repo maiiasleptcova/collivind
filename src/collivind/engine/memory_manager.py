@@ -190,22 +190,40 @@ class MemoryManager:
         """Hybrid search via SearchEngine."""
         return self.search_engine.search(query)
 
-    def get_context(self, query_str: str, project_id: str = "default", limit: int = 10) -> str:
-        """Get formatted context string for LLM."""
+    def get_context(
+        self,
+        query_str: str,
+        project_id: str = "default",
+        limit: int = 10,
+        max_tokens: Optional[int] = None,
+    ) -> str:
+        """Get formatted context string for LLM.
+
+        max_tokens greedily packs results in score order using a len/4
+        token estimate. Importance-aware budgeting lives in collivind-pro.
+        """
         query = SearchQuery(query=query_str, project_id=project_id, limit=limit)
         results = self.search(query)
-        
+
         if not results:
             return "No relevant context found in Collivind."
-            
-        context_parts = ["--- Collivind Context ---"]
+
+        header = "--- Collivind Context ---"
+        context_parts = [header]
+        budget = max_tokens - len(header) // 4 if max_tokens else None
         for res in results:
             cat = res.memory.category.value if hasattr(res.memory.category, 'value') else res.memory.category
             meta = f"[{cat.upper()}] (score: {res.score:.2f})"
             if res.related_entities:
                 meta += f" (Entities: {', '.join(res.related_entities)})"
-            context_parts.append(f"{meta}\n{res.memory.content}\n")
-            
+            part = f"{meta}\n{res.memory.content}\n"
+            if budget is not None:
+                cost = len(part) // 4
+                if cost > budget:
+                    break
+                budget -= cost
+            context_parts.append(part)
+
         return "\n".join(context_parts)
 
     def get_entity(self, name: str) -> Optional[Dict[str, Any]]:
