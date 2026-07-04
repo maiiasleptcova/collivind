@@ -45,6 +45,7 @@ def _register_hooks(config):
             config.hooks.enable_stop,
             config.hooks.enable_precompact,
             config.hooks.save_interval,
+            config.hooks.enable_session_start,
         )
         if events:
             click.secho(f"done ({', '.join(events)})", fg="green")

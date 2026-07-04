@@ -56,8 +56,9 @@ claude mcp add --global collivind -- python3 -m collivind.mcp.server
 
 ### Hooks
 
-Collivind uses Claude Code hooks for automatic memory extraction:
+Collivind uses Claude Code hooks for automatic memory capture and recall:
 
+- **SessionStart hook** — injects a compact index (~100 tokens) of your project's stored knowledge at the start of every session
 - **Stop hook** — every 15 responses, prompts Claude to extract and store knowledge
 - **PreCompact hook** — saves all session knowledge before context compression
 

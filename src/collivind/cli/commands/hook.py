@@ -43,7 +43,7 @@ def get_claude_settings_path() -> Path:
 
 
 def install_hooks(enable_stop: bool = True, enable_precompact: bool = True,
-                  save_interval: int = 15) -> list[str]:
+                  save_interval: int = 15, enable_session_start: bool = True) -> list[str]:
     """Register collivind hooks in ~/.claude/settings.json. Idempotent.
 
     Replaces any existing collivind entries (so threshold changes apply),
@@ -64,6 +64,8 @@ def install_hooks(enable_stop: bool = True, enable_precompact: bool = True,
         wanted["Stop"] = f"collivind hook stop --threshold {save_interval}"
     if enable_precompact:
         wanted["PreCompact"] = "collivind hook precompact"
+    if enable_session_start:
+        wanted["SessionStart"] = "collivind hook session-start"
 
     hooks = settings.setdefault("hooks", {})
     for event, command in wanted.items():
@@ -116,13 +118,48 @@ def stop(threshold):
 
     write_state(state)
 
+def _load_manager():
+    from collivind.cli.commands.memory import _manager
+    return _manager()
+
+
+@hook.command(name="session-start")
+@click.option("--project", "-p", default="default")
+@click.option("--limit", "-l", default=8, help="Memories in the index")
+def session_start(project, limit):
+    """Emit a compact memory index as SessionStart context. Never fails."""
+    try:
+        memories = _load_manager().get_timeline(project, limit=limit)
+    except Exception:
+        return  # a broken backend must never break session start
+    if not memories:
+        return
+
+    lines = [f"- [{m.category.value if hasattr(m.category, 'value') else m.category}] "
+             f"{(m.summary or m.content)[:90]}" for m in memories]
+    text = (
+        "<collivind_memory_index>\n"
+        f"Stored knowledge for project '{project}' (most recent first):\n"
+        + "\n".join(lines)
+        + "\nUse collivind_search or collivind_get_context to recall details.\n"
+        "</collivind_memory_index>"
+    )
+    click.echo(json.dumps({
+        "hookSpecificOutput": {
+            "hookEventName": "SessionStart",
+            "additionalContext": text,
+        }
+    }))
+
+
 @hook.command()
 def install():
     """Register collivind hooks in ~/.claude/settings.json."""
     from collivind.config import load_config
 
     cfg = load_config().hooks
-    events = install_hooks(cfg.enable_stop, cfg.enable_precompact, cfg.save_interval)
+    events = install_hooks(cfg.enable_stop, cfg.enable_precompact, cfg.save_interval,
+                           cfg.enable_session_start)
     if events:
         click.secho(f"Registered hooks: {', '.join(events)}", fg="green")
     else:
