@@ -193,3 +193,40 @@ def test_get_context_respects_max_tokens():
     assert "x" * 100 in unbudgeted
     assert "y" * 40 in budgeted
     assert "x" * 100 not in budgeted  # big result dropped to fit the budget
+
+
+def test_cli_sync_merges_and_writes_stable_order(tmp_path):
+    from collivind.cli.commands.memory import sync
+
+    teammate = _node(id="t-1", content="teammate fact").to_dict()
+    (tmp_path / "default.jsonl").write_text(json.dumps(teammate) + "\n")
+
+    mine = _node(id="a-1").to_dict()
+    mine["created_at"] = "2026-01-01T00:00:00+00:00"
+    theirs = dict(teammate, created_at="2025-01-01T00:00:00+00:00")
+
+    manager = MagicMock()
+    manager.import_memories.return_value = 1
+    manager.export_memories.return_value = [mine, theirs]  # newest first
+
+    with patch("collivind.cli.commands.memory._manager", return_value=manager):
+        result = CliRunner().invoke(sync, [str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert manager.import_memories.call_args.args[0] == [teammate]
+    lines = [json.loads(line) for line in (tmp_path / "default.jsonl").read_text().splitlines()]
+    assert [r["id"] for r in lines] == ["t-1", "a-1"]  # oldest first, stable
+
+
+def test_cli_sync_first_run_creates_file(tmp_path):
+    from collivind.cli.commands.memory import sync
+
+    manager = MagicMock()
+    manager.export_memories.return_value = [_node().to_dict()]
+
+    with patch("collivind.cli.commands.memory._manager", return_value=manager):
+        result = CliRunner().invoke(sync, [str(tmp_path / "shared"), "-p", "proj"])
+
+    assert result.exit_code == 0
+    manager.import_memories.assert_not_called()
+    assert (tmp_path / "shared" / "proj.jsonl").exists()

@@ -11,6 +11,7 @@ from collivind.cli.commands.memory import (
     get,
     import_cmd,
     invalidate,
+    sync,
     update,
 )
 from collivind.cli.commands.reset import reset
@@ -39,3 +40,4 @@ cli.add_command(invalidate)
 cli.add_command(forget)
 cli.add_command(export_cmd)
 cli.add_command(import_cmd)
+cli.add_command(sync)
