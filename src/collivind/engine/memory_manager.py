@@ -1,16 +1,22 @@
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
 from collivind.config import CollivindConfig
-from collivind.storage.interfaces import VectorStore, GraphStore, EmbeddingProvider
-from collivind.models import (
-    MemoryNode, MemoryCreate,
-    EntityNode, EntityCreate,
-    RelationshipEdge, RelationshipCreate, RelType
-)
 from collivind.engine.dedup import Deduplicator
+from collivind.engine.enrichment import build_enriched_text
 from collivind.engine.search_engine import SearchEngine
-from collivind.exceptions import CollivindError
-from collivind.models import SearchQuery, SearchResult
+from collivind.models import (
+    EntityCreate,
+    MemoryCreate,
+    MemoryNode,
+    RelationshipCreate,
+    RelType,
+    SearchQuery,
+    SearchResult,
+)
+from collivind.models.entity import EntityType
+from collivind.models.memory import MemoryCategory, MemorySource
+from collivind.storage.interfaces import EmbeddingProvider, GraphStore, VectorStore
+
 
 class MemoryManager:
     def __init__(
@@ -27,41 +33,62 @@ class MemoryManager:
         self.deduplicator = Deduplicator(vector_store, config.search)
         self.search_engine = SearchEngine(vector_store, graph_store, embedding_provider, config.search)
 
+    def _merge_tags(self, existing: MemoryNode, new_tags: List[str]) -> List[str]:
+        merged = list(existing.tags)
+        for tag in new_tags:
+            if tag not in merged:
+                merged.append(tag)
+        return merged
+
+    def _merge_into_existing(
+        self,
+        existing: MemoryNode,
+        memory_create: MemoryCreate,
+        entities: Optional[List[EntityCreate]],
+    ) -> MemoryNode:
+        merged_tags = self._merge_tags(existing, memory_create.tags)
+        if merged_tags != existing.tags:
+            self.graph_store.update_memory(existing.id, tags=merged_tags)
+
+        if entities:
+            for ent_create in entities:
+                ent_node = self.graph_store.create_entity(ent_create)
+                self.graph_store.create_relationship(RelationshipCreate(
+                    source_id=existing.id,
+                    target_id=ent_node.id,
+                    type=RelType.ABOUT,
+                    confidence=1.0,
+                    source="merge"
+                ))
+
+        return self.graph_store.get_memory(existing.id) or existing
+
     def add_memory(
         self,
         memory_create: MemoryCreate,
         entities: Optional[List[EntityCreate]] = None,
         relationships: Optional[List[RelationshipCreate]] = None
     ) -> MemoryNode:
-        """
-        Full pipeline to process, embed, deduplicate, and store a memory and its entities.
-        """
-        # 1. Embed content
-        vector = self.embedding_provider.embed(memory_create.content)
-        
-        # 2. Deduplicate
-        duplicate = self.deduplicator.find_duplicate(vector, memory_create.project_id)
-        if duplicate:
-            dup_id, score = duplicate
-            # If it's a near exact match, return existing memory
-            # For this implementation, we just return the duplicate. 
-            # Real application might merge tags/entities or supersede.
-            existing_memory = self.graph_store.get_memory(dup_id)
-            if existing_memory:
-                return existing_memory
+        entity_names = [e.name for e in entities] if entities else None
+        enriched = build_enriched_text(memory_create, entity_names=entity_names)
+        vector = self.embedding_provider.embed(enriched)
 
-        # 3. Create Memory Node
+        dup_match = self.deduplicator.find_duplicate_detailed(vector, memory_create.project_id)
+        if dup_match:
+            existing = self.graph_store.get_memory(dup_match.memory_id)
+            if existing:
+                if dup_match.is_exact:
+                    return self._merge_into_existing(existing, memory_create, entities)
+                return self._merge_into_existing(existing, memory_create, entities)
+
         memory_node = self.graph_store.create_memory(memory_create)
-        
-        # 4. Upsert Vector
+
         payload = memory_node.to_dict()
         self.vector_store.upsert(memory_node.id, vector, payload)
-        
-        # 5. Create Entities and standard relationships
+
         if entities:
             for ent_create in entities:
                 ent_node = self.graph_store.create_entity(ent_create)
-                # By default, relate memory to entity as ABOUT
                 self.graph_store.create_relationship(RelationshipCreate(
                     source_id=memory_node.id,
                     target_id=ent_node.id,
@@ -69,16 +96,13 @@ class MemoryManager:
                     confidence=1.0,
                     source="extraction"
                 ))
-                
-        # 6. Create custom relationships (between entities or memory to memory)
+
         if relationships:
             for rel_create in relationships:
-                # Resolve potential references if they are missing source_id
                 if not rel_create.source_id:
                     rel_create.source_id = memory_node.id
                 self.graph_store.create_relationship(rel_create)
 
-        # 7. Check for contradictions
         contradictions = self.search_engine.find_contradictions(memory_node)
         for contra in contradictions:
             self.graph_store.create_relationship(RelationshipCreate(
@@ -92,16 +116,7 @@ class MemoryManager:
         return memory_node
 
     def invalidate(self, memory_id: str, superseded_by: str, reason: str) -> None:
-        """Marks a memory as outdated and updates stores."""
         self.graph_store.invalidate_memory(memory_id, superseded_by, reason)
-        # Fetch updated node and push to Qdrant to update valid_to payload
-        updated = self.graph_store.get_memory(memory_id)
-        if updated:
-            # We need the vector again or we rely on Qdrant payload update mechanism.
-            # For simplicity, we assume Qdrant payload is updated correctly when superseded
-            # Note: Qdrant actually supports payload-only updates via the API, 
-            # but VectorStore interface only has upsert. We'll skip for this spec.
-            pass
 
     def search(self, query: SearchQuery) -> List[SearchResult]:
         """Hybrid search via SearchEngine."""
@@ -127,28 +142,30 @@ class MemoryManager:
 
     def get_entity(self, name: str) -> Optional[Dict[str, Any]]:
         """Retrieve an entity and its related memories."""
-        # This requires graph_store to have a generic MATCH node query or we just find by ID.
-        # EntityNode IDs are lowercased underscore-separated names.
-        entity_id = name.lower().replace(" ", "_").replace("-", "_")
-        query = "MATCH (e:Entity {id: $id}) RETURN e"
-        
-        with self.graph_store.driver.session(database=self.graph_store.config.database) as session:
-            res = session.run(query, id=entity_id)
-            record = res.single()
-            if not record:
-                return None
-            node = dict(record["e"])
-            
-        # Get related memories
+        entity = self.graph_store.get_entity(name)
+        if not entity:
+            return None
+
         related = self.graph_store.find_related_memories(name)
         return {
-            "entity": node,
+            "entity": {
+                "id": entity.id,
+                "name": entity.name,
+                "type": entity.type.value if hasattr(entity.type, "value") else entity.type,
+                "properties": entity.properties,
+                "created_at": entity.created_at.isoformat() if entity.created_at else None,
+                "updated_at": entity.updated_at.isoformat() if entity.updated_at else None,
+            },
             "related_memories": [m.to_dict() for m in related]
         }
 
     def get_timeline(self, project_id: str, entity: Optional[str] = None, limit: int = 50) -> List[MemoryNode]:
         """Get timeline of memories for a project."""
         return self.graph_store.get_timeline(project_id, entity, limit)
+
+    def get_version_chain(self, memory_id: str) -> List[MemoryNode]:
+        """Get the full version history of a memory."""
+        return self.graph_store.get_version_chain(memory_id)
 
     def batch_add_memories(self, memories: List[Dict[str, Any]]) -> List[str]:
         """Batch insert memories."""
@@ -176,6 +193,9 @@ class MemoryManager:
                 summary=mem_data["summary"],
                 category=MemoryCategory(mem_data["category"]),
                 project_id=mem_data.get("project_id", "default"),
+                session_id=mem_data.get("session_id"),
+                user_id=mem_data.get("user_id", "local"),
+                source=MemorySource(mem_data.get("source", "manual")),
                 confidence=mem_data.get("confidence", 1.0),
                 tags=mem_data.get("tags", [])
             )

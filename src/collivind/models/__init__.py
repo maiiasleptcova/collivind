@@ -1,9 +1,9 @@
 """
 Data models for Collivind.
 """
-from .memory import MemoryNode, MemoryCreate, MemoryCategory, MemorySource
-from .entity import EntityNode, EntityCreate, EntityType
-from .relationship import RelationshipEdge, RelationshipCreate, RelType
+from .entity import EntityCreate, EntityNode, EntityType
+from .memory import MemoryCategory, MemoryCreate, MemoryNode, MemorySource
+from .relationship import RelationshipCreate, RelationshipEdge, RelType
 from .search import SearchQuery, SearchResult
 from .session import SessionNode
 

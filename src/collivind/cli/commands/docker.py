@@ -3,7 +3,7 @@ import subprocess
 import click
 
 from collivind.config import load_config
-from collivind.docker.compose import docker_compose_up, docker_compose_down
+from collivind.docker.compose import docker_compose_down, docker_compose_up
 
 
 @click.group()

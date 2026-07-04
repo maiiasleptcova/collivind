@@ -1,36 +1,43 @@
-import sys
 import json
-from typing import Dict, Any, Optional
+import logging
+import sys
+import uuid
+from typing import Any, Dict, Optional
 
 from collivind.config import load_config
-from collivind.storage.qdrant_store import QdrantVectorStore
-from collivind.storage.neo4j_store import Neo4jGraphStore
-from collivind.storage.embedding_service import HttpEmbeddingProvider
 from collivind.engine.memory_manager import MemoryManager
 from collivind.mcp.tools import CollivindTools
-from collivind.exceptions import CollivindError
+from collivind.storage.factory import create_all_backends
+
+logger = logging.getLogger(__name__)
+
 
 class MCPServer:
     def __init__(self):
+        self.initialized = False
+        self.backends_available = False
+        self.manager = None
+        self.tools = None
+        self._init_error = None
+        self.session_id = str(uuid.uuid4())
+
         try:
             self.config = load_config()
-            self.vector_store = QdrantVectorStore(self.config.qdrant, self.config.embeddings.dimension)
-            self.graph_store = Neo4jGraphStore(self.config.neo4j)
-            self.embedding_provider = HttpEmbeddingProvider(self.config.embeddings)
-            
+            self.vector_store, self.graph_store, self.embedding_provider = create_all_backends(self.config)
+
             self.manager = MemoryManager(
                 vector_store=self.vector_store,
                 graph_store=self.graph_store,
                 embedding_provider=self.embedding_provider,
-                config=self.config
+                config=self.config,
             )
-            
-            self.tools = CollivindTools(self.manager)
-            self.initialized = False
+
+            self.tools = CollivindTools(self.manager, session_id=self.session_id)
+            self.backends_available = True
         except Exception as e:
-            # Output error to stderr so as not to break JSON-RPC
-            print(f"Failed to initialize components: {e}", file=sys.stderr)
-            sys.exit(1)
+            self._init_error = str(e)
+            logger.warning(f"Server starting in degraded mode: {e}")
+            print(f"Warning: backends unavailable, starting in degraded mode: {e}", file=sys.stderr)
 
     def serve(self):
         """Main stdio loop for JSON-RPC 2.0."""
@@ -56,6 +63,13 @@ class MCPServer:
 
         if method == "initialize":
             self.initialized = True
+            server_info = {
+                "name": "collivind",
+                "version": "0.1.0"
+            }
+            if not self.backends_available:
+                server_info["status"] = "degraded"
+                server_info["degraded_reason"] = self._init_error
             return {
                 "jsonrpc": "2.0",
                 "id": req_id,
@@ -64,10 +78,7 @@ class MCPServer:
                     "capabilities": {
                         "tools": {}
                     },
-                    "serverInfo": {
-                        "name": "collivind",
-                        "version": "0.1.0"
-                    }
+                    "serverInfo": server_info
                 }
             }
             
@@ -75,18 +86,35 @@ class MCPServer:
             return None # Notifications don't get responses
             
         elif method == "tools/list":
+            tools_list = self.tools.get_tool_list() if self.tools else []
             return {
                 "jsonrpc": "2.0",
                 "id": req_id,
                 "result": {
-                    "tools": self.tools.get_tool_list()
+                    "tools": tools_list
                 }
             }
             
         elif method == "tools/call":
             tool_name = params.get("name")
             tool_args = params.get("arguments", {})
-            
+
+            if not self.backends_available:
+                return {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "result": {
+                        "isError": True,
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": f"Storage backends unavailable: {self._init_error}. "
+                                        f"Tool '{tool_name}' cannot execute in degraded mode."
+                            }
+                        ]
+                    }
+                }
+
             try:
                 content_str = self.tools.handle_call(tool_name, tool_args)
                 return {

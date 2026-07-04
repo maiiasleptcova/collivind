@@ -1,6 +1,9 @@
 import json
+
 from click.testing import CliRunner
-from collivind.cli.commands.hook import hook, get_state_file
+
+from collivind.cli.commands.hook import get_state_file, hook
+
 
 def test_hook_stop(tmp_path, monkeypatch):
     # Mock home directory to tmp_path

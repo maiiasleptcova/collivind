@@ -1,9 +1,18 @@
-import pytest
 from unittest.mock import MagicMock
 
 from collivind.config import CollivindConfig
-from collivind.models import MemoryCreate, MemoryCategory, MemoryNode, EntityCreate, EntityType, RelationshipCreate, RelType
 from collivind.engine.memory_manager import MemoryManager
+from collivind.models import (
+    EntityCreate,
+    EntityNode,
+    EntityType,
+    MemoryCategory,
+    MemoryCreate,
+    MemoryNode,
+    RelationshipCreate,
+    RelType,
+)
+
 
 def test_add_memory_no_duplicate():
     # Setup mocks
@@ -67,3 +76,21 @@ def test_add_memory_with_duplicate():
     vector_store.search.assert_called_once()
     graph_store.create_memory.assert_not_called()
     vector_store.upsert.assert_not_called()
+
+
+def test_get_entity_uses_graph_store_interface():
+    vector_store = MagicMock()
+    graph_store = MagicMock()
+    graph_store.get_entity.return_value = EntityNode(name="FastAPI", type=EntityType.LIBRARY)
+    graph_store.find_related_memories.return_value = [
+        MemoryNode(content="FastAPI is used", summary="FastAPI", category=MemoryCategory.FACT, id="mem-1")
+    ]
+    embedding_provider = MagicMock()
+
+    manager = MemoryManager(vector_store, graph_store, embedding_provider, CollivindConfig())
+    result = manager.get_entity("FastAPI")
+
+    assert result["entity"]["id"] == "fastapi"
+    assert result["entity"]["type"] == "library"
+    assert result["related_memories"][0]["id"] == "mem-1"
+    graph_store.get_entity.assert_called_once_with("FastAPI")

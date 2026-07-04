@@ -1,7 +1,7 @@
-import os
 import json
-import click
 from pathlib import Path
+
+import click
 
 EXTRACTION_PROMPT = """
 <collivind_extraction>

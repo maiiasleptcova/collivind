@@ -1,0 +1,25 @@
+{
+  "name": "collivind-memory",
+  "version": "0.1.0",
+  "description": "Graph-based memory layer for AI coding assistants",
+  "license": "MIT",
+  "bin": {
+    "collivind-memory": "./bin/cli.js"
+  },
+  "keywords": [
+    "ai",
+    "memory",
+    "claude",
+    "coding-assistant",
+    "graph-database",
+    "mcp"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/collivind.git",
+    "directory": "npm"
+  },
+  "files": [
+    "bin/"
+  ]
+}

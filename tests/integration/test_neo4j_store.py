@@ -1,7 +1,9 @@
 import pytest
+
 from collivind.config import Neo4jConfig
+from collivind.models import EntityCreate, EntityType, MemoryCategory, MemoryCreate, RelationshipCreate, RelType
 from collivind.storage.neo4j_store import Neo4jGraphStore
-from collivind.models import MemoryCreate, MemoryCategory, EntityCreate, EntityType, RelationshipCreate, RelType
+
 
 @pytest.fixture
 def store():

@@ -1,11 +1,9 @@
 import click
 
 from collivind.config import load_config
-from collivind.storage.qdrant_store import QdrantVectorStore
-from collivind.storage.neo4j_store import Neo4jGraphStore
-from collivind.storage.embedding_service import HttpEmbeddingProvider
 from collivind.engine.memory_manager import MemoryManager
 from collivind.models import SearchQuery
+from collivind.storage.factory import create_all_backends
 
 
 @click.command()
@@ -18,9 +16,7 @@ def search(query, project, category, limit):
     config = load_config()
 
     try:
-        vector_store = QdrantVectorStore(config.qdrant, config.embeddings.dimension)
-        graph_store = Neo4jGraphStore(config.neo4j)
-        embedding_provider = HttpEmbeddingProvider(config.embeddings)
+        vector_store, graph_store, embedding_provider = create_all_backends(config)
         manager = MemoryManager(vector_store, graph_store, embedding_provider, config)
 
         q = SearchQuery(

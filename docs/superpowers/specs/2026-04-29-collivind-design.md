@@ -23,6 +23,29 @@ This spec covers the **open-source repo only**. The enterprise version (sign-up,
 
 The scoping model should eventually support a "department" or "team" scope between user and project, enabling executives to see progress across ML engineering, backend, MLOps, and frontend simultaneously. The entity graph naturally supports this — shared entities (services, concepts, libraries) connect cross-department knowledge. Not a requirement for v1.
 
+## Deployment Modes
+
+Collivind supports three deployment modes to work in any environment:
+
+**`docker` (default)** — Qdrant, Neo4j, and sentence-transformers run in Docker containers. Best for local development with Docker Desktop available.
+
+**`embedded`** — Qdrant runs in-process (embedded Rust engine via qdrant-client's local mode), sentence-transformers loads the model directly in Python, and Neo4j is replaced by NetworkX + SQLite for graph storage. Zero Docker dependency. Install via `pip install collivind-memory[embedded]`. Adds ~2GB for PyTorch but works everywhere — devcontainers, Codespaces, CI/CD, cloud IDEs, any environment without Docker.
+
+**`remote`** — Connects to externally hosted Qdrant/Neo4j/embeddings services via config. No Docker, no local model. Just point config at existing endpoints. This is also the path the enterprise version uses.
+
+Mode is set in config:
+```toml
+[collivind]
+mode = "docker"     # default
+# mode = "embedded" # in-process, no Docker
+# mode = "remote"   # external services, no Docker
+```
+
+`collivind init` adapts to the mode:
+- `docker`: pulls images, starts containers, runs health checks
+- `embedded`: downloads the embedding model on first run, creates local Qdrant storage dir, initializes SQLite graph DB
+- `remote`: validates connectivity to external endpoints
+
 ---
 
 ## Architecture

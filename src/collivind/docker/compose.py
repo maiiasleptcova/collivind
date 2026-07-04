@@ -1,12 +1,11 @@
-import os
-import shutil
 import string
 import subprocess
-from pathlib import Path
 from importlib import resources
+from pathlib import Path
 
 from collivind.config import CollivindConfig
 from collivind.exceptions import DockerExecutionError
+
 
 def copy_templates(data_dir: Path, config: CollivindConfig):
     """Copies Docker templates to the data directory, substituting variables."""
@@ -38,7 +37,7 @@ def copy_templates(data_dir: Path, config: CollivindConfig):
 def check_docker_running():
     """Checks if Docker is running by executing 'docker info'."""
     try:
-        result = subprocess.run(
+        subprocess.run(
             ["docker", "info"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

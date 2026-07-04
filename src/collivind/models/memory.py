@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import List, Optional
 
+
 class MemoryCategory(str, Enum):
     FACT = "fact"
     DECISION = "decision"
@@ -34,9 +35,11 @@ class MemoryNode:
     source: MemorySource = MemorySource.MANUAL
     superseded_by: Optional[str] = None
     tags: List[str] = field(default_factory=list)
+    version: int = 1
+    previous_version_id: Optional[str] = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    
+
     def to_dict(self):
         return {
             "id": self.id,
@@ -52,6 +55,8 @@ class MemoryNode:
             "source": self.source.value if isinstance(self.source, Enum) else self.source,
             "superseded_by": self.superseded_by,
             "tags": self.tags,
+            "version": self.version,
+            "previous_version_id": self.previous_version_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }

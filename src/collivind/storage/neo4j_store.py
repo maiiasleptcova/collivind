@@ -1,15 +1,35 @@
-from typing import List, Dict, Any, Optional
-from datetime import datetime
-from neo4j import GraphDatabase, exceptions as neo4j_exceptions
+import ast
+import json
+import logging
+import time
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+from neo4j import GraphDatabase
+from neo4j import exceptions as neo4j_exceptions
 
 from collivind.config import Neo4jConfig
-from collivind.storage.interfaces import GraphStore
-from collivind.models import (
-    MemoryNode, MemoryCreate,
-    EntityNode, EntityCreate,
-    RelationshipEdge, RelationshipCreate
-)
 from collivind.exceptions import CollivindError
+from collivind.models import EntityCreate, EntityNode, MemoryCreate, MemoryNode, RelationshipCreate, RelationshipEdge
+from collivind.models.entity import EntityType
+from collivind.storage.interfaces import GraphStore
+
+logger = logging.getLogger(__name__)
+
+
+def _retry(fn, max_retries=3, base_delay=0.5):
+    """Retry with exponential backoff."""
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            return fn()
+        except Exception as e:
+            last_error = e
+            if attempt < max_retries - 1:
+                delay = base_delay * (2 ** attempt)
+                logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying in {delay}s...")
+                time.sleep(delay)
+    raise last_error
 
 class Neo4jGraphStore(GraphStore):
     def __init__(self, config: Neo4jConfig):
@@ -33,7 +53,7 @@ class Neo4jGraphStore(GraphStore):
             for q in queries:
                 try:
                     session.run(q)
-                except neo4j_exceptions.ClientError as e:
+                except neo4j_exceptions.ClientError:
                     # Ignore if constraint already exists or not supported in this Neo4j version exactly
                     pass
 
@@ -54,54 +74,66 @@ class Neo4jGraphStore(GraphStore):
             confidence=data.confidence,
             tags=data.tags
         )
-        
+
         query = """
         CREATE (m:Memory $props)
         RETURN m
         """
-        
+
         props = memory.to_dict()
-        
-        with self.driver.session(database=self.config.database) as session:
-            try:
+
+        def _do_create():
+            with self.driver.session(database=self.config.database) as session:
                 session.run(query, props=props)
-            except Exception as e:
-                raise CollivindError(f"Failed to create memory in Neo4j: {e}")
-                
+
+        try:
+            _retry(_do_create)
+        except Exception as e:
+            raise CollivindError(f"Failed to create memory in Neo4j after retries: {e}")
+
         return memory
 
     def get_memory(self, id: str) -> Optional[MemoryNode]:
         query = "MATCH (m:Memory {id: $id}) RETURN m"
-        with self.driver.session(database=self.config.database) as session:
-            result = session.run(query, id=id)
-            record = result.single()
-            if not record:
-                return None
-            node = record["m"]
-            
-            # Reconstruct MemoryNode
-            return MemoryNode(
-                id=node["id"],
-                content=node["content"],
-                summary=node["summary"],
-                category=node["category"],
-                confidence=node.get("confidence", 1.0),
-                valid_from=datetime.fromisoformat(node["valid_from"]) if node.get("valid_from") else None,
-                valid_to=datetime.fromisoformat(node["valid_to"]) if node.get("valid_to") else None,
-                project_id=node.get("project_id", "default"),
-                session_id=node.get("session_id"),
-                user_id=node.get("user_id", "local"),
-                source=node.get("source", "manual"),
-                superseded_by=node.get("superseded_by"),
-                tags=node.get("tags", []),
-                created_at=datetime.fromisoformat(node["created_at"]) if node.get("created_at") else None,
-                updated_at=datetime.fromisoformat(node["updated_at"]) if node.get("updated_at") else None
-            )
+
+        def _do_get():
+            with self.driver.session(database=self.config.database) as session:
+                result = session.run(query, id=id)
+                record = result.single()
+                if not record:
+                    return None
+                node = record["m"]
+
+                # Reconstruct MemoryNode
+                return MemoryNode(
+                    id=node["id"],
+                    content=node["content"],
+                    summary=node["summary"],
+                    category=node["category"],
+                    confidence=node.get("confidence", 1.0),
+                    valid_from=datetime.fromisoformat(node["valid_from"]) if node.get("valid_from") else None,
+                    valid_to=datetime.fromisoformat(node["valid_to"]) if node.get("valid_to") else None,
+                    project_id=node.get("project_id", "default"),
+                    session_id=node.get("session_id"),
+                    user_id=node.get("user_id", "local"),
+                    source=node.get("source", "manual"),
+                    superseded_by=node.get("superseded_by"),
+                    tags=node.get("tags", []),
+                    version=node.get("version", 1),
+                    previous_version_id=node.get("previous_version_id"),
+                    created_at=datetime.fromisoformat(node["created_at"]) if node.get("created_at") else None,
+                    updated_at=datetime.fromisoformat(node["updated_at"]) if node.get("updated_at") else None
+                )
+
+        try:
+            return _retry(_do_get)
+        except Exception as e:
+            raise CollivindError(f"Failed to get memory from Neo4j after retries: {e}")
 
     def update_memory(self, id: str, **updates) -> Optional[MemoryNode]:
         if not updates:
             return self.get_memory(id)
-            
+        updates = {k: self._normalize_update_value(k, v) for k, v in updates.items()}
         set_clauses = ", ".join([f"m.{k} = ${k}" for k in updates.keys()])
         query = f"MATCH (m:Memory {{id: $id}}) SET {set_clauses} RETURN m"
         
@@ -126,7 +158,8 @@ class Neo4jGraphStore(GraphStore):
         
         query = """
         MERGE (e:Entity {id: $id})
-        ON CREATE SET e.name = $name, e.type = $type, e.properties = $props, e.created_at = $created_at, e.updated_at = $updated_at
+        ON CREATE SET e.name = $name, e.type = $type, e.properties = $props,
+            e.created_at = $created_at, e.updated_at = $updated_at
         RETURN e
         """
         with self.driver.session(database=self.config.database) as session:
@@ -139,6 +172,30 @@ class Neo4jGraphStore(GraphStore):
                 updated_at=entity.updated_at.isoformat()
             )
         return entity
+
+    def get_entity(self, name: str) -> Optional[EntityNode]:
+        entity_id = name.lower().replace(" ", "_").replace("-", "_")
+        query = "MATCH (e:Entity {id: $id}) RETURN e"
+        with self.driver.session(database=self.config.database) as session:
+            record = session.run(query, id=entity_id).single()
+            if not record:
+                return None
+            node = record["e"]
+
+        entity_type = node.get("type", EntityType.CONCEPT.value)
+        try:
+            entity_type = EntityType(entity_type)
+        except (TypeError, ValueError):
+            entity_type = EntityType.CONCEPT
+
+        return EntityNode(
+            id=node["id"],
+            name=node.get("name", name),
+            type=entity_type,
+            properties=self._parse_properties(node.get("properties", {})),
+            created_at=datetime.fromisoformat(node["created_at"]) if node.get("created_at") else None,
+            updated_at=datetime.fromisoformat(node["updated_at"]) if node.get("updated_at") else None,
+        )
 
     def create_relationship(self, data: RelationshipCreate) -> RelationshipEdge:
         query = f"""
@@ -164,7 +221,10 @@ class Neo4jGraphStore(GraphStore):
             source=data.source
         )
 
-    def get_neighbors(self, node_id: str, rel_types: List[str], direction: str = "OUT", depth: int = 1) -> List[Dict[str, Any]]:
+    def get_neighbors(
+        self, node_id: str, rel_types: List[str],
+        direction: str = "OUT", depth: int = 1,
+    ) -> List[Dict[str, Any]]:
         type_filter = "|".join(rel_types) if rel_types else ""
         rel_pattern = f"-[r:{type_filter}*1..{depth}]-"
         if direction == "OUT":
@@ -180,8 +240,11 @@ class Neo4jGraphStore(GraphStore):
         with self.driver.session(database=self.config.database) as session:
             res = session.run(query, node_id=node_id)
             for record in res:
+                node = dict(record["m"])
                 results.append({
-                    "node": dict(record["m"]),
+                    "id": node.get("id"),
+                    "name": node.get("name"),
+                    "node": node,
                     "relationships": [dict(rel) for rel in record["r"]]
                 })
         return results
@@ -227,6 +290,11 @@ class Neo4jGraphStore(GraphStore):
         
         # Set valid_to and superseded_by property
         self.update_memory(id, valid_to=now_str, superseded_by=superseded_by)
+
+        old = self.get_memory(id)
+        new_mem = self.get_memory(superseded_by)
+        if old and new_mem:
+            self.update_memory(superseded_by, version=old.version + 1, previous_version_id=id)
         
         # Create relation
         query = """
@@ -237,6 +305,28 @@ class Neo4jGraphStore(GraphStore):
         """
         with self.driver.session(database=self.config.database) as session:
             session.run(query, id=id, superseded_by=superseded_by, reason=reason, now_str=now_str)
+
+    def get_version_chain(self, memory_id: str) -> List[MemoryNode]:
+        chain = []
+        current = self.get_memory(memory_id)
+        if not current:
+            return chain
+        while current.previous_version_id:
+            prev = self.get_memory(current.previous_version_id)
+            if not prev:
+                break
+            chain.append(prev)
+            current = prev
+        chain.reverse()
+        current = self.get_memory(memory_id)
+        chain.append(current)
+        while current.superseded_by:
+            nxt = self.get_memory(current.superseded_by)
+            if not nxt:
+                break
+            chain.append(nxt)
+            current = nxt
+        return chain
 
     def health_check(self) -> Dict[str, Any]:
         try:
@@ -250,3 +340,31 @@ class Neo4jGraphStore(GraphStore):
 
     def close(self) -> None:
         self.driver.close()
+
+    def _normalize_update_value(self, key: str, value: Any) -> Any:
+        if hasattr(value, "value"):
+            return value.value
+        if key == "tags" and isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+            except json.JSONDecodeError:
+                try:
+                    parsed = ast.literal_eval(value)
+                except (ValueError, SyntaxError):
+                    parsed = [value]
+            return parsed if isinstance(parsed, list) else [value]
+        return value
+
+    def _parse_properties(self, value: Any) -> Dict[str, Any]:
+        if isinstance(value, dict):
+            return value
+        if not isinstance(value, str) or not value:
+            return {}
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            try:
+                parsed = ast.literal_eval(value)
+            except (ValueError, SyntaxError):
+                return {}
+        return parsed if isinstance(parsed, dict) else {}

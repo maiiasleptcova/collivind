@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
-from collivind.models.memory import MemoryCreate, MemoryNode
 from collivind.models.entity import EntityCreate, EntityNode
+from collivind.models.memory import MemoryCreate, MemoryNode
 from collivind.models.relationship import RelationshipCreate, RelationshipEdge
+
 
 class VectorStore(ABC):
     @abstractmethod
@@ -17,7 +18,10 @@ class VectorStore(ABC):
         pass
 
     @abstractmethod
-    def search(self, vector: List[float], limit: int = 10, filters: Optional[Dict[str, Any]] = None, threshold: float = 0.3) -> List[Dict[str, Any]]:
+    def search(
+        self, vector: List[float], limit: int = 10,
+        filters: Optional[Dict[str, Any]] = None, threshold: float = 0.3,
+    ) -> List[Dict[str, Any]]:
         """Search for similar vectors."""
         pass
 
@@ -68,12 +72,20 @@ class GraphStore(ABC):
         pass
 
     @abstractmethod
+    def get_entity(self, name: str) -> Optional[EntityNode]:
+        """Get an entity by display name or normalized id."""
+        pass
+
+    @abstractmethod
     def create_relationship(self, data: RelationshipCreate) -> RelationshipEdge:
         """Create a relationship edge."""
         pass
 
     @abstractmethod
-    def get_neighbors(self, node_id: str, rel_types: List[str], direction: str = "OUT", depth: int = 1) -> List[Dict[str, Any]]:
+    def get_neighbors(
+        self, node_id: str, rel_types: List[str],
+        direction: str = "OUT", depth: int = 1,
+    ) -> List[Dict[str, Any]]:
         """Get neighboring nodes in the graph."""
         pass
 
@@ -90,6 +102,11 @@ class GraphStore(ABC):
     @abstractmethod
     def invalidate_memory(self, id: str, superseded_by: str, reason: str) -> None:
         """Invalidate a memory node."""
+        pass
+
+    @abstractmethod
+    def get_version_chain(self, memory_id: str) -> List[MemoryNode]:
+        """Walk the supersession chain for a memory, returning all versions oldest-first."""
         pass
 
     @abstractmethod

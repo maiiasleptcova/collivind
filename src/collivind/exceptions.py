@@ -17,3 +17,7 @@ class DockerExecutionError(CollivindError):
 class HealthCheckFailedError(CollivindError):
     """Raised when services do not become healthy in time."""
     pass
+
+class StorageUnavailableError(CollivindError):
+    """Raised when a storage backend is not reachable."""
+    pass

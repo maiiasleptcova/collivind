@@ -1,8 +1,9 @@
-import pytest
 from datetime import datetime
-from collivind.models.memory import MemoryCreate, MemoryNode, MemoryCategory
-from collivind.models.entity import EntityCreate, EntityNode, EntityType
-from collivind.models.relationship import RelationshipCreate, RelationshipEdge, RelType
+
+from collivind.models.entity import EntityNode, EntityType
+from collivind.models.memory import MemoryCategory, MemoryNode
+from collivind.models.relationship import RelationshipEdge, RelType
+
 
 def test_memory_node_creation():
     node = MemoryNode(

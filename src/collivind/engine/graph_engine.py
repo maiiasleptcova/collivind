@@ -1,10 +1,19 @@
-from typing import List, Dict, Any, Set
+from typing import Any, Dict, List, Optional
+
 from collivind.storage.interfaces import GraphStore
-from collivind.models import MemoryNode
+
 
 class GraphEngine:
     def __init__(self, graph_store: GraphStore):
         self.graph_store = graph_store
+
+    def _neighbor_identity(self, neighbor: Dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
+        node = neighbor.get("node") if isinstance(neighbor.get("node"), dict) else {}
+        ent_id = neighbor.get("id") or node.get("id")
+        ent_name = neighbor.get("name") or node.get("name")
+        if not ent_name and ent_id:
+            ent_name = ent_id.replace("_", " ")
+        return ent_id, ent_name
 
     def get_expanded_memories(self, seed_memory_ids: List[str]) -> Dict[str, Dict[str, Any]]:
         """
@@ -22,15 +31,16 @@ class GraphEngine:
         
         for mem_id in seed_memory_ids:
             # 1. Get entities for this memory
-            neighbors = self.graph_store.get_neighbors(mem_id, rel_types=["ABOUT", "MENTIONS"], direction="OUT", depth=1)
+            neighbors = self.graph_store.get_neighbors(
+                mem_id, rel_types=["ABOUT", "MENTIONS"], direction="OUT", depth=1,
+            )
             
             for n in neighbors:
-                entity = n["node"]
-                ent_name = entity.get("name")
-                if not ent_name:
+                ent_id, ent_name = self._neighbor_identity(n)
+                if not ent_id:
                     continue
-                    
-                # 2. Get memories for this entity
+                ent_name = ent_name or ent_id.replace("_", " ")
+
                 related_mems = self.graph_store.find_related_memories(ent_name, limit=20)
                 for r_mem in related_mems:
                     if r_mem.id in seed_memory_ids:
