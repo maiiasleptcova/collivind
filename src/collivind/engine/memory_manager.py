@@ -119,6 +119,73 @@ class MemoryManager:
     def invalidate(self, memory_id: str, superseded_by: str, reason: str) -> None:
         self.graph_store.invalidate_memory(memory_id, superseded_by, reason)
 
+    def update_memory(
+        self,
+        memory_id: str,
+        content: Optional[str] = None,
+        summary: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        confidence: Optional[float] = None,
+    ) -> Optional[MemoryNode]:
+        """Update fields on a memory; re-embeds when the text changes."""
+        existing = self.graph_store.get_memory(memory_id)
+        if not existing:
+            return None
+
+        updates = {
+            k: v for k, v in
+            {"content": content, "summary": summary, "tags": tags, "confidence": confidence}.items()
+            if v is not None
+        }
+        if not updates:
+            return existing
+
+        updated = self.graph_store.update_memory(memory_id, **updates)
+        if updated and (content is not None or summary is not None):
+            recreate = MemoryCreate(
+                content=updated.content,
+                summary=updated.summary,
+                category=updated.category,
+                project_id=updated.project_id,
+                tags=updated.tags,
+            )
+            vector = self.embedding_provider.embed(build_enriched_text(recreate))
+            self.vector_store.upsert(updated.id, vector, updated.to_dict())
+        return updated
+
+    def forget(self, memory_id: str) -> bool:
+        """Permanently delete a memory from graph and vector stores."""
+        if not self.graph_store.get_memory(memory_id):
+            return False
+        self.graph_store.delete_memory(memory_id)
+        self.vector_store.delete(memory_id)
+        return True
+
+    def export_memories(self, project_id: str = "default", limit: int = 100_000) -> List[Dict[str, Any]]:
+        """All memories of a project as plain dicts (newest first).
+
+        v1 exports memory nodes only; entity links are rebuilt on import
+        by re-running extraction, not preserved.
+        """
+        return [m.to_dict() for m in self.graph_store.get_timeline(project_id, limit=limit)]
+
+    def import_memories(self, records: List[Dict[str, Any]]) -> int:
+        """Re-add exported records through the normal pipeline (dedup applies).
+
+        Returns the number of records processed.
+        """
+        for rec in records:
+            self.add_memory(MemoryCreate(
+                content=rec["content"],
+                summary=rec.get("summary", rec["content"][:120]),
+                category=MemoryCategory(rec.get("category", "fact")),
+                project_id=rec.get("project_id", "default"),
+                user_id=rec.get("user_id", "local"),
+                confidence=rec.get("confidence", 1.0),
+                tags=rec.get("tags") or [],
+            ))
+        return len(records)
+
     def search(self, query: SearchQuery) -> List[SearchResult]:
         """Hybrid search via SearchEngine."""
         return self.search_engine.search(query)
