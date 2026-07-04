@@ -167,7 +167,7 @@ class Neo4jGraphStore(GraphStore):
                 id=entity.id, 
                 name=entity.name, 
                 type=entity.type.value, 
-                props=str(entity.properties), # simplified, production would serialize nicely
+                props=json.dumps(entity.properties),
                 created_at=entity.created_at.isoformat(),
                 updated_at=entity.updated_at.isoformat()
             )
