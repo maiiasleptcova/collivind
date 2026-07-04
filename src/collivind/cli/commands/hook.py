@@ -31,8 +31,52 @@ Save the data using the tool right now.
 </collivind_urgent_extraction>
 """
 
+HOOK_MARKER = "collivind hook"
+
+
 def get_state_file() -> Path:
     return Path.home() / ".collivind" / "hook_state.json"
+
+
+def get_claude_settings_path() -> Path:
+    return Path.home() / ".claude" / "settings.json"
+
+
+def install_hooks(enable_stop: bool = True, enable_precompact: bool = True,
+                  save_interval: int = 15) -> list[str]:
+    """Register collivind hooks in ~/.claude/settings.json. Idempotent.
+
+    Replaces any existing collivind entries (so threshold changes apply),
+    preserves everything else in the file. Returns the list of events registered.
+    """
+    settings_path = get_claude_settings_path()
+    settings = {}
+    if settings_path.exists():
+        try:
+            settings = json.loads(settings_path.read_text())
+        except json.JSONDecodeError:
+            raise click.ClickException(
+                f"{settings_path} is not valid JSON; fix it manually and re-run."
+            )
+
+    wanted = {}
+    if enable_stop:
+        wanted["Stop"] = f"collivind hook stop --threshold {save_interval}"
+    if enable_precompact:
+        wanted["PreCompact"] = "collivind hook precompact"
+
+    hooks = settings.setdefault("hooks", {})
+    for event, command in wanted.items():
+        entries = [
+            e for e in hooks.get(event, [])
+            if not any(HOOK_MARKER in h.get("command", "") for h in e.get("hooks", []))
+        ]
+        entries.append({"hooks": [{"type": "command", "command": command}]})
+        hooks[event] = entries
+
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    settings_path.write_text(json.dumps(settings, indent=2) + "\n")
+    return list(wanted)
 
 def read_state() -> dict:
     state_file = get_state_file()
@@ -61,14 +105,29 @@ def stop(threshold):
     """Periodic stop hook."""
     state = read_state()
     count = state.get("message_count", 0) + 1
-    
+
     if count >= threshold:
-        click.echo(EXTRACTION_PROMPT)
+        # Stop hooks only reach the model via a block decision; plain stdout
+        # is discarded by Claude Code.
+        click.echo(json.dumps({"decision": "block", "reason": EXTRACTION_PROMPT}))
         state["message_count"] = 0
     else:
         state["message_count"] = count
-        
+
     write_state(state)
+
+@hook.command()
+def install():
+    """Register collivind hooks in ~/.claude/settings.json."""
+    from collivind.config import load_config
+
+    cfg = load_config().hooks
+    events = install_hooks(cfg.enable_stop, cfg.enable_precompact, cfg.save_interval)
+    if events:
+        click.secho(f"Registered hooks: {', '.join(events)}", fg="green")
+    else:
+        click.secho("All hooks disabled in config; nothing registered.", fg="yellow")
+
 
 @hook.command()
 def precompact():

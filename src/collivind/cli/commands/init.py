@@ -32,6 +32,27 @@ def init():
         _init_docker(config, data_dir)
 
     _register_mcp_server()
+    _register_hooks(config)
+
+
+def _register_hooks(config):
+    """Register Claude Code hooks in ~/.claude/settings.json."""
+    from collivind.cli.commands.hook import install_hooks
+
+    click.echo("Registering Claude Code hooks... ", nl=False)
+    try:
+        events = install_hooks(
+            config.hooks.enable_stop,
+            config.hooks.enable_precompact,
+            config.hooks.save_interval,
+        )
+        if events:
+            click.secho(f"done ({', '.join(events)})", fg="green")
+        else:
+            click.secho("skipped (disabled in config)", fg="yellow")
+    except Exception as e:
+        click.secho(f"skipped ({e})", fg="yellow")
+        click.echo("Run manually: collivind hook install")
 
 
 def _init_embedded(config, data_dir: Path):
