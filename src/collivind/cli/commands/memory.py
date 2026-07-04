@@ -55,6 +55,7 @@ def add(content, summary, category, project, tags, confidence, as_json):
             summary=summary or content[:120],
             category=MemoryCategory(category),
             project_id=project,
+            user_id=manager.config.user_id,
             confidence=confidence,
             tags=[t.strip() for t in tags.split(",") if t.strip()],
         ))

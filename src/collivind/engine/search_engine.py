@@ -39,6 +39,8 @@ class SearchEngine:
             return False
         if query.session_id and memory.session_id != query.session_id:
             return False
+        if query.user_id and memory.user_id != query.user_id:
+            return False
         if query.date_from and memory.created_at < query.date_from:
             return False
         if query.date_to and memory.created_at > query.date_to:

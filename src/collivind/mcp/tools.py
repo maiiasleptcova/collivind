@@ -99,6 +99,7 @@ class CollivindTools:
                         "tags": {"type": "array", "items": {"type": "string"}},
                         "entity_names": {"type": "array", "items": {"type": "string"}},
                         "session_id": {"type": "string", "description": "Filter by session"},
+                        "user_id": {"type": "string", "description": "Filter by contributing user"},
                         "date_from": {"type": "string", "description": "ISO datetime"},
                         "date_to": {"type": "string", "description": "ISO datetime"}
                     },
@@ -334,6 +335,7 @@ class CollivindTools:
                     tags=args.get("tags"),
                     entity_names=args.get("entity_names"),
                     session_id=args.get("session_id"),
+                    user_id=args.get("user_id"),
                     date_from=date_from,
                     date_to=date_to,
                 )
