@@ -58,15 +58,16 @@ claude mcp add --global collivind -- python3 -m collivind.mcp.server
 
 Collivind uses Claude Code hooks for automatic memory extraction:
 
-- **Stop hook** — every 15 messages, prompts Claude to extract and store knowledge
+- **Stop hook** — every 15 responses, prompts Claude to extract and store knowledge
 - **PreCompact hook** — saves all session knowledge before context compression
 
-Register hooks:
+`collivind init` registers both hooks in `~/.claude/settings.json` automatically. To (re)register manually:
 
 ```bash
-collivind hook stop     # periodic extraction
-collivind hook precompact  # pre-compression save
+collivind hook install
 ```
+
+Tune the extraction interval and toggles in the `[hooks]` section of `~/.collivind/config.toml`.
 
 ## MCP Tools
 
@@ -84,6 +85,9 @@ Once connected, Claude Code gets these tools:
 | `collivind_invalidate` | Mark a memory as outdated/superseded |
 | `collivind_forget` | Delete a memory permanently |
 | `collivind_find_contradictions` | Detect conflicting memories |
+| `collivind_get_version_chain` | Full supersession history of a memory |
+| `collivind_extract` | Get an extraction prompt for raw text |
+| `collivind_extract_save` | Parse and store an LLM extraction response |
 
 ## CLI Commands
 
@@ -93,6 +97,8 @@ collivind status            # Health check
 collivind search "query"    # Search memories from terminal
 collivind reset             # Wipe all data (with confirmation)
 collivind docker up|down|logs  # Container management (docker mode)
+collivind hook install      # Register Claude Code hooks
+
 ```
 
 ## How It Works

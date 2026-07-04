@@ -1,5 +1,10 @@
 # Collivind Design Spec
 
+> **Note:** this is the original design document. The implemented MCP tool
+> surface has since diverged (renames, additions like extract/version tools,
+> and dropped tools) — the README and `src/collivind/mcp/tools.py` are the
+> source of truth.
+
 Open-source, graph-based memory layer for AI coding assistants. Stores knowledge from coding sessions (facts, decisions, patterns, errors, architecture choices) in a graph database with vector embeddings for semantic search. Runs entirely locally via Docker — no LLM API keys required.
 
 ## Problem
