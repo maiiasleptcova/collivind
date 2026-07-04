@@ -17,16 +17,21 @@ def check_qdrant_health(config: CollivindConfig) -> Dict[str, Any]:
         return {"status": "error", "message": f"Connection failed: {e}"}
 
 def check_neo4j_health(config: CollivindConfig) -> Dict[str, Any]:
-    """Checks if Neo4j is healthy via its HTTP API (port 7474)."""
-    # Assuming standard setup maps bolt 7687 and http 7474
-    # Note: Using http since bolt needs the neo4j driver which we'll configure later
-    url = "http://localhost:7474/"
+    """Checks Neo4j connectivity over bolt using the configured URI."""
+    from neo4j import GraphDatabase
+
     try:
-        resp = httpx.get(url, timeout=2.0)
-        if resp.status_code == 200:
-            return {"status": "ok", "message": "Neo4j is healthy"}
-        return {"status": "error", "message": f"Neo4j returned {resp.status_code}"}
-    except httpx.RequestError as e:
+        driver = GraphDatabase.driver(
+            config.neo4j.uri,
+            auth=(config.neo4j.user, config.neo4j.password),
+            connection_timeout=2.0,
+        )
+        try:
+            driver.verify_connectivity()
+        finally:
+            driver.close()
+        return {"status": "ok", "message": "Neo4j is healthy"}
+    except Exception as e:
         return {"status": "error", "message": f"Connection failed: {e}"}
 
 def check_embeddings_health(config: CollivindConfig) -> Dict[str, Any]:
