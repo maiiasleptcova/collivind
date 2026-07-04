@@ -78,7 +78,8 @@ class MemoryManager:
             existing = self.graph_store.get_memory(dup_match.memory_id)
             if existing:
                 if dup_match.is_exact:
-                    return self._merge_into_existing(existing, memory_create, entities)
+                    # identical content resubmitted — reject, keep existing as-is
+                    return existing
                 return self._merge_into_existing(existing, memory_create, entities)
 
         memory_node = self.graph_store.create_memory(memory_create)
