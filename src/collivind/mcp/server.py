@@ -86,7 +86,9 @@ class MCPServer:
             return None # Notifications don't get responses
             
         elif method == "tools/list":
-            tools_list = self.tools.get_tool_list() if self.tools else []
+            # Tool schemas are static — advertise them even in degraded mode
+            # so clients can see what exists; calls return isError instead.
+            tools_list = self.tools.get_tool_list() if self.tools else CollivindTools.get_tool_list()
             return {
                 "jsonrpc": "2.0",
                 "id": req_id,

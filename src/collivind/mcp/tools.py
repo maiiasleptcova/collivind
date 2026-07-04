@@ -33,7 +33,8 @@ class CollivindTools:
                 status[name] = {"status": "error", "message": str(e)}
         return status
 
-    def get_tool_list(self) -> List[Dict[str, Any]]:
+    @staticmethod
+    def get_tool_list() -> List[Dict[str, Any]]:
         return [
             {
                 "name": "collivind_status",
