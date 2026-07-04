@@ -95,11 +95,20 @@ Once connected, Claude Code gets these tools:
 collivind init              # Setup and start services
 collivind status            # Health check
 collivind search "query"    # Search memories from terminal
+collivind add "content" -c decision -t db,infra  # Store a memory
+collivind get <id>          # Show one memory
+collivind context "query"   # Formatted context block (pipe into prompts)
+collivind update <id> --content "..."  # Update a memory (re-embeds)
+collivind invalidate <id> -r outdated  # Mark outdated, keep history
+collivind forget <id>       # Delete permanently (with confirmation)
+collivind export -p proj -o mem.jsonl  # Backup / portability
+collivind import mem.jsonl  # Re-import (deduplication applies)
 collivind reset             # Wipe all data (with confirmation)
 collivind docker up|down|logs  # Container management (docker mode)
 collivind hook install      # Register Claude Code hooks
-
 ```
+
+Memory verbs take `--json` for scripting and agent use.
 
 ## How It Works
 
