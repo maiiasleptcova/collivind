@@ -24,7 +24,9 @@ class TestInitCommand:
     @patch("collivind.cli.commands.init.copy_templates")
     @patch("collivind.cli.commands.init.check_docker_running")
     @patch("collivind.cli.commands.init.load_config")
-    def test_init_docker_mode(self, mock_config, mock_docker, mock_templates, mock_up, mock_health, mock_mcp, mock_hooks):
+    def test_init_docker_mode(
+        self, mock_config, mock_docker, mock_templates, mock_up, mock_health, mock_mcp, mock_hooks
+    ):
         mock_config.return_value = _mock_config("docker")
         mock_health.return_value = {
             "qdrant": {"status": "ok", "message": "healthy"},
@@ -46,8 +48,10 @@ class TestInitCommand:
         config = _mock_config("embedded")
         mock_config.return_value = config
         runner = CliRunner()
-        with patch("collivind.storage.graph_sqlite.SqliteGraphStore") as mock_graph, \
-             patch("collivind.storage.qdrant_embedded.EmbeddedQdrantStore") as mock_qdrant:
+        with (
+            patch("collivind.storage.graph_sqlite.SqliteGraphStore") as mock_graph,
+            patch("collivind.storage.qdrant_embedded.EmbeddedQdrantStore") as mock_qdrant,
+        ):
             mock_graph.return_value = MagicMock()
             mock_qdrant.return_value = MagicMock()
             result = runner.invoke(init)
@@ -61,8 +65,10 @@ class TestInitCommand:
         config = _mock_config("embedded")
         mock_config.return_value = config
         runner = CliRunner()
-        with patch("collivind.storage.graph_sqlite.SqliteGraphStore") as mock_graph, \
-             patch("collivind.storage.qdrant_embedded.EmbeddedQdrantStore") as mock_qdrant:
+        with (
+            patch("collivind.storage.graph_sqlite.SqliteGraphStore") as mock_graph,
+            patch("collivind.storage.qdrant_embedded.EmbeddedQdrantStore") as mock_qdrant,
+        ):
             mock_graph.return_value = MagicMock()
             mock_qdrant.return_value = MagicMock()
             runner.invoke(init)

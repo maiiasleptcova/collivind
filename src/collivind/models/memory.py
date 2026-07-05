@@ -14,11 +14,13 @@ class MemoryCategory(str, Enum):
     PREFERENCE = "preference"
     SNIPPET = "snippet"
 
+
 class MemorySource(str, Enum):
     HOOK_STOP = "hook_stop"
     HOOK_PRECOMPACT = "hook_precompact"
     PERIODIC = "periodic"
     MANUAL = "manual"
+
 
 @dataclass
 class MemoryNode:
@@ -58,8 +60,9 @@ class MemoryNode:
             "version": self.version,
             "previous_version_id": self.previous_version_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+
 
 @dataclass
 class MemoryCreate:

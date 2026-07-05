@@ -3,6 +3,7 @@
 Produces category, summary, entities, relationships, and tags from
 unstructured conversation content. Used by hooks and the auto-extract tool.
 """
+
 import json
 import logging
 from dataclasses import dataclass, field
@@ -97,14 +98,16 @@ def parse_extraction_response(response_text: str) -> List[ExtractionResult]:
                     etype = "concept"
                 entities.append({"name": e["name"], "type": etype})
 
-        results.append(ExtractionResult(
-            content=content,
-            summary=item.get("summary", content[:50]),
-            category=category,
-            confidence=min(1.0, max(0.0, float(item.get("confidence", 1.0)))),
-            tags=item.get("tags", []),
-            entities=entities,
-        ))
+        results.append(
+            ExtractionResult(
+                content=content,
+                summary=item.get("summary", content[:50]),
+                category=category,
+                confidence=min(1.0, max(0.0, float(item.get("confidence", 1.0)))),
+                tags=item.get("tags", []),
+                entities=entities,
+            )
+        )
 
     return results
 

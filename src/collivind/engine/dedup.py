@@ -25,9 +25,7 @@ class Deduplicator:
             return (match.memory_id, match.score)
         return None
 
-    def find_duplicate_detailed(
-        self, vector: List[float], project_id: str
-    ) -> Optional[DuplicateMatch]:
+    def find_duplicate_detailed(self, vector: List[float], project_id: str) -> Optional[DuplicateMatch]:
         results = self.vector_store.search(
             vector=vector,
             limit=1,

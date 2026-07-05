@@ -35,6 +35,7 @@ def _node(**kw):
 
 # --- engine ---
 
+
 def test_update_memory_reembeds_on_content_change():
     node = _node()
     manager, vs, gs, ep = _make_manager(existing=node)
@@ -91,6 +92,7 @@ def test_export_and_import_roundtrip():
 
 
 # --- cli ---
+
 
 def test_cli_add_json():
     manager = MagicMock()

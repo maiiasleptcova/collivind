@@ -54,15 +54,12 @@ def _merge_hook_entries(settings_path: Path, wanted: dict) -> None:
         try:
             settings = json.loads(settings_path.read_text())
         except json.JSONDecodeError:
-            raise click.ClickException(
-                f"{settings_path} is not valid JSON; fix it manually and re-run."
-            )
+            raise click.ClickException(f"{settings_path} is not valid JSON; fix it manually and re-run.")
 
     hooks = settings.setdefault("hooks", {})
     for event, command in wanted.items():
         entries = [
-            e for e in hooks.get(event, [])
-            if not any(HOOK_MARKER in h.get("command", "") for h in e.get("hooks", []))
+            e for e in hooks.get(event, []) if not any(HOOK_MARKER in h.get("command", "") for h in e.get("hooks", []))
         ]
         entries.append({"hooks": [{"type": "command", "command": command}]})
         hooks[event] = entries
@@ -71,9 +68,13 @@ def _merge_hook_entries(settings_path: Path, wanted: dict) -> None:
     settings_path.write_text(json.dumps(settings, indent=2) + "\n")
 
 
-def install_hooks(enable_stop: bool = True, enable_precompact: bool = True,
-                  save_interval: int = 15, enable_session_start: bool = True,
-                  tool: str = "claude") -> list[str]:
+def install_hooks(
+    enable_stop: bool = True,
+    enable_precompact: bool = True,
+    save_interval: int = 15,
+    enable_session_start: bool = True,
+    tool: str = "claude",
+) -> list[str]:
     """Register collivind hooks for a tool. Returns the events registered.
 
     Claude Code gets all hooks; Codex gets SessionStart only — its
@@ -99,13 +100,15 @@ def install_hooks(enable_stop: bool = True, enable_precompact: bool = True,
 
 def install_all_hooks(cfg) -> dict:
     """Install hooks for Claude Code, plus Codex when ~/.codex exists."""
-    results = {"claude": install_hooks(cfg.enable_stop, cfg.enable_precompact,
-                                       cfg.save_interval, cfg.enable_session_start)}
+    results = {
+        "claude": install_hooks(cfg.enable_stop, cfg.enable_precompact, cfg.save_interval, cfg.enable_session_start)
+    }
     if get_codex_hooks_path().parent.exists():
-        results["codex"] = install_hooks(cfg.enable_stop, cfg.enable_precompact,
-                                         cfg.save_interval, cfg.enable_session_start,
-                                         tool="codex")
+        results["codex"] = install_hooks(
+            cfg.enable_stop, cfg.enable_precompact, cfg.save_interval, cfg.enable_session_start, tool="codex"
+        )
     return results
+
 
 def read_state() -> dict:
     state_file = get_state_file()
@@ -117,19 +120,22 @@ def read_state() -> dict:
             pass
     return {"message_count": 0}
 
+
 def write_state(state: dict):
     state_file = get_state_file()
     state_file.parent.mkdir(parents=True, exist_ok=True)
     with open(state_file, "w") as f:
         json.dump(state, f)
 
+
 @click.group()
 def hook():
     """Claude Code hook commands."""
     pass
 
+
 @hook.command()
-@click.option('--threshold', default=15, help="Number of messages before extraction")
+@click.option("--threshold", default=15, help="Number of messages before extraction")
 def stop(threshold):
     """Periodic stop hook."""
     state = read_state()
@@ -145,8 +151,10 @@ def stop(threshold):
 
     write_state(state)
 
+
 def _load_manager():
     from collivind.cli.commands.memory import _manager
+
     return _manager()
 
 
@@ -162,8 +170,10 @@ def session_start(project, limit):
     if not memories:
         return
 
-    lines = [f"- [{m.category.value if hasattr(m.category, 'value') else m.category}] "
-             f"{(m.summary or m.content)[:90]}" for m in memories]
+    lines = [
+        f"- [{m.category.value if hasattr(m.category, 'value') else m.category}] {(m.summary or m.content)[:90]}"
+        for m in memories
+    ]
     text = (
         "<collivind_memory_index>\n"
         f"Stored knowledge for project '{project}' (most recent first):\n"
@@ -171,17 +181,25 @@ def session_start(project, limit):
         + "\nUse collivind_search or collivind_get_context to recall details.\n"
         "</collivind_memory_index>"
     )
-    click.echo(json.dumps({
-        "hookSpecificOutput": {
-            "hookEventName": "SessionStart",
-            "additionalContext": text,
-        }
-    }))
+    click.echo(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "SessionStart",
+                    "additionalContext": text,
+                }
+            }
+        )
+    )
 
 
 @hook.command()
-@click.option("--tool", type=click.Choice(["claude", "codex", "auto"]), default="auto",
-              help="Which agent to register hooks for (auto = Claude Code + Codex if present)")
+@click.option(
+    "--tool",
+    type=click.Choice(["claude", "codex", "auto"]),
+    default="auto",
+    help="Which agent to register hooks for (auto = Claude Code + Codex if present)",
+)
 def install(tool):
     """Register collivind hooks (Claude Code settings.json / Codex hooks.json)."""
     from collivind.config import load_config
@@ -190,8 +208,11 @@ def install(tool):
     if tool == "auto":
         results = install_all_hooks(cfg)
     else:
-        results = {tool: install_hooks(cfg.enable_stop, cfg.enable_precompact,
-                                       cfg.save_interval, cfg.enable_session_start, tool=tool)}
+        results = {
+            tool: install_hooks(
+                cfg.enable_stop, cfg.enable_precompact, cfg.save_interval, cfg.enable_session_start, tool=tool
+            )
+        }
 
     registered = {t: ev for t, ev in results.items() if ev}
     if not registered:

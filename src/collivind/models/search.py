@@ -20,6 +20,7 @@ class SearchQuery:
     date_from: Optional[datetime] = None
     date_to: Optional[datetime] = None
 
+
 @dataclass
 class SearchResult:
     memory: MemoryNode

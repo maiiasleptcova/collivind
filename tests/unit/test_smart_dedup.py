@@ -15,6 +15,7 @@ from collivind.models import (
 def test_dedup_match_exact():
     vs = MagicMock()
     from collivind.config import SearchConfig
+
     config = SearchConfig()
     dedup = Deduplicator(vs, config)
 
@@ -29,6 +30,7 @@ def test_dedup_match_exact():
 def test_dedup_match_near():
     vs = MagicMock()
     from collivind.config import SearchConfig
+
     config = SearchConfig()
     dedup = Deduplicator(vs, config)
 
@@ -42,6 +44,7 @@ def test_dedup_match_near():
 def test_dedup_no_match():
     vs = MagicMock()
     from collivind.config import SearchConfig
+
     config = SearchConfig()
     dedup = Deduplicator(vs, config)
 
@@ -55,10 +58,7 @@ def test_exact_duplicate_rejected_without_merge():
     vs = MagicMock()
     vs.search.return_value = [{"id": "dup-1", "score": 0.99}]
 
-    existing = MemoryNode(
-        id="dup-1", content="Test", summary="Test",
-        category=MemoryCategory.FACT, tags=["tag1"]
-    )
+    existing = MemoryNode(id="dup-1", content="Test", summary="Test", category=MemoryCategory.FACT, tags=["tag1"])
     gs = MagicMock()
     gs.get_memory.return_value = existing
 
@@ -68,13 +68,8 @@ def test_exact_duplicate_rejected_without_merge():
     config = CollivindConfig()
     manager = MemoryManager(vs, gs, ep, config)
 
-    mem_create = MemoryCreate(
-        content="Test", summary="Test",
-        category=MemoryCategory.FACT, tags=["tag1", "tag2"]
-    )
-    result = manager.add_memory(
-        mem_create, entities=[EntityCreate(name="NewEntity", type=EntityType.CONCEPT)]
-    )
+    mem_create = MemoryCreate(content="Test", summary="Test", category=MemoryCategory.FACT, tags=["tag1", "tag2"])
+    result = manager.add_memory(mem_create, entities=[EntityCreate(name="NewEntity", type=EntityType.CONCEPT)])
 
     assert result is existing
     gs.update_memory.assert_not_called()
@@ -86,10 +81,7 @@ def test_merge_adds_new_tags():
     vs = MagicMock()
     vs.search.return_value = [{"id": "dup-1", "score": 0.95}]
 
-    existing = MemoryNode(
-        id="dup-1", content="Test", summary="Test",
-        category=MemoryCategory.FACT, tags=["tag1"]
-    )
+    existing = MemoryNode(id="dup-1", content="Test", summary="Test", category=MemoryCategory.FACT, tags=["tag1"])
     gs = MagicMock()
     gs.get_memory.return_value = existing
 
@@ -103,10 +95,7 @@ def test_merge_adds_new_tags():
     config = CollivindConfig()
     manager = MemoryManager(vs, gs, ep, config)
 
-    mem_create = MemoryCreate(
-        content="Test", summary="Test",
-        category=MemoryCategory.FACT, tags=["tag1", "tag2"]
-    )
+    mem_create = MemoryCreate(content="Test", summary="Test", category=MemoryCategory.FACT, tags=["tag1", "tag2"])
     ent = EntityCreate(name="NewEntity", type=EntityType.CONCEPT)
 
     manager.add_memory(mem_create, entities=[ent])
@@ -120,10 +109,7 @@ def test_merge_no_update_when_same_tags():
     vs = MagicMock()
     vs.search.return_value = [{"id": "dup-1", "score": 0.95}]
 
-    existing = MemoryNode(
-        id="dup-1", content="Test", summary="Test",
-        category=MemoryCategory.FACT, tags=["tag1"]
-    )
+    existing = MemoryNode(id="dup-1", content="Test", summary="Test", category=MemoryCategory.FACT, tags=["tag1"])
     gs = MagicMock()
     gs.get_memory.return_value = existing
 
@@ -133,10 +119,7 @@ def test_merge_no_update_when_same_tags():
     config = CollivindConfig()
     manager = MemoryManager(vs, gs, ep, config)
 
-    mem_create = MemoryCreate(
-        content="Test", summary="Test",
-        category=MemoryCategory.FACT, tags=["tag1"]
-    )
+    mem_create = MemoryCreate(content="Test", summary="Test", category=MemoryCategory.FACT, tags=["tag1"])
 
     manager.add_memory(mem_create)
     gs.update_memory.assert_not_called()

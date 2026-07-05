@@ -19,8 +19,11 @@ class VectorStore(ABC):
 
     @abstractmethod
     def search(
-        self, vector: List[float], limit: int = 10,
-        filters: Optional[Dict[str, Any]] = None, threshold: float = 0.3,
+        self,
+        vector: List[float],
+        limit: int = 10,
+        filters: Optional[Dict[str, Any]] = None,
+        threshold: float = 0.3,
     ) -> List[Dict[str, Any]]:
         """Search for similar vectors."""
         pass
@@ -39,6 +42,7 @@ class VectorStore(ABC):
     def close(self) -> None:
         """Close connection."""
         pass
+
 
 class GraphStore(ABC):
     @abstractmethod
@@ -83,8 +87,11 @@ class GraphStore(ABC):
 
     @abstractmethod
     def get_neighbors(
-        self, node_id: str, rel_types: List[str],
-        direction: str = "OUT", depth: int = 1,
+        self,
+        node_id: str,
+        rel_types: List[str],
+        direction: str = "OUT",
+        depth: int = 1,
     ) -> List[Dict[str, Any]]:
         """Get neighboring nodes in the graph."""
         pass
@@ -118,6 +125,7 @@ class GraphStore(ABC):
     def close(self) -> None:
         """Close connection."""
         pass
+
 
 class EmbeddingProvider(ABC):
     @abstractmethod

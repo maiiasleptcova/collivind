@@ -3,6 +3,7 @@
 Expands text before embedding to improve recall. The original content
 is stored unchanged — only the vector captures the wider semantic field.
 """
+
 from typing import List, Optional
 
 from collivind.models.memory import MemoryCategory, MemoryCreate

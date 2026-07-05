@@ -3,6 +3,7 @@
 Each backend can be configured independently via its `provider` field,
 or defaults are chosen based on the top-level `mode` setting.
 """
+
 import logging
 
 from collivind.config import CollivindConfig
@@ -38,6 +39,7 @@ def create_vector_store(config: CollivindConfig) -> VectorStore:
 
     if provider == "embedded":
         from collivind.storage.qdrant_embedded import EmbeddedQdrantStore
+
         return EmbeddedQdrantStore(
             data_dir=config.data_dir,
             config=config.qdrant,
@@ -45,6 +47,7 @@ def create_vector_store(config: CollivindConfig) -> VectorStore:
         )
     else:
         from collivind.storage.qdrant_store import QdrantVectorStore
+
         return QdrantVectorStore(config.qdrant, config.embeddings.dimension)
 
 
@@ -54,9 +57,11 @@ def create_graph_store(config: CollivindConfig) -> GraphStore:
 
     if provider == "sqlite":
         from collivind.storage.graph_sqlite import SqliteGraphStore
+
         return SqliteGraphStore(data_dir=config.data_dir)
     else:
         from collivind.storage.neo4j_store import Neo4jGraphStore
+
         return Neo4jGraphStore(config.neo4j)
 
 
@@ -66,15 +71,19 @@ def create_embedding_provider(config: CollivindConfig) -> EmbeddingProvider:
 
     if provider == "local":
         from collivind.storage.embedding_local import LocalEmbeddingProvider
+
         return LocalEmbeddingProvider(config.embeddings)
     elif provider == "openai":
         from collivind.storage.embedding_openai import OpenAIEmbeddingProvider
+
         return OpenAIEmbeddingProvider(config.embeddings)
     elif provider == "ollama":
         from collivind.storage.embedding_ollama import OllamaEmbeddingProvider
+
         return OllamaEmbeddingProvider(config.embeddings)
     else:
         from collivind.storage.embedding_service import HttpEmbeddingProvider
+
         return HttpEmbeddingProvider(config.embeddings)
 
 
