@@ -59,8 +59,11 @@ claude mcp add --global collivind -- python3 -m collivind.mcp.server
 Collivind uses Claude Code hooks for automatic memory capture and recall:
 
 - **SessionStart hook** — injects a compact index (~100 tokens) of your project's stored knowledge at the start of every session
+- **UserPromptSubmit hook** — searches memory with every prompt you type and injects the relevant context (budgeted, silent when nothing matches), so the agent starts building with what it already learned
 - **Stop hook** — every 15 responses, prompts Claude to extract and store knowledge
 - **PreCompact hook** — saves all session knowledge before context compression
+
+The recall hooks (SessionStart, UserPromptSubmit) are also registered for Codex CLI when `~/.codex` exists.
 
 `collivind init` registers both hooks in `~/.claude/settings.json` automatically. To (re)register manually:
 

@@ -58,6 +58,7 @@ class HooksConfig:
     enable_precompact: bool = True
     enable_stop: bool = True
     enable_session_start: bool = True
+    enable_user_prompt: bool = True
 
 
 @dataclass
@@ -146,6 +147,7 @@ save_interval = 15
 enable_precompact = true
 enable_stop = true
 enable_session_start = true
+enable_user_prompt = true
 """
 
 

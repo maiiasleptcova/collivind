@@ -1,4 +1,5 @@
 import json
+import sys
 from pathlib import Path
 
 import click
@@ -74,14 +75,22 @@ def install_hooks(
     save_interval: int = 15,
     enable_session_start: bool = True,
     tool: str = "claude",
+    enable_user_prompt: bool = True,
 ) -> list[str]:
     """Register collivind hooks for a tool. Returns the events registered.
 
-    Claude Code gets all hooks; Codex gets SessionStart only — its
-    additionalContext support is documented, Stop/PreCompact injection isn't.
+    Claude Code gets all hooks; Codex gets the recall hooks only
+    (SessionStart, UserPromptSubmit) — their additionalContext support is
+    documented, Stop/PreCompact injection isn't.
     """
+    recall = {}
+    if enable_session_start:
+        recall["SessionStart"] = "collivind hook session-start"
+    if enable_user_prompt:
+        recall["UserPromptSubmit"] = "collivind hook user-prompt"
+
     if tool == "codex":
-        wanted = {"SessionStart": "collivind hook session-start"} if enable_session_start else {}
+        wanted = recall
         settings_path = get_codex_hooks_path()
     else:
         wanted = {}
@@ -89,8 +98,7 @@ def install_hooks(
             wanted["Stop"] = f"collivind hook stop --threshold {save_interval}"
         if enable_precompact:
             wanted["PreCompact"] = "collivind hook precompact"
-        if enable_session_start:
-            wanted["SessionStart"] = "collivind hook session-start"
+        wanted.update(recall)
         settings_path = get_claude_settings_path()
 
     if wanted:
@@ -100,13 +108,20 @@ def install_hooks(
 
 def install_all_hooks(cfg) -> dict:
     """Install hooks for Claude Code, plus Codex when ~/.codex exists."""
-    results = {
-        "claude": install_hooks(cfg.enable_stop, cfg.enable_precompact, cfg.save_interval, cfg.enable_session_start)
-    }
-    if get_codex_hooks_path().parent.exists():
-        results["codex"] = install_hooks(
-            cfg.enable_stop, cfg.enable_precompact, cfg.save_interval, cfg.enable_session_start, tool="codex"
+
+    def _install(tool):
+        return install_hooks(
+            cfg.enable_stop,
+            cfg.enable_precompact,
+            cfg.save_interval,
+            cfg.enable_session_start,
+            tool=tool,
+            enable_user_prompt=cfg.enable_user_prompt,
         )
+
+    results = {"claude": _install("claude")}
+    if get_codex_hooks_path().parent.exists():
+        results["codex"] = _install("codex")
     return results
 
 
@@ -193,6 +208,41 @@ def session_start(project, limit):
     )
 
 
+@hook.command(name="user-prompt")
+@click.option("--project", "-p", default="default")
+@click.option("--max-tokens", default=800, type=int, help="Recall context budget")
+def user_prompt(project, max_tokens):
+    """Inject memory context relevant to the submitted prompt. Never fails.
+
+    Reads the UserPromptSubmit payload from stdin, searches memory with the
+    prompt text, and emits a token-budgeted context block — or nothing when
+    no stored knowledge is relevant.
+    """
+    try:
+        payload = json.load(sys.stdin)
+        prompt = (payload.get("prompt") or "").strip()
+        if len(prompt) < 15:
+            return  # "yes", "ok", etc. — not worth an embedding round-trip
+
+        # ponytail: embedded mode loads the model per invocation; add a
+        # daemon/warm cache if per-prompt latency hurts (see ROADMAP.md)
+        context = _load_manager().get_context(prompt, project_id=project, limit=5, max_tokens=max_tokens)
+        if "No relevant context found" in context:
+            return
+        click.echo(
+            json.dumps(
+                {
+                    "hookSpecificOutput": {
+                        "hookEventName": "UserPromptSubmit",
+                        "additionalContext": f"<collivind_recall>\n{context}\n</collivind_recall>",
+                    }
+                }
+            )
+        )
+    except Exception:
+        return  # recall must never break prompt submission
+
+
 @hook.command()
 @click.option(
     "--tool",
@@ -210,7 +260,12 @@ def install(tool):
     else:
         results = {
             tool: install_hooks(
-                cfg.enable_stop, cfg.enable_precompact, cfg.save_interval, cfg.enable_session_start, tool=tool
+                cfg.enable_stop,
+                cfg.enable_precompact,
+                cfg.save_interval,
+                cfg.enable_session_start,
+                tool=tool,
+                enable_user_prompt=cfg.enable_user_prompt,
             )
         }
 
