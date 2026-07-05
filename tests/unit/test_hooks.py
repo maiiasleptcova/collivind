@@ -92,8 +92,9 @@ def test_install_hooks_preserves_existing_settings(tmp_path, monkeypatch):
 
 def test_install_hooks_respects_disabled_flags(tmp_path, monkeypatch):
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
-    events = install_hooks(enable_stop=False, enable_precompact=True, enable_session_start=False,
-                           enable_user_prompt=False)
+    events = install_hooks(
+        enable_stop=False, enable_precompact=True, enable_session_start=False, enable_user_prompt=False
+    )
     assert events == ["PreCompact"]
     settings = _read_settings(tmp_path)
     assert "Stop" not in settings["hooks"]
