@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [
-    { name = "Eugene Zubanov" }
+    { name = "Maiia Sleptcova", email = "mayyasleptsova@gmail.com" }
 ]
 dependencies = [
     "click>=8.1.7",
@@ -23,6 +23,8 @@ dependencies = [
 embedded = [
     "sentence-transformers>=2.0.0",
 ]
+
+[dependency-groups]
 dev = [
     "pytest>=8.0.0",
     "ruff>=0.8.0",
