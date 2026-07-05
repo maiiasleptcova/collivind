@@ -10,33 +10,30 @@ from collivind.models import MemoryCategory, MemoryNode, SearchQuery
 def test_search_engine_hybrid_scoring():
     vector_store = MagicMock()
     # Mock vector results
-    vector_store.search.return_value = [
-        {"id": "mem-1", "score": 0.8},
-        {"id": "mem-2", "score": 0.6}
-    ]
-    
+    vector_store.search.return_value = [{"id": "mem-1", "score": 0.8}, {"id": "mem-2", "score": 0.6}]
+
     graph_store = MagicMock()
-    
+
     def mock_get_memory(mem_id):
         return MemoryNode(content=f"Content {mem_id}", summary="Test", category=MemoryCategory.FACT, id=mem_id)
-        
+
     graph_store.get_memory.side_effect = mock_get_memory
-    
+
     embedding_provider = MagicMock()
     embedding_provider.embed.return_value = [0.1, 0.2]
-    
+
     config = SearchConfig(vector_weight=0.7, graph_weight=0.3)
     engine = SearchEngine(vector_store, graph_store, embedding_provider, config)
-    
+
     # Mock graph engine to add graph score to mem-2
     engine.graph_engine = MagicMock()
     engine.graph_engine.get_expanded_memories.return_value = {
         "mem-2": {"memory": mock_get_memory("mem-2"), "shared_entities": ["ent-1", "ent-2"]}
     }
-    
+
     query = SearchQuery(query="test", limit=10)
     results = engine.search(query)
-    
+
     assert len(results) == 2
     # mem-1 score: (0.8 * 0.7) + (0 * 0.3) = 0.56
     # mem-2 score: (0.6 * 0.7) + (0.2 * 0.3) = 0.42 + 0.06 = 0.48
@@ -63,14 +60,14 @@ def test_find_contradictions():
         content="We use PostgreSQL for the database",
         summary="DB choice",
         category=MemoryCategory.DECISION,
-        project_id="test"
+        project_id="test",
     )
 
     existing = MemoryNode(
         content="We use MongoDB for the database",
         summary="DB choice",
         category=MemoryCategory.DECISION,
-        project_id="test"
+        project_id="test",
     )
 
     embedding_provider.embed.return_value = [0.1] * 384
@@ -100,7 +97,7 @@ def test_find_contradictions_skips_same_content():
         content="We use PostgreSQL for the database",
         summary="DB choice",
         category=MemoryCategory.DECISION,
-        project_id="test"
+        project_id="test",
     )
 
     # Same content as target -- should not be flagged
@@ -108,7 +105,7 @@ def test_find_contradictions_skips_same_content():
         content="We use PostgreSQL for the database",
         summary="DB choice",
         category=MemoryCategory.DECISION,
-        project_id="test"
+        project_id="test",
     )
 
     embedding_provider.embed.return_value = [0.1] * 384
@@ -137,7 +134,7 @@ def test_find_contradictions_skips_invalidated():
         content="We use PostgreSQL for the database",
         summary="DB choice",
         category=MemoryCategory.DECISION,
-        project_id="test"
+        project_id="test",
     )
 
     # This memory has been invalidated (valid_to is set)
@@ -146,7 +143,7 @@ def test_find_contradictions_skips_invalidated():
         summary="DB choice",
         category=MemoryCategory.DECISION,
         project_id="test",
-        valid_to=datetime.now(timezone.utc)
+        valid_to=datetime.now(timezone.utc),
     )
 
     embedding_provider.embed.return_value = [0.1] * 384
@@ -174,7 +171,7 @@ def test_find_contradictions_skips_different_category():
         content="We use PostgreSQL for the database",
         summary="DB choice",
         category=MemoryCategory.DECISION,
-        project_id="test"
+        project_id="test",
     )
 
     # Different category -- should not be flagged
@@ -182,7 +179,7 @@ def test_find_contradictions_skips_different_category():
         content="PostgreSQL is a relational database",
         summary="DB info",
         category=MemoryCategory.FACT,
-        project_id="test"
+        project_id="test",
     )
 
     embedding_provider.embed.return_value = [0.1] * 384

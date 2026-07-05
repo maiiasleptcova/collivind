@@ -2,6 +2,7 @@
 
 Every command supports --json for scripting and agent use.
 """
+
 import json
 import sys
 
@@ -50,15 +51,17 @@ def add(content, summary, category, project, tags, confidence, as_json):
     """Store a memory."""
     try:
         manager = _manager()
-        memory = manager.add_memory(MemoryCreate(
-            content=content,
-            summary=summary or content[:120],
-            category=MemoryCategory(category),
-            project_id=project,
-            user_id=manager.config.user_id,
-            confidence=confidence,
-            tags=[t.strip() for t in tags.split(",") if t.strip()],
-        ))
+        memory = manager.add_memory(
+            MemoryCreate(
+                content=content,
+                summary=summary or content[:120],
+                category=MemoryCategory(category),
+                project_id=project,
+                user_id=manager.config.user_id,
+                confidence=confidence,
+                tags=[t.strip() for t in tags.split(",") if t.strip()],
+            )
+        )
     except Exception as e:
         _fail(f"Add failed: {e}")
     if as_json:

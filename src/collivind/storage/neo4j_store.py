@@ -26,19 +26,17 @@ def _retry(fn, max_retries=3, base_delay=0.5):
         except Exception as e:
             last_error = e
             if attempt < max_retries - 1:
-                delay = base_delay * (2 ** attempt)
+                delay = base_delay * (2**attempt)
                 logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying in {delay}s...")
                 time.sleep(delay)
     raise last_error
+
 
 class Neo4jGraphStore(GraphStore):
     def __init__(self, config: Neo4jConfig):
         self.config = config
         try:
-            self.driver = GraphDatabase.driver(
-                config.uri,
-                auth=(config.user, config.password)
-            )
+            self.driver = GraphDatabase.driver(config.uri, auth=(config.user, config.password))
         except Exception as e:
             raise CollivindError(f"Failed to connect to Neo4j: {e}")
 
@@ -47,7 +45,7 @@ class Neo4jGraphStore(GraphStore):
         queries = [
             "CREATE CONSTRAINT memory_id IF NOT EXISTS FOR (m:Memory) REQUIRE m.id IS UNIQUE",
             "CREATE CONSTRAINT entity_id IF NOT EXISTS FOR (e:Entity) REQUIRE e.id IS UNIQUE",
-            "CREATE CONSTRAINT session_id IF NOT EXISTS FOR (s:Session) REQUIRE s.id IS UNIQUE"
+            "CREATE CONSTRAINT session_id IF NOT EXISTS FOR (s:Session) REQUIRE s.id IS UNIQUE",
         ]
         with self.driver.session(database=self.config.database) as session:
             for q in queries:
@@ -72,7 +70,7 @@ class Neo4jGraphStore(GraphStore):
             user_id=data.user_id,
             source=data.source,
             confidence=data.confidence,
-            tags=data.tags
+            tags=data.tags,
         )
 
         query = """
@@ -122,7 +120,7 @@ class Neo4jGraphStore(GraphStore):
                     version=node.get("version", 1),
                     previous_version_id=node.get("previous_version_id"),
                     created_at=datetime.fromisoformat(node["created_at"]) if node.get("created_at") else None,
-                    updated_at=datetime.fromisoformat(node["updated_at"]) if node.get("updated_at") else None
+                    updated_at=datetime.fromisoformat(node["updated_at"]) if node.get("updated_at") else None,
                 )
 
         try:
@@ -136,7 +134,7 @@ class Neo4jGraphStore(GraphStore):
         updates = {k: self._normalize_update_value(k, v) for k, v in updates.items()}
         set_clauses = ", ".join([f"m.{k} = ${k}" for k in updates.keys()])
         query = f"MATCH (m:Memory {{id: $id}}) SET {set_clauses} RETURN m"
-        
+
         with self.driver.session(database=self.config.database) as session:
             result = session.run(query, id=id, **updates)
             record = result.single()
@@ -150,12 +148,8 @@ class Neo4jGraphStore(GraphStore):
             session.run(query, id=id)
 
     def create_entity(self, data: EntityCreate) -> EntityNode:
-        entity = EntityNode(
-            name=data.name,
-            type=data.type,
-            properties=data.properties
-        )
-        
+        entity = EntityNode(name=data.name, type=data.type, properties=data.properties)
+
         query = """
         MERGE (e:Entity {id: $id})
         ON CREATE SET e.name = $name, e.type = $type, e.properties = $props,
@@ -163,13 +157,14 @@ class Neo4jGraphStore(GraphStore):
         RETURN e
         """
         with self.driver.session(database=self.config.database) as session:
-            session.run(query, 
-                id=entity.id, 
-                name=entity.name, 
-                type=entity.type.value, 
+            session.run(
+                query,
+                id=entity.id,
+                name=entity.name,
+                type=entity.type.value,
                 props=json.dumps(entity.properties),
                 created_at=entity.created_at.isoformat(),
-                updated_at=entity.updated_at.isoformat()
+                updated_at=entity.updated_at.isoformat(),
             )
         return entity
 
@@ -206,24 +201,28 @@ class Neo4jGraphStore(GraphStore):
         RETURN r
         """
         with self.driver.session(database=self.config.database) as session:
-            session.run(query, 
-                source_id=data.source_id, 
-                target_id=data.target_id, 
-                confidence=data.confidence, 
-                source=data.source
+            session.run(
+                query,
+                source_id=data.source_id,
+                target_id=data.target_id,
+                confidence=data.confidence,
+                source=data.source,
             )
-        
+
         return RelationshipEdge(
             source_id=data.source_id,
             target_id=data.target_id,
             type=data.type,
             confidence=data.confidence,
-            source=data.source
+            source=data.source,
         )
 
     def get_neighbors(
-        self, node_id: str, rel_types: List[str],
-        direction: str = "OUT", depth: int = 1,
+        self,
+        node_id: str,
+        rel_types: List[str],
+        direction: str = "OUT",
+        depth: int = 1,
     ) -> List[Dict[str, Any]]:
         type_filter = "|".join(rel_types) if rel_types else ""
         rel_pattern = f"-[r:{type_filter}*1..{depth}]-"
@@ -241,12 +240,14 @@ class Neo4jGraphStore(GraphStore):
             res = session.run(query, node_id=node_id)
             for record in res:
                 node = dict(record["m"])
-                results.append({
-                    "id": node.get("id"),
-                    "name": node.get("name"),
-                    "node": node,
-                    "relationships": [dict(rel) for rel in record["r"]]
-                })
+                results.append(
+                    {
+                        "id": node.get("id"),
+                        "name": node.get("name"),
+                        "node": node,
+                        "relationships": [dict(rel) for rel in record["r"]],
+                    }
+                )
         return results
 
     def find_related_memories(self, entity_name: str, limit: int = 10) -> List[MemoryNode]:
@@ -260,7 +261,7 @@ class Neo4jGraphStore(GraphStore):
             res = session.run(query, entity_id=entity_id, limit=limit)
             for record in res:
                 node = record["m"]
-                memories.append(self.get_memory(node["id"])) # Simplification: refetch to construct node
+                memories.append(self.get_memory(node["id"]))  # Simplification: refetch to construct node
         return [m for m in memories if m is not None]
 
     def get_timeline(self, project_id: str, entity: Optional[str] = None, limit: int = 50) -> List[MemoryNode]:
@@ -277,7 +278,7 @@ class Neo4jGraphStore(GraphStore):
             RETURN m.id as id ORDER BY m.created_at DESC LIMIT $limit
             """
             params = {"project_id": project_id, "limit": limit}
-            
+
         memories = []
         with self.driver.session(database=self.config.database) as session:
             res = session.run(query, **params)
@@ -287,7 +288,7 @@ class Neo4jGraphStore(GraphStore):
 
     def invalidate_memory(self, id: str, superseded_by: str, reason: str) -> None:
         now_str = datetime.now(timezone.utc).isoformat()
-        
+
         # Set valid_to and superseded_by property
         self.update_memory(id, valid_to=now_str, superseded_by=superseded_by)
 
@@ -295,7 +296,7 @@ class Neo4jGraphStore(GraphStore):
         new_mem = self.get_memory(superseded_by)
         if old and new_mem:
             self.update_memory(superseded_by, version=old.version + 1, previous_version_id=id)
-        
+
         # Create relation
         query = """
         MATCH (old:Memory {id: $id})

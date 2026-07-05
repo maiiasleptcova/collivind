@@ -24,7 +24,7 @@ class MemoryManager:
         vector_store: VectorStore,
         graph_store: GraphStore,
         embedding_provider: EmbeddingProvider,
-        config: CollivindConfig
+        config: CollivindConfig,
     ):
         self.vector_store = vector_store
         self.graph_store = graph_store
@@ -53,13 +53,11 @@ class MemoryManager:
         if entities:
             for ent_create in entities:
                 ent_node = self.graph_store.create_entity(ent_create)
-                self.graph_store.create_relationship(RelationshipCreate(
-                    source_id=existing.id,
-                    target_id=ent_node.id,
-                    type=RelType.ABOUT,
-                    confidence=1.0,
-                    source="merge"
-                ))
+                self.graph_store.create_relationship(
+                    RelationshipCreate(
+                        source_id=existing.id, target_id=ent_node.id, type=RelType.ABOUT, confidence=1.0, source="merge"
+                    )
+                )
 
         return self.graph_store.get_memory(existing.id) or existing
 
@@ -67,7 +65,7 @@ class MemoryManager:
         self,
         memory_create: MemoryCreate,
         entities: Optional[List[EntityCreate]] = None,
-        relationships: Optional[List[RelationshipCreate]] = None
+        relationships: Optional[List[RelationshipCreate]] = None,
     ) -> MemoryNode:
         entity_names = [e.name for e in entities] if entities else None
         enriched = build_enriched_text(memory_create, entity_names=entity_names)
@@ -90,13 +88,15 @@ class MemoryManager:
         if entities:
             for ent_create in entities:
                 ent_node = self.graph_store.create_entity(ent_create)
-                self.graph_store.create_relationship(RelationshipCreate(
-                    source_id=memory_node.id,
-                    target_id=ent_node.id,
-                    type=RelType.ABOUT,
-                    confidence=1.0,
-                    source="extraction"
-                ))
+                self.graph_store.create_relationship(
+                    RelationshipCreate(
+                        source_id=memory_node.id,
+                        target_id=ent_node.id,
+                        type=RelType.ABOUT,
+                        confidence=1.0,
+                        source="extraction",
+                    )
+                )
 
         if relationships:
             for rel_create in relationships:
@@ -106,13 +106,15 @@ class MemoryManager:
 
         contradictions = self.search_engine.find_contradictions(memory_node)
         for contra in contradictions:
-            self.graph_store.create_relationship(RelationshipCreate(
-                source_id=memory_node.id,
-                target_id=contra.memory.id,
-                type=RelType.CONTRADICTS,
-                confidence=contra.vector_score,
-                source="auto_detection"
-            ))
+            self.graph_store.create_relationship(
+                RelationshipCreate(
+                    source_id=memory_node.id,
+                    target_id=contra.memory.id,
+                    type=RelType.CONTRADICTS,
+                    confidence=contra.vector_score,
+                    source="auto_detection",
+                )
+            )
 
         return memory_node
 
@@ -133,8 +135,8 @@ class MemoryManager:
             return None
 
         updates = {
-            k: v for k, v in
-            {"content": content, "summary": summary, "tags": tags, "confidence": confidence}.items()
+            k: v
+            for k, v in {"content": content, "summary": summary, "tags": tags, "confidence": confidence}.items()
             if v is not None
         }
         if not updates:
@@ -175,15 +177,17 @@ class MemoryManager:
         Returns the number of records processed.
         """
         for rec in records:
-            self.add_memory(MemoryCreate(
-                content=rec["content"],
-                summary=rec.get("summary", rec["content"][:120]),
-                category=MemoryCategory(rec.get("category", "fact")),
-                project_id=rec.get("project_id", "default"),
-                user_id=rec.get("user_id", "local"),
-                confidence=rec.get("confidence", 1.0),
-                tags=rec.get("tags") or [],
-            ))
+            self.add_memory(
+                MemoryCreate(
+                    content=rec["content"],
+                    summary=rec.get("summary", rec["content"][:120]),
+                    category=MemoryCategory(rec.get("category", "fact")),
+                    project_id=rec.get("project_id", "default"),
+                    user_id=rec.get("user_id", "local"),
+                    confidence=rec.get("confidence", 1.0),
+                    tags=rec.get("tags") or [],
+                )
+            )
         return len(records)
 
     def search(self, query: SearchQuery) -> List[SearchResult]:
@@ -212,7 +216,7 @@ class MemoryManager:
         context_parts = [header]
         budget = max_tokens - len(header) // 4 if max_tokens else None
         for res in results:
-            cat = res.memory.category.value if hasattr(res.memory.category, 'value') else res.memory.category
+            cat = res.memory.category.value if hasattr(res.memory.category, "value") else res.memory.category
             meta = f"[{cat.upper()}] (score: {res.score:.2f})"
             if res.related_entities:
                 meta += f" (Entities: {', '.join(res.related_entities)})"
@@ -242,7 +246,7 @@ class MemoryManager:
                 "created_at": entity.created_at.isoformat() if entity.created_at else None,
                 "updated_at": entity.updated_at.isoformat() if entity.updated_at else None,
             },
-            "related_memories": [m.to_dict() for m in related]
+            "related_memories": [m.to_dict() for m in related],
         }
 
     def get_timeline(self, project_id: str, entity: Optional[str] = None, limit: int = 50) -> List[MemoryNode]:
@@ -259,20 +263,20 @@ class MemoryManager:
         for mem_data in memories:
             entities = []
             for e in mem_data.get("entities", []):
-                entities.append(EntityCreate(
-                    name=e["name"],
-                    type=EntityType(e["type"]),
-                    properties=e.get("properties", {})
-                ))
-            
+                entities.append(
+                    EntityCreate(name=e["name"], type=EntityType(e["type"]), properties=e.get("properties", {}))
+                )
+
             relationships = []
             for r in mem_data.get("relationships", []):
-                relationships.append(RelationshipCreate(
-                    source_id="",
-                    target_id=r["target_id"],
-                    type=RelType(r["type"]),
-                    properties=r.get("properties", {})
-                ))
+                relationships.append(
+                    RelationshipCreate(
+                        source_id="",
+                        target_id=r["target_id"],
+                        type=RelType(r["type"]),
+                        properties=r.get("properties", {}),
+                    )
+                )
 
             mem_create = MemoryCreate(
                 content=mem_data["content"],
@@ -283,10 +287,10 @@ class MemoryManager:
                 user_id=mem_data.get("user_id", "local"),
                 source=MemorySource(mem_data.get("source", "manual")),
                 confidence=mem_data.get("confidence", 1.0),
-                tags=mem_data.get("tags", [])
+                tags=mem_data.get("tags", []),
             )
-            
+
             node = self.add_memory(mem_create, entities=entities, relationships=relationships)
             ids.append(node.id)
-            
+
         return ids

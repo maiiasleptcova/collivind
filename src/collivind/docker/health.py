@@ -16,6 +16,7 @@ def check_qdrant_health(config: CollivindConfig) -> Dict[str, Any]:
     except httpx.RequestError as e:
         return {"status": "error", "message": f"Connection failed: {e}"}
 
+
 def check_neo4j_health(config: CollivindConfig) -> Dict[str, Any]:
     """Checks Neo4j connectivity over bolt using the configured URI."""
     from neo4j import GraphDatabase
@@ -34,6 +35,7 @@ def check_neo4j_health(config: CollivindConfig) -> Dict[str, Any]:
     except Exception as e:
         return {"status": "error", "message": f"Connection failed: {e}"}
 
+
 def check_embeddings_health(config: CollivindConfig) -> Dict[str, Any]:
     """Checks if the embedding service is healthy."""
     url = f"{config.embeddings.service_url}/health"
@@ -45,10 +47,11 @@ def check_embeddings_health(config: CollivindConfig) -> Dict[str, Any]:
     except httpx.RequestError as e:
         return {"status": "error", "message": f"Connection failed: {e}"}
 
+
 def check_all_services(config: CollivindConfig) -> Dict[str, Dict[str, Any]]:
     """Checks health of all Docker services."""
     return {
         "qdrant": check_qdrant_health(config),
         "neo4j": check_neo4j_health(config),
-        "embeddings": check_embeddings_health(config)
+        "embeddings": check_embeddings_health(config),
     }

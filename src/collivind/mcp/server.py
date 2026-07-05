@@ -44,7 +44,7 @@ class MCPServer:
         for line in sys.stdin:
             if not line.strip():
                 continue
-                
+
             try:
                 request = json.loads(line)
                 response = self.handle_request(request)
@@ -63,40 +63,25 @@ class MCPServer:
 
         if method == "initialize":
             self.initialized = True
-            server_info = {
-                "name": "collivind",
-                "version": "0.1.0"
-            }
+            server_info = {"name": "collivind", "version": "0.1.0"}
             if not self.backends_available:
                 server_info["status"] = "degraded"
                 server_info["degraded_reason"] = self._init_error
             return {
                 "jsonrpc": "2.0",
                 "id": req_id,
-                "result": {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {
-                        "tools": {}
-                    },
-                    "serverInfo": server_info
-                }
+                "result": {"protocolVersion": "2024-11-05", "capabilities": {"tools": {}}, "serverInfo": server_info},
             }
-            
+
         elif method == "notifications/initialized":
-            return None # Notifications don't get responses
-            
+            return None  # Notifications don't get responses
+
         elif method == "tools/list":
             # Tool schemas are static — advertise them even in degraded mode
             # so clients can see what exists; calls return isError instead.
             tools_list = self.tools.get_tool_list() if self.tools else CollivindTools.get_tool_list()
-            return {
-                "jsonrpc": "2.0",
-                "id": req_id,
-                "result": {
-                    "tools": tools_list
-                }
-            }
-            
+            return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": tools_list}}
+
         elif method == "tools/call":
             tool_name = params.get("name")
             tool_args = params.get("arguments", {})
@@ -111,62 +96,30 @@ class MCPServer:
                             {
                                 "type": "text",
                                 "text": f"Storage backends unavailable: {self._init_error}. "
-                                        f"Tool '{tool_name}' cannot execute in degraded mode."
+                                f"Tool '{tool_name}' cannot execute in degraded mode.",
                             }
-                        ]
-                    }
+                        ],
+                    },
                 }
 
             try:
                 content_str = self.tools.handle_call(tool_name, tool_args)
-                return {
-                    "jsonrpc": "2.0",
-                    "id": req_id,
-                    "result": {
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": content_str
-                            }
-                        ]
-                    }
-                }
+                return {"jsonrpc": "2.0", "id": req_id, "result": {"content": [{"type": "text", "text": content_str}]}}
             except Exception as e:
                 return {
                     "jsonrpc": "2.0",
                     "id": req_id,
-                    "result": {
-                        "isError": True,
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": f"Error executing tool: {e}"
-                            }
-                        ]
-                    }
+                    "result": {"isError": True, "content": [{"type": "text", "text": f"Error executing tool: {e}"}]},
                 }
-                
+
         else:
-            return {
-                "jsonrpc": "2.0",
-                "id": req_id,
-                "error": {
-                    "code": -32601,
-                    "message": "Method not found"
-                }
-            }
+            return {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32601, "message": "Method not found"}}
 
     def send_error(self, req_id: Any, code: int, message: str):
-        err = {
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "error": {
-                "code": code,
-                "message": message
-            }
-        }
+        err = {"jsonrpc": "2.0", "id": req_id, "error": {"code": code, "message": message}}
         sys.stdout.write(json.dumps(err) + "\n")
         sys.stdout.flush()
+
 
 if __name__ == "__main__":
     server = MCPServer()

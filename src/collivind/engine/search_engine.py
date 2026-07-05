@@ -15,7 +15,7 @@ class SearchEngine:
         vector_store: VectorStore,
         graph_store: GraphStore,
         embedding_provider: EmbeddingProvider,
-        config: SearchConfig
+        config: SearchConfig,
     ):
         self.vector_store = vector_store
         self.graph_store = graph_store
@@ -61,10 +61,7 @@ class SearchEngine:
             vector_filters["project_id"] = query.project_id
 
         raw_vector_results = self.vector_store.search(
-            vector=vector,
-            limit=query.limit * 3,
-            filters=vector_filters,
-            threshold=self.config.similarity_threshold
+            vector=vector, limit=query.limit * 3, filters=vector_filters, threshold=self.config.similarity_threshold
         )
 
         candidates: Dict[str, SearchResult] = {}
@@ -130,23 +127,17 @@ class SearchEngine:
         results = []
         for res in candidates.values():
             norm_graph_score = min(res.graph_score, 1.0)
-            base_score = (
-                (res.vector_score * self.config.vector_weight)
-                + (norm_graph_score * self.config.graph_weight)
-            )
+            base_score = (res.vector_score * self.config.vector_weight) + (norm_graph_score * self.config.graph_weight)
             res.score = base_score * res.temporal_decay
             results.append(res)
 
         results.sort(key=lambda x: x.score, reverse=True)
-        return results[:query.limit]
+        return results[: query.limit]
 
     def find_contradictions(self, memory: MemoryNode, threshold: float = 0.75) -> List[SearchResult]:
         vector = self.embedding_provider.embed(memory.content)
         similar = self.vector_store.search(
-            vector=vector,
-            limit=5,
-            filters={"project_id": memory.project_id},
-            threshold=threshold
+            vector=vector, limit=5, filters={"project_id": memory.project_id}, threshold=threshold
         )
 
         candidates = []
@@ -157,11 +148,8 @@ class SearchEngine:
             if existing.valid_to is not None:
                 continue
             if existing.category == memory.category and existing.content != memory.content:
-                candidates.append(SearchResult(
-                    memory=existing,
-                    score=res["score"],
-                    vector_score=res["score"],
-                    graph_score=0.0
-                ))
+                candidates.append(
+                    SearchResult(memory=existing, score=res["score"], vector_score=res["score"], graph_score=0.0)
+                )
 
         return candidates

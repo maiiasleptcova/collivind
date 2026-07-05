@@ -13,9 +13,11 @@ def test_default_config():
     assert config.neo4j.user == "neo4j"
     assert config.expanded_data_dir == Path("~/.collivind").expanduser()
 
+
 def test_default_config_mode():
     config = load_config()
     assert config.mode == "docker"
+
 
 def test_generate_default_config():
     with tempfile.TemporaryDirectory() as tmpdir:

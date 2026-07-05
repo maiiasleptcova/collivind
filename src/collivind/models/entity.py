@@ -13,11 +13,12 @@ class EntityType(str, Enum):
     LIBRARY = "library"
     TOOL = "tool"
 
+
 @dataclass
 class EntityNode:
     name: str
     type: EntityType
-    id: str = "" # typically lowercased, underscored name
+    id: str = ""  # typically lowercased, underscored name
     properties: Dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -25,6 +26,7 @@ class EntityNode:
     def __post_init__(self):
         if not self.id:
             self.id = self.name.lower().replace(" ", "_").replace("-", "_")
+
 
 @dataclass
 class EntityCreate:

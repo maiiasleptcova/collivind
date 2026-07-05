@@ -59,6 +59,7 @@ def _init_embedded(config, data_dir: Path):
     click.echo("Initializing SQLite graph store... ", nl=False)
     try:
         from collivind.storage.graph_sqlite import SqliteGraphStore
+
         graph = SqliteGraphStore(data_dir=str(data_dir))
         graph.initialize()
         graph.close()
@@ -70,10 +71,9 @@ def _init_embedded(config, data_dir: Path):
     click.echo("Initializing embedded Qdrant... ", nl=False)
     try:
         from collivind.storage.qdrant_embedded import EmbeddedQdrantStore
+
         qdrant = EmbeddedQdrantStore(
-            data_dir=str(data_dir),
-            config=config.qdrant,
-            dimension=config.embeddings.dimension
+            data_dir=str(data_dir), config=config.qdrant, dimension=config.embeddings.dimension
         )
         qdrant.initialize()
         qdrant.close()
@@ -85,6 +85,7 @@ def _init_embedded(config, data_dir: Path):
     click.echo("Checking embedding model... ", nl=False)
     try:
         from collivind.storage.embedding_local import LocalEmbeddingProvider
+
         provider = LocalEmbeddingProvider(config.embeddings)
         health = provider.health_check()
         if health["status"] == "ok":

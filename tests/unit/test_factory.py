@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from collivind.config import EmbeddingsConfig, CollivindConfig, Neo4jConfig, QdrantConfig
+from collivind.config import CollivindConfig, EmbeddingsConfig, Neo4jConfig, QdrantConfig
 from collivind.storage.factory import (
     create_all_backends,
     create_embedding_provider,
@@ -9,6 +9,7 @@ from collivind.storage.factory import (
 )
 
 # --- Mode-based defaults ---
+
 
 def test_create_vector_store_embedded():
     config = CollivindConfig(mode="embedded", data_dir="/tmp/collivind_test_factory")
@@ -58,9 +59,11 @@ def test_create_embedding_provider_docker():
 
 def test_create_all_backends_returns_tuple():
     config = CollivindConfig(mode="embedded")
-    with patch("collivind.storage.qdrant_embedded.EmbeddedQdrantStore") as mv, \
-         patch("collivind.storage.graph_sqlite.SqliteGraphStore") as mg, \
-         patch("collivind.storage.embedding_local.LocalEmbeddingProvider") as me:
+    with (
+        patch("collivind.storage.qdrant_embedded.EmbeddedQdrantStore") as mv,
+        patch("collivind.storage.graph_sqlite.SqliteGraphStore") as mg,
+        patch("collivind.storage.embedding_local.LocalEmbeddingProvider") as me,
+    ):
         v, g, e = create_all_backends(config)
         assert v == mv.return_value
         assert g == mg.return_value
@@ -68,6 +71,7 @@ def test_create_all_backends_returns_tuple():
 
 
 # --- Per-backend provider overrides ---
+
 
 def test_qdrant_cloud_override():
     config = CollivindConfig(
@@ -146,9 +150,11 @@ def test_mixed_backends():
         neo4j=Neo4jConfig(provider="sqlite"),
         embeddings=EmbeddingsConfig(provider="openai", api_key="sk-test"),
     )
-    with patch("collivind.storage.qdrant_store.QdrantVectorStore") as mv, \
-         patch("collivind.storage.graph_sqlite.SqliteGraphStore") as mg, \
-         patch("collivind.storage.embedding_openai.OpenAIEmbeddingProvider") as me:
+    with (
+        patch("collivind.storage.qdrant_store.QdrantVectorStore") as mv,
+        patch("collivind.storage.graph_sqlite.SqliteGraphStore") as mg,
+        patch("collivind.storage.embedding_openai.OpenAIEmbeddingProvider") as me,
+    ):
         v, g, e = create_all_backends(config)
         assert v == mv.return_value
         assert g == mg.return_value

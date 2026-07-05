@@ -11,6 +11,7 @@ class DockerConfig:
     compose_project: str = "collivind"
     auto_start: bool = True
 
+
 @dataclass
 class QdrantConfig:
     provider: str = ""  # "" = use mode default; "embedded", "local", "cloud"
@@ -20,6 +21,7 @@ class QdrantConfig:
     api_key: str = ""  # API key for Qdrant Cloud
     collection_name: str = "collivind_memories"
 
+
 @dataclass
 class Neo4jConfig:
     provider: str = ""  # "" = use mode default; "sqlite", "neo4j"
@@ -27,6 +29,7 @@ class Neo4jConfig:
     user: str = "neo4j"
     password: str = "collivind_local"
     database: str = "neo4j"
+
 
 @dataclass
 class EmbeddingsConfig:
@@ -36,6 +39,7 @@ class EmbeddingsConfig:
     dimension: int = 384
     api_key: str = ""  # API key for OpenAI or compatible services
     base_url: str = ""  # custom base URL for OpenAI-compatible APIs
+
 
 @dataclass
 class SearchConfig:
@@ -47,12 +51,14 @@ class SearchConfig:
     temporal_decay_rate: float = 0.01
     temporal_decay_max: float = 0.3
 
+
 @dataclass
 class HooksConfig:
     save_interval: int = 15
     enable_precompact: bool = True
     enable_stop: bool = True
     enable_session_start: bool = True
+
 
 @dataclass
 class CollivindConfig:

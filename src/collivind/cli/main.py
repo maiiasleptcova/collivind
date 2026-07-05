@@ -26,6 +26,7 @@ def cli():
     """Collivind - Graph-based memory layer for AI coding assistants."""
     pass
 
+
 cli.add_command(init)
 cli.add_command(status)
 cli.add_command(hook)

@@ -8,24 +8,25 @@ class RelType(str, Enum):
     # Memory -> Entity
     ABOUT = "ABOUT"
     MENTIONS = "MENTIONS"
-    
+
     # Memory -> Memory
     SUPERSEDES = "SUPERSEDES"
     CONTRADICTS = "CONTRADICTS"
     RELATES_TO = "RELATES_TO"
     CAUSED_BY = "CAUSED_BY"
     DEPENDS_ON_MEM = "DEPENDS_ON"
-    
+
     # Entity -> Entity
     IMPLEMENTS = "IMPLEMENTS"
     DEPENDS_ON_ENT = "DEPENDS_ON"
     PART_OF = "PART_OF"
     USES = "USES"
     RELATED_TO = "RELATED_TO"
-    
+
     # Session
     PRODUCED = "PRODUCED"
     WORKED_ON = "WORKED_ON"
+
 
 @dataclass
 class RelationshipEdge:
@@ -37,6 +38,7 @@ class RelationshipEdge:
     source: str = "manual"
     properties: Dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
 
 @dataclass
 class RelationshipCreate:

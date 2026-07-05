@@ -3,6 +3,7 @@
 Runs the full add->search->invalidate flow using in-process Qdrant + SQLite.
 No Docker required - this test can run in CI.
 """
+
 import shutil
 import tempfile
 
@@ -139,9 +140,7 @@ def test_add_multiple_and_search(embedded_manager):
             entities=ents,
         )
 
-    results = manager.search(
-        SearchQuery(query="database", project_id="proj", limit=5)
-    )
+    results = manager.search(SearchQuery(query="database", project_id="proj", limit=5))
     assert len(results) >= 1
 
 

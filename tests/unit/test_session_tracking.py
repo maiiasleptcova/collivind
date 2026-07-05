@@ -8,8 +8,7 @@ from collivind.models import MemoryCategory, MemoryNode, SearchQuery
 
 
 def test_server_generates_session_id():
-    with patch("collivind.mcp.server.create_all_backends") as mock_b, \
-         patch("collivind.mcp.server.load_config"):
+    with patch("collivind.mcp.server.create_all_backends") as mock_b, patch("collivind.mcp.server.load_config"):
         mock_b.return_value = (MagicMock(), MagicMock(), MagicMock())
         server = MCPServer()
         assert server.session_id
@@ -17,8 +16,7 @@ def test_server_generates_session_id():
 
 
 def test_tools_receives_session_id():
-    with patch("collivind.mcp.server.create_all_backends") as mock_b, \
-         patch("collivind.mcp.server.load_config"):
+    with patch("collivind.mcp.server.create_all_backends") as mock_b, patch("collivind.mcp.server.load_config"):
         mock_b.return_value = (MagicMock(), MagicMock(), MagicMock())
         server = MCPServer()
         assert server.tools.session_id == server.session_id
@@ -26,10 +24,12 @@ def test_tools_receives_session_id():
 
 def test_session_filter_in_search():
     now = datetime.now(timezone.utc)
-    m1 = MemoryNode(id="m1", content="A", summary="s",
-                     category=MemoryCategory.FACT, session_id="sess-1", created_at=now)
-    m2 = MemoryNode(id="m2", content="B", summary="s",
-                     category=MemoryCategory.FACT, session_id="sess-2", created_at=now)
+    m1 = MemoryNode(
+        id="m1", content="A", summary="s", category=MemoryCategory.FACT, session_id="sess-1", created_at=now
+    )
+    m2 = MemoryNode(
+        id="m2", content="B", summary="s", category=MemoryCategory.FACT, session_id="sess-2", created_at=now
+    )
 
     vs = MagicMock()
     gs = MagicMock()
@@ -53,10 +53,12 @@ def test_session_filter_in_search():
 
 def test_no_session_filter_returns_all():
     now = datetime.now(timezone.utc)
-    m1 = MemoryNode(id="m1", content="A", summary="s",
-                     category=MemoryCategory.FACT, session_id="sess-1", created_at=now)
-    m2 = MemoryNode(id="m2", content="B", summary="s",
-                     category=MemoryCategory.FACT, session_id="sess-2", created_at=now)
+    m1 = MemoryNode(
+        id="m1", content="A", summary="s", category=MemoryCategory.FACT, session_id="sess-1", created_at=now
+    )
+    m2 = MemoryNode(
+        id="m2", content="B", summary="s", category=MemoryCategory.FACT, session_id="sess-2", created_at=now
+    )
 
     vs = MagicMock()
     gs = MagicMock()

@@ -22,7 +22,7 @@ def _retry(fn, max_retries=3, base_delay=0.5):
         except Exception as e:
             last_error = e
             if attempt < max_retries - 1:
-                delay = base_delay * (2 ** attempt)
+                delay = base_delay * (2**attempt)
                 logger.warning(f"Attempt {attempt + 1} failed: {e}. Retrying in {delay}s...")
                 time.sleep(delay)
     raise last_error
@@ -46,10 +46,7 @@ class QdrantVectorStore(VectorStore):
             if self.config.collection_name not in [c.name for c in collections.collections]:
                 self.client.create_collection(
                     collection_name=self.config.collection_name,
-                    vectors_config=qmodels.VectorParams(
-                        size=self.dimension,
-                        distance=qmodels.Distance.COSINE
-                    )
+                    vectors_config=qmodels.VectorParams(size=self.dimension, distance=qmodels.Distance.COSINE),
                 )
         except UnexpectedResponse as e:
             raise CollivindError(f"Qdrant initialization failed: {e}")
@@ -62,13 +59,7 @@ class QdrantVectorStore(VectorStore):
         def _do_upsert():
             self.client.upsert(
                 collection_name=self.config.collection_name,
-                points=[
-                    qmodels.PointStruct(
-                        id=id,
-                        vector=vector,
-                        payload=payload
-                    )
-                ]
+                points=[qmodels.PointStruct(id=id, vector=vector, payload=payload)],
             )
 
         try:
@@ -79,20 +70,18 @@ class QdrantVectorStore(VectorStore):
             raise CollivindError(f"Qdrant upsert failed after retries: {e}")
 
     def search(
-        self, vector: List[float], limit: int = 10,
-        filters: Optional[Dict[str, Any]] = None, threshold: float = 0.3,
+        self,
+        vector: List[float],
+        limit: int = 10,
+        filters: Optional[Dict[str, Any]] = None,
+        threshold: float = 0.3,
     ) -> List[Dict[str, Any]]:
         # Basic filter conversion (only handles simple exact matches for now)
         qdrant_filter = None
         if filters:
             must_conditions = []
             for k, v in filters.items():
-                must_conditions.append(
-                    qmodels.FieldCondition(
-                        key=k,
-                        match=qmodels.MatchValue(value=v)
-                    )
-                )
+                must_conditions.append(qmodels.FieldCondition(key=k, match=qmodels.MatchValue(value=v)))
             qdrant_filter = qmodels.Filter(must=must_conditions)
 
         def _do_search():
@@ -103,14 +92,7 @@ class QdrantVectorStore(VectorStore):
                 limit=limit,
                 score_threshold=threshold,
             )
-            return [
-                {
-                    "id": str(p.id),
-                    "score": p.score,
-                    "payload": p.payload
-                }
-                for p in response.points
-            ]
+            return [{"id": str(p.id), "score": p.score, "payload": p.payload} for p in response.points]
 
         try:
             return _retry(_do_search)
@@ -122,10 +104,7 @@ class QdrantVectorStore(VectorStore):
     def delete(self, id: str) -> None:
         try:
             self.client.delete(
-                collection_name=self.config.collection_name,
-                points_selector=qmodels.PointIdsList(
-                    points=[id]
-                )
+                collection_name=self.config.collection_name, points_selector=qmodels.PointIdsList(points=[id])
             )
         except UnexpectedResponse as e:
             raise CollivindError(f"Qdrant delete failed: {e}")

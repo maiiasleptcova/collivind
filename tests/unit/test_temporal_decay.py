@@ -63,12 +63,18 @@ def test_decay_affects_final_score():
 
     now = datetime.now(timezone.utc)
     recent = MemoryNode(
-        id="recent", content="A", summary="s",
-        category=MemoryCategory.FACT, created_at=now,
+        id="recent",
+        content="A",
+        summary="s",
+        category=MemoryCategory.FACT,
+        created_at=now,
     )
     old = MemoryNode(
-        id="old", content="B", summary="s",
-        category=MemoryCategory.FACT, created_at=now - timedelta(days=365),
+        id="old",
+        content="B",
+        summary="s",
+        category=MemoryCategory.FACT,
+        created_at=now - timedelta(days=365),
     )
 
     vs.search.return_value = [

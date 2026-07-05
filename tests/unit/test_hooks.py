@@ -9,13 +9,13 @@ def test_hook_stop(tmp_path, monkeypatch):
     # Mock home directory to tmp_path
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
     runner = CliRunner()
-    
+
     # Run 14 times
     for _ in range(14):
         result = runner.invoke(hook, ["stop", "--threshold", "15"])
         assert result.exit_code == 0
         assert "collivind_extraction" not in result.output
-        
+
     # 15th time should trigger with a Stop-hook block decision (plain stdout
     # is discarded by Claude Code)
     result = runner.invoke(hook, ["stop", "--threshold", "15"])
@@ -23,13 +23,14 @@ def test_hook_stop(tmp_path, monkeypatch):
     payload = json.loads(result.output)
     assert payload["decision"] == "block"
     assert "collivind_extraction" in payload["reason"]
-    
+
     # State should reset
     state_file = get_state_file()
     assert state_file.exists()
     with open(state_file) as f:
         state = json.load(f)
     assert state["message_count"] == 0
+
 
 def test_hook_precompact(tmp_path, monkeypatch):
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
@@ -71,10 +72,14 @@ def test_install_hooks_preserves_existing_settings(tmp_path, monkeypatch):
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
     settings_path = tmp_path / ".claude" / "settings.json"
     settings_path.parent.mkdir(parents=True)
-    settings_path.write_text(json.dumps({
-        "model": "opus",
-        "hooks": {"Stop": [{"hooks": [{"type": "command", "command": "other-tool run"}]}]},
-    }))
+    settings_path.write_text(
+        json.dumps(
+            {
+                "model": "opus",
+                "hooks": {"Stop": [{"hooks": [{"type": "command", "command": "other-tool run"}]}]},
+            }
+        )
+    )
 
     install_hooks()
 
@@ -111,9 +116,11 @@ def test_session_start_emits_context_index(monkeypatch):
 
     manager = __import__("unittest.mock", fromlist=["MagicMock"]).MagicMock()
     manager.get_timeline.return_value = [
-        MemoryNode(content="We picked Postgres over Mongo for transactions",
-                   summary="Postgres chosen for transactions",
-                   category=MemoryCategory.DECISION),
+        MemoryNode(
+            content="We picked Postgres over Mongo for transactions",
+            summary="Postgres chosen for transactions",
+            category=MemoryCategory.DECISION,
+        ),
     ]
     monkeypatch.setattr("collivind.cli.commands.hook._load_manager", lambda: manager)
 
@@ -135,6 +142,7 @@ def test_session_start_silent_when_empty_or_broken(monkeypatch):
 
     def boom():
         raise RuntimeError("backend down")
+
     monkeypatch.setattr("collivind.cli.commands.hook._load_manager", boom)
     result = CliRunner().invoke(hook, ["session-start"])
     assert result.exit_code == 0

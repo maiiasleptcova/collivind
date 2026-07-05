@@ -74,6 +74,10 @@ by not being published. Decide and implement:
 
 ## Deferred smaller items
 
+- **mypy burn-down**: the CI type-check step is `continue-on-error` — 57
+  pre-existing errors in 14 files (mostly Optional handling). Fix per-module,
+  then make the step blocking.
+
 - **Codex extraction hooks**: only SessionStart is registered for Codex —
   verify Codex's Stop-hook `decision: block` semantics, then enable
   extraction there too.

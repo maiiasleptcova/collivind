@@ -23,8 +23,10 @@ def test_openai_default_model():
 
 def test_openai_custom_model():
     config = EmbeddingsConfig(
-        provider="openai", api_key="sk-test",
-        model="text-embedding-3-large", dimension=3072,
+        provider="openai",
+        api_key="sk-test",
+        model="text-embedding-3-large",
+        dimension=3072,
     )
     provider = OpenAIEmbeddingProvider(config)
     assert provider._model == "text-embedding-3-large"
@@ -33,7 +35,8 @@ def test_openai_custom_model():
 
 def test_openai_custom_base_url():
     config = EmbeddingsConfig(
-        provider="openai", api_key="sk-test",
+        provider="openai",
+        api_key="sk-test",
         base_url="https://my-proxy.com/v1",
     )
     provider = OpenAIEmbeddingProvider(config)
@@ -43,8 +46,10 @@ def test_openai_custom_base_url():
 def test_openai_default_dimensions():
     for model, dim in OPENAI_DIMENSIONS.items():
         config = EmbeddingsConfig(
-            provider="openai", api_key="sk-test",
-            model=model, dimension=0,
+            provider="openai",
+            api_key="sk-test",
+            model=model,
+            dimension=0,
         )
         provider = OpenAIEmbeddingProvider(config)
         assert provider.dimension == dim
@@ -55,6 +60,7 @@ def test_ollama_defaults():
         OLLAMA_DEFAULT_MODEL,
         OllamaEmbeddingProvider,
     )
+
     config = EmbeddingsConfig(provider="ollama")
     provider = OllamaEmbeddingProvider(config)
     assert provider._model == OLLAMA_DEFAULT_MODEL
@@ -63,9 +69,12 @@ def test_ollama_defaults():
 
 def test_ollama_custom_model():
     from collivind.storage.embedding_ollama import OllamaEmbeddingProvider
+
     config = EmbeddingsConfig(
-        provider="ollama", model="mxbai-embed-large",
-        service_url="http://gpu-box:11434", dimension=1024,
+        provider="ollama",
+        model="mxbai-embed-large",
+        service_url="http://gpu-box:11434",
+        dimension=1024,
     )
     provider = OllamaEmbeddingProvider(config)
     assert provider._model == "mxbai-embed-large"

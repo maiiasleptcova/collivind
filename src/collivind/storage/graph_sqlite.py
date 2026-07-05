@@ -92,7 +92,7 @@ class SqliteGraphStore(GraphStore):
             source=data.source,
             tags=data.tags,
             created_at=now,
-            updated_at=now
+            updated_at=now,
         )
         self.conn.execute(
             """INSERT INTO memories (id, content, summary, category, confidence,
@@ -100,12 +100,25 @@ class SqliteGraphStore(GraphStore):
                superseded_by, tags, version, previous_version_id,
                created_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (node.id, node.content, node.summary, node.category.value,
-             node.confidence, node.valid_from.isoformat(), None,
-             node.project_id, node.session_id, node.user_id,
-             node.source.value, None, json.dumps(node.tags),
-             node.version, node.previous_version_id,
-             node.created_at.isoformat(), node.updated_at.isoformat())
+            (
+                node.id,
+                node.content,
+                node.summary,
+                node.category.value,
+                node.confidence,
+                node.valid_from.isoformat(),
+                None,
+                node.project_id,
+                node.session_id,
+                node.user_id,
+                node.source.value,
+                None,
+                json.dumps(node.tags),
+                node.version,
+                node.previous_version_id,
+                node.created_at.isoformat(),
+                node.updated_at.isoformat(),
+            ),
         )
         self.conn.commit()
         return node
@@ -144,13 +157,12 @@ class SqliteGraphStore(GraphStore):
             type=data.type,
             properties=data.properties or {},
             created_at=now,
-            updated_at=now
+            updated_at=now,
         )
         self.conn.execute(
             """INSERT INTO entities (id, name, type, properties, created_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?)""",
-            (node.id, node.name, node.type.value, json.dumps(node.properties),
-             now.isoformat(), now.isoformat())
+            (node.id, node.name, node.type.value, json.dumps(node.properties), now.isoformat(), now.isoformat()),
         )
         self.conn.commit()
         return node
@@ -172,34 +184,40 @@ class SqliteGraphStore(GraphStore):
             confidence=data.confidence,
             source=data.source,
             properties=data.properties or {},
-            created_at=now
+            created_at=now,
         )
         self.conn.execute(
             """INSERT INTO relationships (id, source_id, target_id, type, confidence, source, properties, created_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (edge.id, edge.source_id, edge.target_id, edge.type.value,
-             edge.confidence, edge.source, json.dumps(edge.properties),
-             now.isoformat())
+            (
+                edge.id,
+                edge.source_id,
+                edge.target_id,
+                edge.type.value,
+                edge.confidence,
+                edge.source,
+                json.dumps(edge.properties),
+                now.isoformat(),
+            ),
         )
         self.conn.commit()
         return edge
 
     def get_neighbors(
-        self, node_id: str, rel_types: List[str],
-        direction: str = "OUT", depth: int = 1,
+        self,
+        node_id: str,
+        rel_types: List[str],
+        direction: str = "OUT",
+        depth: int = 1,
     ) -> List[Dict[str, Any]]:
         results = []
         if direction in ("OUT", "BOTH"):
-            rows = self.conn.execute(
-                "SELECT * FROM relationships WHERE source_id = ?", (node_id,)
-            ).fetchall()
+            rows = self.conn.execute("SELECT * FROM relationships WHERE source_id = ?", (node_id,)).fetchall()
             for row in rows:
                 if not rel_types or row["type"] in rel_types:
                     results.append({"id": row["target_id"], "rel_type": row["type"], "direction": "OUT"})
         if direction in ("IN", "BOTH"):
-            rows = self.conn.execute(
-                "SELECT * FROM relationships WHERE target_id = ?", (node_id,)
-            ).fetchall()
+            rows = self.conn.execute("SELECT * FROM relationships WHERE target_id = ?", (node_id,)).fetchall()
             for row in rows:
                 if not rel_types or row["type"] in rel_types:
                     results.append({"id": row["source_id"], "rel_type": row["type"], "direction": "IN"})
@@ -212,7 +230,7 @@ class SqliteGraphStore(GraphStore):
                JOIN relationships r ON r.source_id = m.id
                WHERE r.target_id = ?
                ORDER BY m.created_at DESC LIMIT ?""",
-            (entity_id, limit)
+            (entity_id, limit),
         ).fetchall()
         return [self._row_to_memory(r) for r in rows]
 
@@ -224,12 +242,11 @@ class SqliteGraphStore(GraphStore):
                    JOIN relationships r ON r.source_id = m.id
                    WHERE m.project_id = ? AND r.target_id = ?
                    ORDER BY m.created_at DESC LIMIT ?""",
-                (project_id, entity_id, limit)
+                (project_id, entity_id, limit),
             ).fetchall()
         else:
             rows = self.conn.execute(
-                "SELECT * FROM memories WHERE project_id = ? ORDER BY created_at DESC LIMIT ?",
-                (project_id, limit)
+                "SELECT * FROM memories WHERE project_id = ? ORDER BY created_at DESC LIMIT ?", (project_id, limit)
             ).fetchall()
         return [self._row_to_memory(r) for r in rows]
 
@@ -237,7 +254,7 @@ class SqliteGraphStore(GraphStore):
         now = datetime.now(timezone.utc).isoformat()
         self.conn.execute(
             "UPDATE memories SET valid_to = ?, superseded_by = ?, updated_at = ? WHERE id = ?",
-            (now, superseded_by, now, id)
+            (now, superseded_by, now, id),
         )
         old = self.get_memory(id)
         if old:
@@ -245,7 +262,7 @@ class SqliteGraphStore(GraphStore):
             if new_mem:
                 self.conn.execute(
                     "UPDATE memories SET version = ?, previous_version_id = ? WHERE id = ?",
-                    (old.version + 1, id, superseded_by)
+                    (old.version + 1, id, superseded_by),
                 )
         self.conn.commit()
 
@@ -307,7 +324,7 @@ class SqliteGraphStore(GraphStore):
             version=version,
             previous_version_id=prev_id,
             created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
-            updated_at=datetime.fromisoformat(row["updated_at"]) if row["updated_at"] else None
+            updated_at=datetime.fromisoformat(row["updated_at"]) if row["updated_at"] else None,
         )
 
     def _row_to_entity(self, row) -> EntityNode:
@@ -317,7 +334,7 @@ class SqliteGraphStore(GraphStore):
             type=EntityType(row["type"]),
             properties=json.loads(row["properties"]) if row["properties"] else {},
             created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
-            updated_at=datetime.fromisoformat(row["updated_at"]) if row["updated_at"] else None
+            updated_at=datetime.fromisoformat(row["updated_at"]) if row["updated_at"] else None,
         )
 
     def _serialize_update_value(self, key: str, value: Any) -> Any:

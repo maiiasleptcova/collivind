@@ -27,10 +27,7 @@ class EmbeddedQdrantStore(VectorStore):
             if self.config.collection_name not in [c.name for c in collections.collections]:
                 self.client.create_collection(
                     collection_name=self.config.collection_name,
-                    vectors_config=qmodels.VectorParams(
-                        size=self._dimension,
-                        distance=qmodels.Distance.COSINE
-                    )
+                    vectors_config=qmodels.VectorParams(size=self._dimension, distance=qmodels.Distance.COSINE),
                 )
         except Exception as e:
             raise CollivindError(f"Embedded Qdrant initialization failed: {e}")
@@ -42,24 +39,23 @@ class EmbeddedQdrantStore(VectorStore):
         try:
             self.client.upsert(
                 collection_name=self.config.collection_name,
-                points=[
-                    qmodels.PointStruct(id=id, vector=vector, payload=payload)
-                ]
+                points=[qmodels.PointStruct(id=id, vector=vector, payload=payload)],
             )
         except Exception as e:
             raise CollivindError(f"Embedded Qdrant upsert failed: {e}")
 
     def search(
-        self, vector: List[float], limit: int = 10,
-        filters: Optional[Dict[str, Any]] = None, threshold: float = 0.3,
+        self,
+        vector: List[float],
+        limit: int = 10,
+        filters: Optional[Dict[str, Any]] = None,
+        threshold: float = 0.3,
     ) -> List[Dict[str, Any]]:
         qdrant_filter = None
         if filters:
             must_conditions = []
             for k, v in filters.items():
-                must_conditions.append(
-                    qmodels.FieldCondition(key=k, match=qmodels.MatchValue(value=v))
-                )
+                must_conditions.append(qmodels.FieldCondition(key=k, match=qmodels.MatchValue(value=v)))
             qdrant_filter = qmodels.Filter(must=must_conditions)
 
         try:
@@ -70,18 +66,14 @@ class EmbeddedQdrantStore(VectorStore):
                 limit=limit,
                 score_threshold=threshold,
             )
-            return [
-                {"id": str(p.id), "score": p.score, "payload": p.payload}
-                for p in response.points
-            ]
+            return [{"id": str(p.id), "score": p.score, "payload": p.payload} for p in response.points]
         except Exception as e:
             raise CollivindError(f"Embedded Qdrant search failed: {e}")
 
     def delete(self, id: str) -> None:
         try:
             self.client.delete(
-                collection_name=self.config.collection_name,
-                points_selector=qmodels.PointIdsList(points=[id])
+                collection_name=self.config.collection_name, points_selector=qmodels.PointIdsList(points=[id])
             )
         except Exception as e:
             raise CollivindError(f"Embedded Qdrant delete failed: {e}")

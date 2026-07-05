@@ -39,10 +39,7 @@ class CollivindTools:
             {
                 "name": "collivind_status",
                 "description": "Check health status of Collivind services.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {}
-                }
+                "inputSchema": {"type": "object", "properties": {}},
             },
             {
                 "name": "collivind_add_memory",
@@ -61,10 +58,10 @@ class CollivindTools:
                                 "properties": {
                                     "name": {"type": "string"},
                                     "type": {"type": "string", "enum": [t.value for t in EntityType]},
-                                    "properties": {"type": "object"}
+                                    "properties": {"type": "object"},
                                 },
-                                "required": ["name", "type"]
-                            }
+                                "required": ["name", "type"],
+                            },
                         },
                         "relationships": {
                             "type": "array",
@@ -73,16 +70,16 @@ class CollivindTools:
                                 "properties": {
                                     "target_id": {"type": "string"},
                                     "type": {"type": "string", "enum": [r.value for r in RelType]},
-                                    "properties": {"type": "object"}
+                                    "properties": {"type": "object"},
                                 },
-                                "required": ["target_id", "type"]
-                            }
+                                "required": ["target_id", "type"],
+                            },
                         },
                         "tags": {"type": "array", "items": {"type": "string"}},
-                        "confidence": {"type": "number", "default": 1.0}
+                        "confidence": {"type": "number", "default": 1.0},
                     },
-                    "required": ["content", "summary", "category"]
-                }
+                    "required": ["content", "summary", "category"],
+                },
             },
             {
                 "name": "collivind_search",
@@ -101,10 +98,10 @@ class CollivindTools:
                         "session_id": {"type": "string", "description": "Filter by session"},
                         "user_id": {"type": "string", "description": "Filter by contributing user"},
                         "date_from": {"type": "string", "description": "ISO datetime"},
-                        "date_to": {"type": "string", "description": "ISO datetime"}
+                        "date_to": {"type": "string", "description": "ISO datetime"},
                     },
-                    "required": ["query"]
-                }
+                    "required": ["query"],
+                },
             },
             {
                 "name": "collivind_get_context",
@@ -115,10 +112,10 @@ class CollivindTools:
                         "query": {"type": "string"},
                         "project_id": {"type": "string", "default": "default"},
                         "limit": {"type": "integer", "default": 10},
-                        "max_tokens": {"type": "integer", "description": "Approximate token budget for the block"}
+                        "max_tokens": {"type": "integer", "description": "Approximate token budget for the block"},
                     },
-                    "required": ["query"]
-                }
+                    "required": ["query"],
+                },
             },
             {
                 "name": "collivind_invalidate",
@@ -128,32 +125,28 @@ class CollivindTools:
                     "properties": {
                         "memory_id": {"type": "string"},
                         "superseded_by": {"type": "string"},
-                        "reason": {"type": "string"}
+                        "reason": {"type": "string"},
                     },
-                    "required": ["memory_id", "superseded_by", "reason"]
-                }
+                    "required": ["memory_id", "superseded_by", "reason"],
+                },
             },
             {
                 "name": "collivind_forget",
                 "description": "Delete a specific memory permanently.",
                 "inputSchema": {
                     "type": "object",
-                    "properties": {
-                        "memory_id": {"type": "string"}
-                    },
-                    "required": ["memory_id"]
-                }
+                    "properties": {"memory_id": {"type": "string"}},
+                    "required": ["memory_id"],
+                },
             },
             {
                 "name": "collivind_get_entity",
                 "description": "Get an entity and its related memories.",
                 "inputSchema": {
                     "type": "object",
-                    "properties": {
-                        "entity_name": {"type": "string"}
-                    },
-                    "required": ["entity_name"]
-                }
+                    "properties": {"entity_name": {"type": "string"}},
+                    "required": ["entity_name"],
+                },
             },
             {
                 "name": "collivind_get_timeline",
@@ -165,21 +158,19 @@ class CollivindTools:
                         "entity_name": {"type": "string"},
                         "session_id": {"type": "string", "description": "Filter by session"},
                         "limit": {"type": "integer", "default": 50},
-                        "offset": {"type": "integer", "default": 0}
+                        "offset": {"type": "integer", "default": 0},
                     },
-                    "required": ["project_id"]
-                }
+                    "required": ["project_id"],
+                },
             },
             {
                 "name": "collivind_find_contradictions",
                 "description": "Find memories that potentially contradict a given memory.",
                 "inputSchema": {
                     "type": "object",
-                    "properties": {
-                        "memory_id": {"type": "string", "description": "ID of the memory to check against"}
-                    },
-                    "required": ["memory_id"]
-                }
+                    "properties": {"memory_id": {"type": "string", "description": "ID of the memory to check against"}},
+                    "required": ["memory_id"],
+                },
             },
             {
                 "name": "collivind_batch_add",
@@ -203,10 +194,10 @@ class CollivindTools:
                                             "properties": {
                                                 "name": {"type": "string"},
                                                 "type": {"type": "string", "enum": [t.value for t in EntityType]},
-                                                "properties": {"type": "object"}
+                                                "properties": {"type": "object"},
                                             },
-                                            "required": ["name", "type"]
-                                        }
+                                            "required": ["name", "type"],
+                                        },
                                     },
                                     "relationships": {
                                         "type": "array",
@@ -215,10 +206,10 @@ class CollivindTools:
                                             "properties": {
                                                 "target_id": {"type": "string"},
                                                 "type": {"type": "string", "enum": [r.value for r in RelType]},
-                                                "properties": {"type": "object"}
+                                                "properties": {"type": "object"},
                                             },
-                                            "required": ["target_id", "type"]
-                                        }
+                                            "required": ["target_id", "type"],
+                                        },
                                     },
                                     "tags": {"type": "array", "items": {"type": "string"}},
                                     "confidence": {"type": "number", "default": 1.0},
@@ -227,25 +218,23 @@ class CollivindTools:
                                         "description": "Session that produced this memory",
                                     },
                                     "user_id": {"type": "string", "default": "local"},
-                                    "source": {"type": "string", "default": "manual"}
+                                    "source": {"type": "string", "default": "manual"},
                                 },
-                                "required": ["content", "summary", "category"]
-                            }
+                                "required": ["content", "summary", "category"],
+                            },
                         }
                     },
-                    "required": ["memories"]
-                }
+                    "required": ["memories"],
+                },
             },
             {
                 "name": "collivind_get_version_chain",
                 "description": "Get the full version history of a memory.",
                 "inputSchema": {
                     "type": "object",
-                    "properties": {
-                        "memory_id": {"type": "string"}
-                    },
-                    "required": ["memory_id"]
-                }
+                    "properties": {"memory_id": {"type": "string"}},
+                    "required": ["memory_id"],
+                },
             },
             {
                 "name": "collivind_extract",
@@ -258,10 +247,10 @@ class CollivindTools:
                     "type": "object",
                     "properties": {
                         "text": {"type": "string", "description": "Raw text to extract from"},
-                        "project_id": {"type": "string", "default": "default"}
+                        "project_id": {"type": "string", "default": "default"},
                     },
-                    "required": ["text"]
-                }
+                    "required": ["text"],
+                },
             },
             {
                 "name": "collivind_extract_save",
@@ -270,11 +259,11 @@ class CollivindTools:
                     "type": "object",
                     "properties": {
                         "llm_response": {"type": "string", "description": "JSON from LLM extraction"},
-                        "project_id": {"type": "string", "default": "default"}
+                        "project_id": {"type": "string", "default": "default"},
                     },
-                    "required": ["llm_response"]
-                }
-            }
+                    "required": ["llm_response"],
+                },
+            },
         ]
 
     def handle_call(self, name: str, args: Dict[str, Any]) -> str:
@@ -286,21 +275,21 @@ class CollivindTools:
                 # Parse entities
                 entities = []
                 for e in args.get("entities", []):
-                    entities.append(EntityCreate(
-                        name=e["name"],
-                        type=EntityType(e["type"]),
-                        properties=e.get("properties", {})
-                    ))
-                
+                    entities.append(
+                        EntityCreate(name=e["name"], type=EntityType(e["type"]), properties=e.get("properties", {}))
+                    )
+
                 # Parse relationships
                 relationships = []
                 for r in args.get("relationships", []):
-                    relationships.append(RelationshipCreate(
-                        source_id="", # Will be filled by memory_manager
-                        target_id=r["target_id"],
-                        type=RelType(r["type"]),
-                        properties=r.get("properties", {})
-                    ))
+                    relationships.append(
+                        RelationshipCreate(
+                            source_id="",  # Will be filled by memory_manager
+                            target_id=r["target_id"],
+                            type=RelType(r["type"]),
+                            properties=r.get("properties", {}),
+                        )
+                    )
 
                 mem_create = MemoryCreate(
                     content=args["content"],
@@ -311,7 +300,7 @@ class CollivindTools:
                     tags=args.get("tags", []),
                     session_id=args.get("session_id", self.session_id),
                 )
-                
+
                 memory = self.memory_manager.add_memory(mem_create, entities=entities, relationships=relationships)
                 return json.dumps({"status": "success", "memory_id": memory.id})
 
@@ -320,9 +309,11 @@ class CollivindTools:
                 date_to = None
                 if args.get("date_from"):
                     from datetime import datetime
+
                     date_from = datetime.fromisoformat(args["date_from"])
                 if args.get("date_to"):
                     from datetime import datetime
+
                     date_to = datetime.fromisoformat(args["date_to"])
                 offset = args.get("offset", 0)
                 fetch_limit = args.get("limit", 10) + offset
@@ -341,37 +332,39 @@ class CollivindTools:
                 )
                 results = self.memory_manager.search(q)
                 limit = args.get("limit", 10)
-                page = results[offset:offset + limit]
-                return json.dumps({
-                    "results": [
-                        {
-                            "id": r.memory.id,
-                            "content": r.memory.content,
-                            "score": r.score,
-                            "version": r.memory.version,
-                            "session_id": r.memory.session_id,
-                            "related_entities": r.related_entities,
-                        } for r in page
-                    ],
-                    "total": len(results),
-                    "offset": offset,
-                    "has_more": len(results) > offset + limit,
-                }, indent=2)
+                page = results[offset : offset + limit]
+                return json.dumps(
+                    {
+                        "results": [
+                            {
+                                "id": r.memory.id,
+                                "content": r.memory.content,
+                                "score": r.score,
+                                "version": r.memory.version,
+                                "session_id": r.memory.session_id,
+                                "related_entities": r.related_entities,
+                            }
+                            for r in page
+                        ],
+                        "total": len(results),
+                        "offset": offset,
+                        "has_more": len(results) > offset + limit,
+                    },
+                    indent=2,
+                )
 
             elif name == "collivind_get_context":
                 context = self.memory_manager.get_context(
                     query_str=args["query"],
                     project_id=args.get("project_id", "default"),
                     limit=args.get("limit", 10),
-                    max_tokens=args.get("max_tokens")
+                    max_tokens=args.get("max_tokens"),
                 )
                 return context
 
             elif name == "collivind_invalidate":
                 self.memory_manager.invalidate(
-                    memory_id=args["memory_id"],
-                    superseded_by=args["superseded_by"],
-                    reason=args["reason"]
+                    memory_id=args["memory_id"], superseded_by=args["superseded_by"], reason=args["reason"]
                 )
                 return json.dumps({"status": "success", "message": "Memory invalidated"})
 
@@ -398,25 +391,34 @@ class CollivindTools:
                 sid = args.get("session_id")
                 if sid:
                     timeline = [m for m in timeline if m.session_id == sid]
-                page = timeline[offset:offset + limit]
-                return json.dumps({
-                    "results": [m.to_dict() for m in page],
-                    "total": len(timeline),
-                    "offset": offset,
-                    "has_more": len(timeline) > offset + limit,
-                }, indent=2)
+                page = timeline[offset : offset + limit]
+                return json.dumps(
+                    {
+                        "results": [m.to_dict() for m in page],
+                        "total": len(timeline),
+                        "offset": offset,
+                        "has_more": len(timeline) > offset + limit,
+                    },
+                    indent=2,
+                )
 
             elif name == "collivind_find_contradictions":
                 memory = self.memory_manager.graph_store.get_memory(args["memory_id"])
                 if not memory:
                     return json.dumps({"error": "Memory not found"})
                 contradictions = self.memory_manager.search_engine.find_contradictions(memory)
-                return json.dumps([{
-                    "id": c.memory.id,
-                    "content": c.memory.content,
-                    "category": c.memory.category.value,
-                    "similarity": c.vector_score
-                } for c in contradictions], indent=2)
+                return json.dumps(
+                    [
+                        {
+                            "id": c.memory.id,
+                            "content": c.memory.content,
+                            "category": c.memory.category.value,
+                            "similarity": c.vector_score,
+                        }
+                        for c in contradictions
+                    ],
+                    indent=2,
+                )
 
             elif name == "collivind_batch_add":
                 memories = []
@@ -430,30 +432,37 @@ class CollivindTools:
 
             elif name == "collivind_get_version_chain":
                 chain = self.memory_manager.get_version_chain(args["memory_id"])
-                return json.dumps([
-                    {
-                        "id": m.id,
-                        "content": m.content,
-                        "version": m.version,
-                        "valid_from": m.valid_from.isoformat() if m.valid_from else None,
-                        "valid_to": m.valid_to.isoformat() if m.valid_to else None,
-                        "superseded_by": m.superseded_by,
-                    } for m in chain
-                ], indent=2)
+                return json.dumps(
+                    [
+                        {
+                            "id": m.id,
+                            "content": m.content,
+                            "version": m.version,
+                            "valid_from": m.valid_from.isoformat() if m.valid_from else None,
+                            "valid_to": m.valid_to.isoformat() if m.valid_to else None,
+                            "superseded_by": m.superseded_by,
+                        }
+                        for m in chain
+                    ],
+                    indent=2,
+                )
 
             elif name == "collivind_extract":
                 prompt = build_extraction_prompt(
                     args["text"],
                     project_id=args.get("project_id", "default"),
                 )
-                return json.dumps({
-                    "status": "prompt_ready",
-                    "prompt": prompt,
-                    "instructions": (
-                        "Send this prompt to your LLM, then pass the JSON response "
-                        "to collivind_extract_save to store the extracted memories."
-                    ),
-                }, indent=2)
+                return json.dumps(
+                    {
+                        "status": "prompt_ready",
+                        "prompt": prompt,
+                        "instructions": (
+                            "Send this prompt to your LLM, then pass the JSON response "
+                            "to collivind_extract_save to store the extracted memories."
+                        ),
+                    },
+                    indent=2,
+                )
 
             elif name == "collivind_extract_save":
                 results = parse_extraction_response(args["llm_response"])
@@ -462,10 +471,7 @@ class CollivindTools:
                 project_id = args.get("project_id", "default")
                 ids = []
                 for r in results:
-                    entities = [
-                        EntityCreate(name=e["name"], type=EntityType(e["type"]))
-                        for e in r.entities
-                    ]
+                    entities = [EntityCreate(name=e["name"], type=EntityType(e["type"])) for e in r.entities]
                     mem_create = MemoryCreate(
                         content=r.content,
                         summary=r.summary,
