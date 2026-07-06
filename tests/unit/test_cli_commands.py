@@ -17,6 +17,7 @@ def _mock_config(mode="docker"):
 
 
 class TestInitCommand:
+    @patch("collivind.cli.commands.init._register_commands")
     @patch("collivind.cli.commands.init._register_hooks")
     @patch("collivind.cli.commands.init._register_mcp_server")
     @patch("collivind.cli.commands.init.check_all_services")
@@ -25,7 +26,7 @@ class TestInitCommand:
     @patch("collivind.cli.commands.init.check_docker_running")
     @patch("collivind.cli.commands.init.load_config")
     def test_init_docker_mode(
-        self, mock_config, mock_docker, mock_templates, mock_up, mock_health, mock_mcp, mock_hooks
+        self, mock_config, mock_docker, mock_templates, mock_up, mock_health, mock_mcp, mock_hooks, mock_cmds
     ):
         mock_config.return_value = _mock_config("docker")
         mock_health.return_value = {
@@ -41,10 +42,11 @@ class TestInitCommand:
         mock_templates.assert_called_once()
         mock_up.assert_called_once()
 
+    @patch("collivind.cli.commands.init._register_commands")
     @patch("collivind.cli.commands.init._register_hooks")
     @patch("collivind.cli.commands.init._register_mcp_server")
     @patch("collivind.cli.commands.init.load_config")
-    def test_init_embedded_mode(self, mock_config, mock_mcp, mock_hooks):
+    def test_init_embedded_mode(self, mock_config, mock_mcp, mock_hooks, mock_cmds):
         config = _mock_config("embedded")
         mock_config.return_value = config
         runner = CliRunner()
@@ -58,10 +60,11 @@ class TestInitCommand:
         assert result.exit_code == 0
         assert "embedded" in result.output.lower()
 
+    @patch("collivind.cli.commands.init._register_commands")
     @patch("collivind.cli.commands.init._register_hooks")
     @patch("collivind.cli.commands.init._register_mcp_server")
     @patch("collivind.cli.commands.init.load_config")
-    def test_init_generates_config_toml(self, mock_config, mock_mcp, mock_hooks):
+    def test_init_generates_config_toml(self, mock_config, mock_mcp, mock_hooks, mock_cmds):
         config = _mock_config("embedded")
         mock_config.return_value = config
         runner = CliRunner()

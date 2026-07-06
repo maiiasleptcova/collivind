@@ -33,6 +33,7 @@ def init():
 
     _register_mcp_server()
     _register_hooks(config)
+    _register_commands()
 
 
 def _register_hooks(config):
@@ -49,6 +50,19 @@ def _register_hooks(config):
     except Exception as e:
         click.secho(f"skipped ({e})", fg="yellow")
         click.echo("Run manually: collivind hook install")
+
+
+def _register_commands():
+    """Install /mem-save and /mem-recall agent commands."""
+    from collivind.cli.commands.agent_commands import install_all_commands
+
+    click.echo("Installing agent commands... ", nl=False)
+    try:
+        results = install_all_commands()
+        click.secho(f"done ({', '.join(results)})", fg="green")
+    except Exception as e:
+        click.secho(f"skipped ({e})", fg="yellow")
+        click.echo("Run manually: collivind commands install")
 
 
 def _init_embedded(config, data_dir: Path):
