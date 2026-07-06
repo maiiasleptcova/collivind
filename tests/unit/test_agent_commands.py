@@ -1,4 +1,3 @@
-
 from click.testing import CliRunner
 
 from collivind.cli.commands.agent_commands import commands, install_all_commands, install_commands
