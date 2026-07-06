@@ -23,9 +23,22 @@ from collivind.version import __version__
 
 @click.group()
 @click.version_option(version=__version__)
-def cli():
+@click.pass_context
+def cli(ctx):
     """Collivind - Graph-based memory layer for AI coding assistants."""
-    pass
+    # hooks run on every prompt/response — no update checks on that path
+    if ctx.invoked_subcommand == "hook":
+        return
+    try:
+        from collivind.config import load_config
+        from collivind.update_check import get_update_notice
+
+        if load_config().check_updates:
+            notice = get_update_notice()
+            if notice:
+                click.secho(notice, fg="yellow", err=True)
+    except Exception:
+        pass
 
 
 cli.add_command(init)
