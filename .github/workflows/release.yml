@@ -6,10 +6,29 @@ on:
       - "v*"
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Lint
+        run: uv run ruff check src/ tests/
+
+      - name: Unit tests
+        run: uv run pytest tests/unit/ tests/mcp/ -q
+
   publish:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
+      id-token: write # PyPI trusted publishing
+      contents: write # GitHub Release creation
 
     steps:
       - uses: actions/checkout@v4
@@ -22,3 +41,8 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Create GitHub Release (notifies watchers)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" --generate-notes dist/*

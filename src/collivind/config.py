@@ -66,6 +66,7 @@ class CollivindConfig:
     user_id: str = "local"
     data_dir: str = "~/.collivind"
     mode: str = "docker"  # "docker", "embedded", or "remote"
+    check_updates: bool = True  # daily PyPI version check on CLI use
     docker: DockerConfig = field(default_factory=DockerConfig)
     qdrant: QdrantConfig = field(default_factory=QdrantConfig)
     neo4j: Neo4jConfig = field(default_factory=Neo4jConfig)
@@ -91,6 +92,7 @@ DEFAULT_CONFIG_TEMPLATE = """\
 [collivind]
 user_id = "local"
 data_dir = "~/.collivind"
+check_updates = true  # daily PyPI version check on CLI use
 # mode selects defaults for all backends at once:
 #   "embedded" = in-process Qdrant + SQLite + local sentence-transformers
 #   "docker"   = Docker Qdrant + Neo4j + HTTP embedding service
@@ -212,6 +214,7 @@ def load_config() -> CollivindConfig:
         user_id=core_data.get("user_id", "local"),
         data_dir=core_data.get("data_dir", "~/.collivind"),
         mode=core_data.get("mode", "docker"),
+        check_updates=core_data.get("check_updates", True),
         docker=DockerConfig(**docker_data),
         qdrant=QdrantConfig(**qdrant_data),
         neo4j=Neo4jConfig(**neo4j_data),
