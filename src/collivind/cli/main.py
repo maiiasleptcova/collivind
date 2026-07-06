@@ -1,5 +1,6 @@
 import click
 
+from collivind.cli.commands.agent_commands import commands
 from collivind.cli.commands.docker import docker
 from collivind.cli.commands.hook import hook
 from collivind.cli.commands.init import init
@@ -42,3 +43,4 @@ cli.add_command(forget)
 cli.add_command(export_cmd)
 cli.add_command(import_cmd)
 cli.add_command(sync)
+cli.add_command(commands)

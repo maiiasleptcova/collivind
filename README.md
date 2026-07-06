@@ -65,6 +65,15 @@ Collivind uses Claude Code hooks for automatic memory capture and recall:
 
 The recall hooks (SessionStart, UserPromptSubmit) are also registered for Codex CLI when `~/.codex` exists.
 
+### In-session commands
+
+`collivind init` also installs manual slash commands, so you can save and recall memory mid-session without leaving your agent:
+
+- `/mem-save <text>` — store knowledge (or, with no text, extract it from the current conversation)
+- `/mem-recall <topic>` — pull relevant stored knowledge into the session
+
+Installed for Claude Code (`~/.claude/commands`) and Codex (`~/.codex/prompts`) automatically; for VS Code Copilot run `collivind commands install --tool copilot` inside a repo (writes `.github/prompts/`).
+
 `collivind init` registers both hooks in `~/.claude/settings.json` automatically. To (re)register manually:
 
 ```bash
