@@ -130,8 +130,15 @@ class GraphStore(ABC):
 class EmbeddingProvider(ABC):
     @abstractmethod
     def embed(self, text: str) -> List[float]:
-        """Embed a single text."""
+        """Embed a single document text."""
         pass
+
+    def embed_query(self, text: str) -> List[float]:
+        """Embed a search query. Some models (e.g. bge) want a query-side
+        prefix; providers carry it in config.query_prefix. Documents are
+        never prefixed."""
+        prefix = getattr(getattr(self, "config", None), "query_prefix", "")
+        return self.embed(prefix + text)
 
     @abstractmethod
     def embed_batch(self, texts: List[str]) -> List[List[float]]:

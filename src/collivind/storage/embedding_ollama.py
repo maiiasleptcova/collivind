@@ -33,7 +33,7 @@ class OllamaEmbeddingProvider(EmbeddingProvider):
 
     def __init__(self, config: EmbeddingsConfig):
         self.config = config
-        is_default_local_model = config.model in ("all-MiniLM-L6-v2", "")
+        is_default_local_model = config.model in ("all-MiniLM-L6-v2", "BAAI/bge-small-en-v1.5", "")
         self._model = OLLAMA_DEFAULT_MODEL if is_default_local_model else config.model
         base_url = config.service_url or OLLAMA_DEFAULT_URL
         self._dimension = 768 if (config.dimension == 384 and is_default_local_model) else (config.dimension or 768)

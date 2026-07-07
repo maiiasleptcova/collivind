@@ -29,6 +29,10 @@ from collivind.storage.qdrant_embedded import EmbeddedQdrantStore  # noqa: E402
 EMBED_BATCH = 256
 
 
+def make_embedder(model: str, dimension: int):
+    return LocalEmbeddingProvider(EmbeddingsConfig(provider="local", model=model, dimension=dimension))
+
+
 def turns_of(session):
     """Flatten a session (list of {role, content} turns) to embeddable texts."""
     texts = []
@@ -39,7 +43,7 @@ def turns_of(session):
     return texts
 
 
-def evaluate_question(store, embedder, question, top_k):
+def evaluate_question(store, embedder, question, top_k, query_prefix="", doc_prefix=""):
     q_sessions = question["haystack_sessions"]
     q_session_ids = question["haystack_session_ids"]
     answer_ids = set(question["answer_session_ids"])
@@ -48,7 +52,7 @@ def evaluate_question(store, embedder, question, top_k):
     texts, payloads = [], []
     for sid, session in zip(q_session_ids, q_sessions):
         for text in turns_of(session):
-            texts.append(text)
+            texts.append(doc_prefix + text)
             payloads.append({"session_id": sid})
     for i in range(0, len(texts), EMBED_BATCH):
         batch = texts[i : i + EMBED_BATCH]
@@ -57,7 +61,7 @@ def evaluate_question(store, embedder, question, top_k):
             store.upsert(i + j, vec, payloads[i + j])
 
     # retrieve: rank sessions by their best-scoring turn
-    qvec = embedder.embed(question["question"])
+    qvec = embedder.embed(query_prefix + question["question"])
     hits = store.search(vector=qvec, limit=top_k * 20, filters={})
     top_sessions = []
     for hit in hits:
@@ -81,6 +85,14 @@ def main():
     parser.add_argument("dataset")
     parser.add_argument("--questions", type=int, default=None, help="Limit question count")
     parser.add_argument("--top-k", type=int, default=5)
+    parser.add_argument("--model", default="BAAI/bge-small-en-v1.5")
+    parser.add_argument("--dimension", type=int, default=384)
+    parser.add_argument(
+        "--query-prefix",
+        default="Represent this sentence for searching relevant passages: ",
+        help="Prefix for query texts (model-specific)",
+    )
+    parser.add_argument("--doc-prefix", default="", help="Prefix for document texts (model-specific)")
     parser.add_argument("--out", default="benchmarks/results_longmemeval.jsonl")
     args = parser.parse_args()
 
@@ -88,7 +100,7 @@ def main():
     if args.questions:
         data = data[: args.questions]
 
-    embedder = LocalEmbeddingProvider(EmbeddingsConfig(provider="local"))
+    embedder = make_embedder(args.model, args.dimension)
     results = []
     started = time.time()
 
@@ -103,7 +115,9 @@ def main():
                 )
                 store.initialize()
                 try:
-                    result = evaluate_question(store, embedder, question, args.top_k)
+                    result = evaluate_question(
+                        store, embedder, question, args.top_k, args.query_prefix, args.doc_prefix
+                    )
                 finally:
                     store.close()
             results.append(result)

@@ -54,7 +54,7 @@ class SearchEngine:
             tags=query.tags,
             entity_names=query.entity_names,
         )
-        vector = self.embedding_provider.embed(enriched)
+        vector = self.embedding_provider.embed_query(enriched)
 
         vector_filters = dict(query.filters)
         if query.project_id:

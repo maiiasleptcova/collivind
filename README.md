@@ -151,12 +151,12 @@ Collivind stores memories as nodes in a knowledge graph with vector embeddings f
 
 ## Benchmarks
 
-**LongMemEval-S session retrieval, Recall@5: 91.8%** (500/500 questions, raw
-mode — local embeddings, no LLM, no reranking, no API keys). Fully
-reproducible: methodology, per-question results, and honest caveats in
-[benchmarks/BENCHMARKS.md](benchmarks/BENCHMARKS.md). We publish no
-side-by-side numbers against other memory tools — different projects measure
-different things on different splits.
+**LongMemEval-S session retrieval, Recall@5: 98.0%** (500/500 questions,
+standard split, raw mode — local embeddings, no LLM, no reranking, no API
+keys). Fully reproducible: methodology, per-question results, and honest
+caveats in [benchmarks/BENCHMARKS.md](benchmarks/BENCHMARKS.md). We publish
+no side-by-side numbers against other memory tools — different projects
+measure different things on different splits.
 
 ## Architecture
 

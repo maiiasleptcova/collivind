@@ -40,7 +40,7 @@ class LocalEmbeddingProvider(EmbeddingProvider):
     def embed_batch(self, texts: List[str]) -> List[List[float]]:
         self._load_model()
         try:
-            return self._model.encode(texts).tolist()
+            return self._model.encode(texts, batch_size=128).tolist()
         except Exception as e:
             raise CollivindError(f"Local batch embedding failed: {e}")
 

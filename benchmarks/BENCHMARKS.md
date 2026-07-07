@@ -24,25 +24,30 @@ research page for their numbers.
 
 ## Results
 
-**LongMemEval-S, session-level Recall@5, raw mode (no LLM): 91.8%** on all
-500 questions (this dataset variant contains no abstention questions; nothing
-was excluded). Measured 2026-07-07 at commit `a02bc89`; per-question outcomes
-in [`results_longmemeval_r5.jsonl`](results_longmemeval_r5.jsonl).
+**LongMemEval-S, session-level Recall@5, raw mode (no LLM): 98.0%** on all
+500 questions with `BAAI/bge-small-en-v1.5` (collivind's default embedding
+model), standard uncleaned split, nothing excluded (this dataset variant
+contains no abstention questions). Measured 2026-07-07; per-question outcomes
+in [`results_longmemeval_r5_bge.jsonl`](results_longmemeval_r5_bge.jsonl).
 
-| Question type | R@5 | Questions |
-|---|---|---|
-| knowledge-update | 97.4% | 78 |
-| multi-session | 89.5% | 133 |
-| single-session-assistant | 100.0% | 56 |
-| single-session-preference | 93.3% | 30 |
-| single-session-user | 87.1% | 70 |
-| temporal-reasoning | 89.5% | 133 |
-| **overall** | **91.8%** | **500** |
+| Question type | bge-small (default) | all-MiniLM-L6-v2 | Questions |
+|---|---|---|---|
+| knowledge-update | 100.0% | 97.4% | 78 |
+| multi-session | 97.7% | 89.5% | 133 |
+| single-session-assistant | 100.0% | 100.0% | 56 |
+| single-session-preference | 96.7% | 93.3% | 30 |
+| single-session-user | 98.6% | 87.1% | 70 |
+| temporal-reasoning | 96.2% | 89.5% | 133 |
+| **overall** | **98.0%** | **91.8%** | **500** |
 
-The weakest categories (multi-session, temporal-reasoning) are exactly where
-collivind's graph expansion and temporal decay should help — the raw mode
-above uses neither. A hybrid-mode measurement is future work; it will be
-reported on the same split with the same harness.
+Both columns are the same raw pipeline — the only variable is the embedding
+model (MiniLM baseline: [`results_longmemeval_r5.jsonl`](results_longmemeval_r5.jsonl),
+measured at commit `a02bc89`). We publish the model-selection process too:
+`all-mpnet-base-v2` was screened and eliminated (81.5% on a 27-question
+subset, at ~15x the compute). No per-question tuning, no heuristics, no
+reranking anywhere. A hybrid mode (keyword + temporal boosting in the actual
+search engine) is future work and will be reported on the same split with
+the same harness.
 
 ## Reproducing
 

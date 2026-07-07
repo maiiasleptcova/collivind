@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
 
 app = FastAPI(title="Collivind Embedding Service")
-model = SentenceTransformer("all-MiniLM-L6-v2")
+model = SentenceTransformer("BAAI/bge-small-en-v1.5")
 
 
 class EmbedRequest(BaseModel):
