@@ -149,6 +149,15 @@ Collivind stores memories as nodes in a knowledge graph with vector embeddings f
 
 **Deduplication and supersession** keep the store current: resubmitting identical knowledge is rejected, and storing an updated version of existing knowledge retires the stale memory (it leaves search results but stays in the version history) instead of keeping old and new side by side. **Contradiction detection** links genuinely conflicting memories with CONTRADICTS relationships.
 
+## Benchmarks
+
+**LongMemEval-S session retrieval, Recall@5: 91.8%** (500/500 questions, raw
+mode — local embeddings, no LLM, no reranking, no API keys). Fully
+reproducible: methodology, per-question results, and honest caveats in
+[benchmarks/BENCHMARKS.md](benchmarks/BENCHMARKS.md). We publish no
+side-by-side numbers against other memory tools — different projects measure
+different things on different splits.
+
 ## Architecture
 
 ```
