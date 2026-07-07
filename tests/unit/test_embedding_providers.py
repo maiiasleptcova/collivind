@@ -79,3 +79,21 @@ def test_ollama_custom_model():
     provider = OllamaEmbeddingProvider(config)
     assert provider._model == "mxbai-embed-large"
     assert provider.dimension == 1024
+
+
+def test_embed_query_applies_prefix_to_queries_only():
+    from unittest.mock import MagicMock, patch
+
+    from collivind.config import EmbeddingsConfig
+    from collivind.storage.embedding_local import LocalEmbeddingProvider
+
+    config = EmbeddingsConfig(provider="local", query_prefix="QUERY: ")
+    provider = LocalEmbeddingProvider(config)
+    model = MagicMock()
+    model.encode.return_value.tolist.return_value = [0.1]
+    with patch.object(provider, "_load_model"):
+        provider._model = model
+        provider.embed("a document")
+        model.encode.assert_called_with("a document")
+        provider.embed_query("a question")
+        model.encode.assert_called_with("QUERY: a question")

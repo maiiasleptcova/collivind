@@ -35,8 +35,11 @@ class Neo4jConfig:
 class EmbeddingsConfig:
     provider: str = ""  # "" = use mode default; "local", "http", "openai", "ollama"
     service_url: str = "http://localhost:8090"
-    model: str = "all-MiniLM-L6-v2"
+    model: str = "BAAI/bge-small-en-v1.5"
     dimension: int = 384
+    # applied to queries only (never documents); clear it for models that
+    # don't use retrieval prefixes
+    query_prefix: str = "Represent this sentence for searching relevant passages: "
     api_key: str = ""  # API key for OpenAI or compatible services
     base_url: str = ""  # custom base URL for OpenAI-compatible APIs
 
@@ -124,8 +127,11 @@ collection_name = "collivind_memories"
 # provider: "local" (sentence-transformers), "http" (custom HTTP service),
 #           "openai" (OpenAI API), "ollama" (Ollama local)
 # provider = "local"
-model = "all-MiniLM-L6-v2"
+model = "BAAI/bge-small-en-v1.5"
 dimension = 384
+# query_prefix is applied to search queries only; clear it for models
+# that don't use retrieval prefixes (e.g. all-MiniLM-L6-v2)
+query_prefix = "Represent this sentence for searching relevant passages: "
 # service_url = "http://localhost:8090"  # for provider = "http"
 # api_key = ""                            # for provider = "openai"
 # base_url = ""                           # custom OpenAI-compatible endpoint

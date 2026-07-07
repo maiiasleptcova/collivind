@@ -38,7 +38,7 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
 
     def __init__(self, config: EmbeddingsConfig):
         self.config = config
-        is_default_local_model = config.model in ("all-MiniLM-L6-v2", "")
+        is_default_local_model = config.model in ("all-MiniLM-L6-v2", "BAAI/bge-small-en-v1.5", "")
         self._model = OPENAI_DEFAULT_MODEL if is_default_local_model else config.model
         base_url = config.base_url or OPENAI_DEFAULT_URL
         auto_dim = OPENAI_DIMENSIONS.get(self._model, 1536)
