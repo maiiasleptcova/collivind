@@ -40,27 +40,6 @@ class MemoryManager:
                 merged.append(tag)
         return merged
 
-    def _merge_into_existing(
-        self,
-        existing: MemoryNode,
-        memory_create: MemoryCreate,
-        entities: Optional[List[EntityCreate]],
-    ) -> MemoryNode:
-        merged_tags = self._merge_tags(existing, memory_create.tags)
-        if merged_tags != existing.tags:
-            self.graph_store.update_memory(existing.id, tags=merged_tags)
-
-        if entities:
-            for ent_create in entities:
-                ent_node = self.graph_store.create_entity(ent_create)
-                self.graph_store.create_relationship(
-                    RelationshipCreate(
-                        source_id=existing.id, target_id=ent_node.id, type=RelType.ABOUT, confidence=1.0, source="merge"
-                    )
-                )
-
-        return self.graph_store.get_memory(existing.id) or existing
-
     def add_memory(
         self,
         memory_create: MemoryCreate,
@@ -71,6 +50,7 @@ class MemoryManager:
         enriched = build_enriched_text(memory_create, entity_names=entity_names)
         vector = self.embedding_provider.embed(enriched)
 
+        stale = None
         dup_match = self.deduplicator.find_duplicate_detailed(vector, memory_create.project_id)
         if dup_match:
             existing = self.graph_store.get_memory(dup_match.memory_id)
@@ -78,9 +58,22 @@ class MemoryManager:
                 if dup_match.is_exact:
                     # identical content resubmitted — reject, keep existing as-is
                     return existing
-                return self._merge_into_existing(existing, memory_create, entities)
+                # near-duplicate with different content: the incoming memory is
+                # the fresh version — store it and retire the stale one below,
+                # instead of keeping old and new side by side
+                stale = existing
 
         memory_node = self.graph_store.create_memory(memory_create)
+
+        if stale:
+            inherited = self._merge_tags(stale, memory_create.tags)
+            if inherited != memory_create.tags:
+                self.graph_store.update_memory(memory_node.id, tags=inherited)
+            self.graph_store.invalidate_memory(stale.id, memory_node.id, "superseded_by_update")
+            # history stays in the graph (version chain); the live vector index
+            # must only serve current knowledge
+            self.vector_store.delete(stale.id)
+            memory_node = self.graph_store.get_memory(memory_node.id) or memory_node
 
         payload = memory_node.to_dict()
         self.vector_store.upsert(memory_node.id, vector, payload)
