@@ -133,7 +133,7 @@ collivind sync ~/team-repo/memory   # import teammates' knowledge, write yours b
 cd ~/team-repo && git add memory && git commit -m "memory sync" && git push
 ```
 
-Each sync imports records you don't have yet (deduplication merges near-duplicates and skips exact ones) and rewrites the file in stable order, so git diffs show exactly what knowledge was added — reviewable in PRs like any other change. Every memory keeps its `user_id`, and searches can be scoped per contributor (`user_id` filter on `collivind_search`).
+Each sync imports records you don't have yet (exact duplicates are skipped; updated versions of known facts supersede your stale copies) and rewrites the file in stable order, so git diffs show exactly what knowledge was added — reviewable in PRs like any other change. Every memory keeps its `user_id`, and searches can be scoped per contributor (`user_id` filter on `collivind_search`).
 
 ## How It Works
 
@@ -147,7 +147,7 @@ Collivind stores memories as nodes in a knowledge graph with vector embeddings f
 
 **Search** combines vector similarity (70% weight) with graph proximity (30% weight) for results that understand both meaning and structure.
 
-**Deduplication** prevents storing the same knowledge twice. **Contradiction detection** identifies conflicting memories and creates CONTRADICTS relationships.
+**Deduplication and supersession** keep the store current: resubmitting identical knowledge is rejected, and storing an updated version of existing knowledge retires the stale memory (it leaves search results but stays in the version history) instead of keeping old and new side by side. **Contradiction detection** links genuinely conflicting memories with CONTRADICTS relationships.
 
 ## Architecture
 

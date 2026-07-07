@@ -54,10 +54,10 @@ def test_add_memory_no_duplicate():
     assert graph_store.create_relationship.call_count == 2
 
 
-def test_add_memory_with_duplicate():
+def test_add_memory_with_exact_duplicate():
     vector_store = MagicMock()
-    # Mock finding a duplicate
-    vector_store.search.return_value = [{"id": "dup-1", "score": 0.95}]
+    # Exact duplicate (>=0.98) is rejected; near-dupes now supersede instead
+    vector_store.search.return_value = [{"id": "dup-1", "score": 0.99}]
 
     graph_store = MagicMock()
     mock_memory = MemoryNode(content="Dup", summary="Dup", category=MemoryCategory.FACT, id="dup-1")
