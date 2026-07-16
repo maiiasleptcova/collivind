@@ -360,8 +360,28 @@ def test_transient_legacy_lock_recovers_on_retry(tmp_path):
     store.close()
 
 
-def test_non_lock_migration_error_raises_immediately(tmp_path):
+def test_corrupt_legacy_store_raises_collivind_error_with_recovery(tmp_path):
+    """M1: unreadable qdrant_data must fail loud but guided, never raw."""
     (tmp_path / "qdrant_data").mkdir()
     with patch("qdrant_client.QdrantClient", side_effect=ValueError("disk corrupt")):
-        with pytest.raises(ValueError):
+        with pytest.raises(CollivindError) as err:
             make_store(tmp_path)
+    message = str(err.value)
+    assert str(tmp_path / "qdrant_data") in message
+    assert "disk corrupt" in message
+    assert "mv " in message  # concrete recovery step: move the dir aside
+    assert "preserved" in message
+    assert isinstance(err.value.__cause__, ValueError)  # original traceback kept
+
+
+def test_garbage_meta_json_raises_collivind_error_with_recovery(tmp_path):
+    """R5: invalid JSON in qdrant_data/meta.json must not escape as JSONDecodeError."""
+    legacy = tmp_path / "qdrant_data"
+    legacy.mkdir()
+    (legacy / "meta.json").write_text("{definitely not json")
+    with pytest.raises(CollivindError) as err:
+        make_store(tmp_path)
+    message = str(err.value)
+    assert str(legacy) in message
+    assert "mv " in message
+    assert "preserved" in message
