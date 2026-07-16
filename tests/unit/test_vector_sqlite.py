@@ -88,6 +88,27 @@ def test_filter_matches_inside_list_payload(store):
     assert store.search(unit(0), filters={"tags": "rust"}) == []
 
 
+def test_none_filter_value_rejected_not_matched_against_missing_keys(store):
+    """R3 worst case: {'k': None} matched every point missing key k; the old
+    engine raised ValidationError for any non str|int|bool filter value."""
+    store.upsert("no-k", unit(0), {"project_id": "p"})
+    with pytest.raises(CollivindError, match="filter"):
+        store.search(unit(0), filters={"k": None})
+
+
+def test_non_scalar_filter_values_rejected(store):
+    store.upsert("m1", unit(0), {"w": 1.5})
+    for bad in (1.5, {"nested": 1}, ["list"]):
+        with pytest.raises(CollivindError, match="filter"):
+            store.search(unit(0), filters={"w": bad})
+
+
+def test_bool_and_int_filter_values_still_match(store):
+    store.upsert("flagged", unit(0), {"flag": True, "n": 3})
+    assert [r["id"] for r in store.search(unit(0), filters={"flag": True})] == ["flagged"]
+    assert [r["id"] for r in store.search(unit(0), filters={"n": 3})] == ["flagged"]
+
+
 def test_threshold_is_inclusive(store):
     """score >= threshold is kept — dedup's 0.92/0.98 band sits on this."""
     store.upsert("exact", unit(0), {})
