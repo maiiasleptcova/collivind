@@ -225,6 +225,28 @@ def test_cross_instance_delete_visible(tmp_path):
         b.close()
 
 
+def test_scores_accumulate_in_float64(tmp_path):
+    """R4: float32 accumulation drifted ~1e-7 off QdrantLocal's float64
+    pipeline, flipping dedup decisions for cosines within ~2e-7 of the
+    0.92/0.98 boundaries. Storage stays float32; scoring must be float64."""
+    from collivind.storage.vector_sqlite import _normalize
+
+    dim = 384
+    rng = np.random.default_rng(7)
+    stored_vec = rng.normal(size=dim)
+    query_vec = rng.normal(size=dim)
+
+    store = SqliteVectorStore(data_dir=str(tmp_path), config=QdrantConfig(), dimension=dim)
+    try:
+        store.upsert("m", stored_vec.tolist(), {})
+        for probe in (stored_vec, query_vec):
+            expected = float(_normalize(probe).astype(np.float64) @ _normalize(stored_vec).astype(np.float64))
+            results = store.search(probe.tolist(), threshold=-1.0)
+            assert results[0]["score"] == expected  # exact: float64 all the way
+    finally:
+        store.close()
+
+
 # --- Score parity with QdrantLocal (the previous engine) ---
 
 
