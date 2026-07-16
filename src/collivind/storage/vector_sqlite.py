@@ -104,6 +104,7 @@ class SqliteVectorStore(VectorStore):
         if len(vector) != self._dimension:
             raise CollivindError(f"Vector dimension {len(vector)} does not match store dimension {self._dimension}")
         try:
+            self._check_collection_dimension(len(vector))
             with self.conn:
                 self.conn.execute(
                     "INSERT OR REPLACE INTO vectors (collection, id, vector, payload) VALUES (?, ?, ?, ?)",
@@ -224,11 +225,30 @@ class SqliteVectorStore(VectorStore):
         self.conn.executescript(_SCHEMA)
         self.conn.commit()
 
+    def _check_collection_dimension(self, dim: int) -> None:
+        """Reject writes that mismatch the collection's established dimension.
+
+        The old engine pinned the dimension at collection creation; without
+        this, one accepted mismatched row bricks every search on the
+        collection (np.vstack shape mismatch, review finding R2). Rows are
+        normalized float32, so the stored blob is 4 bytes per component.
+        """
+        row = self.conn.execute(
+            "SELECT length(vector) FROM vectors WHERE collection = ? LIMIT 1", (self.config.collection_name,)
+        ).fetchone()
+        if row is not None and row[0] != dim * 4:
+            raise CollivindError(
+                f"Vector dimension {dim} does not match existing dimension {row[0] // 4} "
+                f"of collection '{self.config.collection_name}'"
+            )
+
     def _meta_get(self, key: str) -> Optional[str]:
         row = self.conn.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
         return row[0] if row else None
 
     def _wrap(self, operation: str, error: Exception) -> CollivindError:
+        if isinstance(error, CollivindError):
+            return error  # already a boundary error: don't bury the message
         if isinstance(error, sqlite3.OperationalError) and "locked" in str(error):
             return CollivindError(
                 lockinfo.lock_message(f"Vector store {operation} failed ({error}): {self._db_path}", self._db_path)
