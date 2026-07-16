@@ -71,3 +71,5 @@ venv.bak/
 
 # Collivind local data
 ~/.collivind/
+.autopilot/
+.worktrees/
