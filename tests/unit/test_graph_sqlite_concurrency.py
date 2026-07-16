@@ -9,18 +9,21 @@ import sqlite3
 import subprocess
 import sys
 import threading
+from pathlib import Path
 
 from collivind.models.memory import MemoryCategory, MemoryCreate
 from collivind.storage.graph_sqlite import SqliteGraphStore
+
+SRC = str(Path(__file__).resolve().parents[2] / "src")
 
 
 def _memory(content: str) -> MemoryCreate:
     return MemoryCreate(content=content, summary=content[:40], category=MemoryCategory.FACT, project_id="proj")
 
 
-WRITER_SCRIPT = """
+WRITER_SCRIPT = f"""
 import sys
-sys.path.insert(0, {src!r})
+sys.path.insert(0, {SRC!r})
 from collivind.storage.graph_sqlite import SqliteGraphStore
 from collivind.models.memory import MemoryCategory, MemoryCreate
 
@@ -39,9 +42,8 @@ def test_subprocess_write_visible_to_open_parent_store(tmp_path):
     parent.initialize()
     parent.get_timeline("proj")  # open a read before the other process writes
 
-    src = str(__import__("pathlib").Path(__file__).resolve().parents[2] / "src")
     result = subprocess.run(
-        [sys.executable, "-c", WRITER_SCRIPT.format(src=src), str(tmp_path)],
+        [sys.executable, "-c", WRITER_SCRIPT, str(tmp_path)],
         capture_output=True,
         text=True,
         timeout=30,

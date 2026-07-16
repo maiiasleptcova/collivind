@@ -63,13 +63,17 @@ def send(proc: subprocess.Popen, command: dict) -> dict:
     return json.loads(proc.stdout.readline())
 
 
+def reap(proc: subprocess.Popen) -> None:
+    proc.kill()
+    proc.communicate(timeout=10)  # reap and close the pipes
+
+
 @pytest.fixture
 def two_processes(tmp_path):
     a, b = spawn(tmp_path), spawn(tmp_path)
     yield a, b
     for proc in (a, b):
-        proc.kill()
-        proc.wait(timeout=10)
+        reap(proc)
 
 
 def test_two_processes_open_the_store_concurrently(two_processes):
@@ -97,11 +101,10 @@ def test_sigkill_leaves_store_usable_and_writes_durable(tmp_path):
     victim = spawn(tmp_path)
     assert send(victim, {"op": "upsert", "id": "acked", "vector": unit(0)})["ok"]
     victim.send_signal(signal.SIGKILL)
-    victim.wait(timeout=10)
+    victim.communicate(timeout=10)
 
     survivor = spawn(tmp_path)
     try:
         assert send(survivor, {"op": "search", "vector": unit(0)})["ids"] == ["acked"]
     finally:
-        survivor.kill()
-        survivor.wait(timeout=10)
+        reap(survivor)
