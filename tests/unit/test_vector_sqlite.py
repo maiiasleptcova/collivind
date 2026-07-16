@@ -103,6 +103,28 @@ def test_upsert_wrong_dimension_raises(store):
         store.upsert("m1", [1.0] * (DIM + 1), {})
 
 
+def test_upsert_rejects_dimension_mismatching_existing_rows(tmp_path):
+    """R2: a config/model dimension change must not poison the collection.
+
+    The old Qdrant engine pinned the dimension at collection creation and
+    rejected mismatched writes. Validating only the constructor arg let one
+    accepted 768-dim row brick every search on the collection (np.vstack
+    shape mismatch) until removed by hand.
+    """
+    a = SqliteVectorStore(data_dir=str(tmp_path), config=QdrantConfig(), dimension=384)
+    a.upsert("original", unit(0, 384), {"kept": True})
+    a.close()
+
+    b = SqliteVectorStore(data_dir=str(tmp_path), config=QdrantConfig(), dimension=768)
+    try:
+        with pytest.raises(CollivindError, match="dimension"):
+            b.upsert("poison", unit(0, 768), {})
+        # the collection is not poisoned: search still works at the established dim
+        assert [r["id"] for r in b.search(unit(0, 384))] == ["original"]
+    finally:
+        b.close()
+
+
 def test_zero_vector_scores_zero_not_nan(store):
     store.upsert("zero", [0.0] * DIM, {})
     store.upsert("one", unit(0), {})
