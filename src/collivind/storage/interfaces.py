@@ -34,6 +34,11 @@ class VectorStore(ABC):
         pass
 
     @abstractmethod
+    def delete_collection(self) -> None:
+        """Delete the configured collection (used by `collivind reset`)."""
+        pass
+
+    @abstractmethod
     def health_check(self) -> Dict[str, Any]:
         """Return health status."""
         pass

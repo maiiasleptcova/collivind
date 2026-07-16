@@ -36,6 +36,10 @@ def _status_embedded(config):
                 click.secho(f"✓ {name}: {health['message']}", fg="green")
             else:
                 click.secho(f"✗ {name}: {health['message']}", fg="red")
+
+        legacy = config.expanded_data_dir / "qdrant_data"
+        if legacy.exists():
+            click.echo(f"Note: {legacy} is a pre-migration backup of the old vector store; it can be deleted.")
     except Exception as e:
         click.secho(f"✗ Failed to create backends: {e}", fg="red")
 

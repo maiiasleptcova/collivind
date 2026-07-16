@@ -36,9 +36,11 @@ Then initialize:
 collivind init
 ```
 
-This uses in-process Qdrant, SQLite for the graph, and loads the embedding model directly — zero Docker dependency.
+This uses SQLite for both vectors and the graph, and loads the embedding model directly — zero Docker dependency.
 
-> **Single-process limitation:** embedded mode supports one collivind process at a time — a second agent session's MCP server (or a stale one) will be refused with an error naming the holding PID and recovery steps. For concurrent sessions use `mode = "docker"` or `"remote"`.
+> **Concurrent sessions:** embedded mode is multi-process safe — any number of agent sessions, CLI commands, and hooks can share the store, and a write from one session is immediately visible to the others.
+>
+> **Upgrading from ≤ 0.1.x:** older versions kept vectors in a single-process Qdrant store (`~/.collivind/qdrant_data`). It is migrated automatically on first use and left in place as a backup; restart any agent sessions still running the old version once after upgrading. If you later downgrade, memories written after the upgrade live only in the new store — carry them over with `collivind export` / `import`.
 
 ### npm (alternative)
 
@@ -171,7 +173,7 @@ Three deployment modes share the same core library — only the storage layer ch
 | Mode | Vector Store | Graph Store | Embeddings |
 |------|-------------|-------------|------------|
 | `docker` | Qdrant container | Neo4j container | sentence-transformers container |
-| `embedded` | In-process Qdrant | SQLite | In-process model |
+| `embedded` | SQLite + numpy | SQLite | In-process model |
 | `remote` | External Qdrant | External Neo4j | External service |
 
 ## Configuration
