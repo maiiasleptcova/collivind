@@ -17,7 +17,7 @@ uv run ruff check src/     # Lint
 
 Layered: CLI / MCP Server → Engine (MemoryManager, SearchEngine) → Storage Interfaces → Backends
 
-Three deployment modes selected by `config.mode`: `docker` (Qdrant + Neo4j + HTTP embeddings), `embedded` (in-process Qdrant + SQLite + local model), `remote` (external services). Backend selection happens in `storage/factory.py`.
+Three deployment modes selected by `config.mode`: `docker` (Qdrant + Neo4j + HTTP embeddings), `embedded` (SQLite vector + graph stores + local model, multi-process safe), `remote` (external services). Backend selection happens in `storage/factory.py`.
 
 ## Key Files
 
