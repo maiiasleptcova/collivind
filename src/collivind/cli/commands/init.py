@@ -82,7 +82,7 @@ def _init_embedded(config, data_dir: Path):
         click.secho(f"failed: {e}", fg="red")
         return
 
-    click.echo("Initializing embedded Qdrant... ", nl=False)
+    click.echo("Initializing embedded vector store... ", nl=False)
     try:
         from collivind.storage.qdrant_embedded import EmbeddedQdrantStore
 

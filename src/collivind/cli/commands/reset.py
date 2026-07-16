@@ -1,3 +1,5 @@
+import shutil
+
 import click
 
 from collivind.config import load_config
@@ -14,9 +16,15 @@ def reset():
 
     click.echo("Clearing vector store... ", nl=False)
     try:
+        from collivind.storage.vector_sqlite import SqliteVectorStore
+
         vector = create_vector_store(config)
         vector.delete_collection()
         vector.initialize()
+        if isinstance(vector, SqliteVectorStore):
+            # reset promises "delete ALL memories": that includes the
+            # pre-migration qdrant backup, which is otherwise recoverable
+            shutil.rmtree(config.expanded_data_dir / "qdrant_data", ignore_errors=True)
         click.secho("done", fg="green")
     except Exception as e:
         click.secho(f"failed: {e}", fg="red")
