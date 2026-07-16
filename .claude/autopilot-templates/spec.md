@@ -21,7 +21,7 @@ collivind operator}}, I want {{outcome}} so that {{underlying goal}}.
 
 Background the implementer needs — prior decisions (check ROADMAP.md and recent
 commits), related shipped features, constraints. Collivind invariants that apply:
-local-first / no forced LLM keys, embedded mode is single-process, LongMemEval
+local-first / no forced LLM keys, embedded mode is multi-process safe (SQLite), LongMemEval
 R@5 98.0% baseline, MIT open core with collivind-pro depending on this engine.
 
 ## Acceptance criteria

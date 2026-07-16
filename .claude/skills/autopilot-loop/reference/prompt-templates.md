@@ -34,7 +34,7 @@ Spec: {SPEC}  (read it; read any code it references)
 
 Consider ALL serious options (including "do less"), with trade-offs against
 collivind's constraints: local-first, no forced LLM keys, embedded mode is
-single-process, benchmark honesty (LongMemEval R@5 98.0% baseline must not
+multi-process safe (SQLite), benchmark honesty (LongMemEval R@5 98.0% baseline must not
 regress), MIT open core with pro repo depending on this engine.
 
 Write your proposal to {PROPOSAL}: options considered, recommendation,

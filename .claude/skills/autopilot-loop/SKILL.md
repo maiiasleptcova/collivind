@@ -58,9 +58,9 @@ No eligible items → print the summary and stop.
   storage must re-run `benchmarks/longmemeval_bench.py --questions 50` and
   report the number next to the 98.0% baseline; a regression > 1 point on the
   50q screen blocks the change. Never publish tuned-to-the-test heuristics.
-- **Embedded mode is single-process**: hooks and CLI must never break session
-  start (silent no-op on backend failure); lock contention must stay diagnosed
-  (see qdrant_embedded.py).
+- **Embedded mode is multi-process safe** (SQLite WAL): hooks and CLI must
+  never break session start (silent no-op on backend failure); concurrent
+  access must stay safe and lock errors diagnosed (see vector_sqlite.py).
 - **Docs stay true**: README tool tables, BENCHMARKS.md, and ROADMAP.md must
   match the code in the same commit that changes behaviour.
 - **Both repos**: after OSS engine changes, run collivind-pro's

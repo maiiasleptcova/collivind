@@ -2,7 +2,7 @@
 
 ## What is Collivind
 
-Open-source, graph-based memory layer for AI coding assistants. Stores knowledge from coding sessions (facts, decisions, patterns, errors, architecture choices) in graph + vector search + embeddings. Runs entirely local — no LLM API keys. Three deployment modes: **docker** (Qdrant + Neo4j + sentence-transformers containers), **embedded** (in-process Qdrant + SQLite + local model, no Docker), **remote** (external services). Designed with pluggable backends so an enterprise version (separate repo) can swap storage via config.
+Open-source, graph-based memory layer for AI coding assistants. Stores knowledge from coding sessions (facts, decisions, patterns, errors, architecture choices) in graph + vector search + embeddings. Runs entirely local — no LLM API keys. Three deployment modes: **docker** (Qdrant + Neo4j + sentence-transformers containers), **embedded** (SQLite vector + graph stores + local model, no Docker, multi-process safe), **remote** (external services). Designed with pluggable backends so an enterprise version (separate repo) can swap storage via config.
 
 ## What was done
 
@@ -23,7 +23,7 @@ Open-source, graph-based memory layer for AI coding assistants. Stores knowledge
 10. **Feature 10: Contradiction Detection** — find_contradictions in SearchEngine, auto-detection in add_memory pipeline, MCP tool
 11. **Feature 12: Performance + Robustness** — retry logic with exponential backoff on all storage backends, graceful degradation (MCP server starts even if backends fail), StorageUnavailableError
 12. **Embedded Mode** (cross-cutting):
-    - `storage/qdrant_embedded.py` — EmbeddedQdrantStore (in-process Qdrant, `QdrantClient(path=...)`)
+    - `storage/qdrant_embedded.py` — EmbeddedQdrantStore (in-process Qdrant, `QdrantClient(path=...)`; since replaced — the class is now a shim over the SQLite-backed `storage/vector_sqlite.py`)
     - `storage/graph_sqlite.py` — SqliteGraphStore (SQLite with adjacency tables, full GraphStore impl)
     - `storage/embedding_local.py` — LocalEmbeddingProvider (lazy-loads sentence-transformers in-process)
     - `storage/factory.py` — backend factory selecting implementations based on `config.mode`
@@ -52,7 +52,7 @@ collivind/
     cli/                  # click CLI (init, status, hook, search, reset, docker)
     docker/               # Compose templating and HTTP health checks
     models/               # dataclasses (Memory, Entity, Relationship, Session)
-    storage/              # Qdrant (embedded + remote), Neo4j, SQLite graph, Embedding (local + HTTP), factory
+    storage/              # SQLite vector + graph, Qdrant (remote), Neo4j, Embedding (local + HTTP), factory
     engine/               # MemoryManager, SearchEngine, GraphEngine, Deduplicator, Extractor
     mcp/                  # Stdio MCP Server, CollivindTools, Hooks
   tests/
@@ -86,7 +86,7 @@ The project is essentially complete. All 12 features from the spec are implement
 **Three deployment modes:**
 ```
 docker:    Claude Code → MCP Server → Core Library → Docker (Qdrant/Neo4j/embeddings)
-embedded:  Claude Code → MCP Server → Core Library → In-process (Qdrant/SQLite/sentence-transformers)
+embedded:  Claude Code → MCP Server → Core Library → In-process (SQLite/sentence-transformers)
 remote:    Claude Code → MCP Server → Core Library → External services
 ```
 
