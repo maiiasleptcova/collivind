@@ -230,17 +230,14 @@ class SqliteVectorStore(VectorStore):
         review finding R1). The losers just retry — the winner's conversion
         is instant and persistent, so one retry normally suffices.
         """
-        last_error: Optional[Exception] = None
         for attempt in range(10):
             try:
                 self.conn.execute("PRAGMA journal_mode=WAL")
                 return
             except sqlite3.OperationalError as e:
-                if "locked" not in str(e):
+                if "locked" not in str(e) or attempt == 9:
                     raise self._wrap("open", e) from e
-                last_error = e
                 time.sleep(0.01 * (attempt + 1))
-        raise self._wrap("open", last_error) from last_error
 
     def _ensure_schema(self) -> None:
         self.conn.executescript(_SCHEMA)
