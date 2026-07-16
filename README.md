@@ -38,6 +38,8 @@ collivind init
 
 This uses in-process Qdrant, SQLite for the graph, and loads the embedding model directly — zero Docker dependency.
 
+> **Single-process limitation:** embedded mode supports one collivind process at a time — a second agent session's MCP server (or a stale one) will be refused with an error naming the holding PID and recovery steps. For concurrent sessions use `mode = "docker"` or `"remote"`.
+
 ### npm (alternative)
 
 ```bash

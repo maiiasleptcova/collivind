@@ -1,4 +1,6 @@
 import logging
+import subprocess
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -11,15 +13,60 @@ from collivind.storage.interfaces import VectorStore
 
 logger = logging.getLogger(__name__)
 
+LOCK_HINT = "already accessed by another instance"
+
 
 class EmbeddedQdrantStore(VectorStore):
-    """Qdrant running in-process using its embedded Rust engine. No Docker needed."""
+    """Qdrant running in-process using its embedded Rust engine. No Docker needed.
+
+    The embedded engine is single-process: the first process locks the storage
+    directory and every other collivind process (a second MCP server, a CLI
+    command, a hook) is refused until it exits. See _connect for handling.
+    """
 
     def __init__(self, data_dir: str, config: QdrantConfig, dimension: int):
         self.config = config
         self._dimension = dimension
-        storage_path = str(Path(data_dir).expanduser() / "qdrant_data")
-        self.client = QdrantClient(path=storage_path)
+        self._storage_path = Path(data_dir).expanduser() / "qdrant_data"
+        self.client = self._connect()
+
+    def _connect(self) -> QdrantClient:
+        # brief retry survives overlap between short-lived hook/CLI processes;
+        # a lock held by a long-running MCP server won't clear, so fail with
+        # the holder's PID and recovery steps instead of a bare qdrant error
+        last_error: Exception | None = None
+        for attempt in range(3):
+            try:
+                return QdrantClient(path=str(self._storage_path))
+            except Exception as e:
+                if LOCK_HINT not in str(e):
+                    raise
+                last_error = e
+                time.sleep(0.5 * (attempt + 1))
+        raise CollivindError(self._lock_message()) from last_error
+
+    def _lock_message(self) -> str:
+        pids = self._lock_holders()
+        holder = f" (held by PID{'s' if len(pids) > 1 else ''} {', '.join(pids)})" if pids else ""
+        recovery = f"kill a stale process (kill {pids[0]})" if pids else "find the holder (lsof +D the storage path)"
+        return (
+            f"Embedded Qdrant storage at {self._storage_path} is locked by another collivind "
+            f"process{holder} — usually another agent session's MCP server. Embedded mode "
+            f"supports ONE process at a time. Recovery: close the other session, {recovery}, "
+            'or set mode = "docker" or "remote" in ~/.collivind/config.toml for concurrent access.'
+        )
+
+    def _lock_holders(self) -> List[str]:
+        try:
+            out = subprocess.run(
+                ["lsof", "-t", str(self._storage_path / ".lock")],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            return [p for p in out.stdout.split() if p.strip()]
+        except Exception:
+            return []
 
     def initialize(self) -> None:
         try:
