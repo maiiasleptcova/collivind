@@ -11,8 +11,9 @@ Semantics mirror qdrant-client's local mode exactly, pinned by tests:
 - vectors are L2-normalized float32 at write; score is the cosine dot product
 - the score threshold is inclusive (``score >= threshold`` is kept)
 - filters use flat-key MatchValue semantics: the payload value equals the
-  filter value, or (for list payload values) contains it. Dotted key paths
-  are unsupported (unused in-tree).
+  filter value, or (for list payload values) contains it. Filter values must
+  be str|int|bool, like MatchValue. Dotted key paths are unsupported
+  (unused in-tree).
 
 Legacy data in ``<data_dir>/qdrant_data`` is migrated once on first open and
 left in place (read, never mutated) so a package rollback still finds it.
@@ -61,6 +62,19 @@ def _normalize(vector: Any) -> np.ndarray:
     arr = np.asarray(vector, dtype=np.float32)
     norm = float(np.linalg.norm(arr))
     return arr / (norm or EPSILON)
+
+
+def _validate_filters(filters: Dict[str, Any]) -> None:
+    """Old-engine parity: qdrant MatchValue accepts only str|int|bool (R3).
+
+    Anything else raised ValidationError there; silently accepting it here
+    made ``{'k': None}`` match every point missing key ``k``.
+    """
+    for key, value in filters.items():
+        if not isinstance(value, (str, int)):  # bool is a subclass of int
+            raise CollivindError(
+                f"Unsupported filter value for {key!r}: {type(value).__name__} (expected str, int, or bool)"
+            )
 
 
 def _matches(payload: Dict[str, Any], filters: Dict[str, Any]) -> bool:
@@ -123,6 +137,8 @@ class SqliteVectorStore(VectorStore):
         threshold: float = 0.3,
     ) -> List[Dict[str, Any]]:
         try:
+            if filters:
+                _validate_filters(filters)
             _, ids, matrix, payloads = self._load_cache()
             if not ids:
                 return []
