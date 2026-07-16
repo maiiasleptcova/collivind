@@ -96,6 +96,69 @@ def test_cross_process_read_your_writes_both_directions(two_processes):
     assert send(a, {"op": "search", "vector": unit(1)})["ids"] == ["from-b"]
 
 
+# Cold-start worker: imports (the slow, jittery part) happen BEFORE the start
+# signal; construction happens immediately after it. This compresses process
+# startup jitter (~1 s) below the rollback->WAL conversion window (~1 ms) that
+# plain Popen timing never hits.
+COLD_START_WORKER = f"""
+import json, sys, time
+sys.path.insert(0, {SRC!r})
+from pathlib import Path
+from collivind.config import QdrantConfig
+from collivind.storage.vector_sqlite import SqliteVectorStore
+
+data_dir, start_marker = sys.argv[1], sys.argv[2]
+print("ready", flush=True)
+deadline = time.monotonic() + 30
+while not Path(start_marker).exists():  # spin, no sleep: keep the collision tight
+    if time.monotonic() > deadline:
+        sys.exit(2)
+try:
+    store = SqliteVectorStore(data_dir=data_dir, config=QdrantConfig(), dimension={DIM})
+    store.close()
+    print(json.dumps({{"ok": True}}), flush=True)
+except Exception as e:
+    print(json.dumps({{"ok": False, "error": f"{{type(e).__name__}}: {{e}}"}}), flush=True)
+"""
+
+N_COLD_START_PROCS = 4
+N_COLD_START_TRIALS = 4
+
+
+def test_concurrent_cold_start_on_fresh_dir(tmp_path):
+    """First-ever open by N simultaneous processes must not crash.
+
+    The rollback->WAL journal-mode conversion needs an exclusive lock and
+    SQLite does not consult the busy handler for it, so unsynchronized
+    constructors racing on a fresh dir raised raw 'database is locked'
+    (~60% of opens, review finding R1). Barrier-style start makes the
+    ~1 ms collision deterministic enough to reproduce.
+    """
+    for trial in range(N_COLD_START_TRIALS):
+        data_dir = tmp_path / f"trial-{trial}"
+        data_dir.mkdir()
+        marker = tmp_path / f"start-{trial}"
+        procs = [
+            subprocess.Popen(
+                [sys.executable, "-c", COLD_START_WORKER, str(data_dir), str(marker)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            for _ in range(N_COLD_START_PROCS)
+        ]
+        try:
+            for proc in procs:
+                assert proc.stdout.readline().strip() == "ready"
+            marker.touch()  # release the barrier: all constructors fire at once
+            outcomes = [json.loads(proc.stdout.readline()) for proc in procs]
+        finally:
+            for proc in procs:
+                reap(proc)
+        errors = [o["error"] for o in outcomes if not o["ok"]]
+        assert not errors, f"trial {trial}: {len(errors)}/{N_COLD_START_PROCS} cold-start opens failed: {errors}"
+
+
 def test_sigkill_leaves_store_usable_and_writes_durable(tmp_path):
     """Crash recovery: no lock/state cleanup needed, acknowledged writes survive."""
     victim = spawn(tmp_path)

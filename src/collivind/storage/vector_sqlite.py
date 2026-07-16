@@ -86,8 +86,8 @@ class SqliteVectorStore(VectorStore):
         self._db_path = base / "collivind_vectors.db"
         self._legacy_dir = base / "qdrant_data"
         self.conn = sqlite3.connect(str(self._db_path), check_same_thread=False)
-        self.conn.execute("PRAGMA journal_mode=WAL")
-        self.conn.execute("PRAGMA busy_timeout=10000")
+        self.conn.execute("PRAGMA busy_timeout=10000")  # before the WAL switch: every later statement is covered
+        self._enable_wal()
         self._ensure_schema()
         self._cache: Optional[_Cache] = None
         self._migrate_legacy_qdrant()
@@ -198,6 +198,27 @@ class SqliteVectorStore(VectorStore):
         return cache
 
     # --- plumbing ---
+
+    def _enable_wal(self) -> None:
+        """Switch to WAL, retrying the first-creation race.
+
+        The rollback->WAL conversion takes an exclusive lock and SQLite does
+        NOT consult the busy handler for it, so N processes cold-starting on
+        a fresh directory raced into raw 'database is locked' (~1 ms window;
+        review finding R1). The losers just retry — the winner's conversion
+        is instant and persistent, so one retry normally suffices.
+        """
+        last_error: Optional[Exception] = None
+        for attempt in range(10):
+            try:
+                self.conn.execute("PRAGMA journal_mode=WAL")
+                return
+            except sqlite3.OperationalError as e:
+                if "locked" not in str(e):
+                    raise self._wrap("open", e) from e
+                last_error = e
+                time.sleep(0.01 * (attempt + 1))
+        raise self._wrap("open", last_error) from last_error
 
     def _ensure_schema(self) -> None:
         self.conn.executescript(_SCHEMA)
