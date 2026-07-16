@@ -78,6 +78,12 @@ by not being published. Decide and implement:
   pre-existing errors in 14 files (mostly Optional handling). Fix per-module,
   then make the step blocking.
 
+- **Local daemon / loopback HTTP bridge**: the durable fix for issue #2
+  (embedded Qdrant is single-process — concurrent agent sessions conflict).
+  One daemon owns the embedded store; MCP servers, CLI, and hooks talk to it
+  over loopback. Also fixes per-prompt model-load latency in the user-prompt
+  hook. Until then: lock retry + PID diagnostics are shipped, and
+  docker/remote mode is the concurrent-access answer.
 - **Codex extraction hooks**: only SessionStart is registered for Codex —
   verify Codex's Stop-hook `decision: block` semantics, then enable
   extraction there too.
