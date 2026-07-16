@@ -8,7 +8,8 @@ engine (qdrant-client local mode, exclusive directory lock) could not offer.
 
 Semantics mirror qdrant-client's local mode exactly, pinned by tests:
 
-- vectors are L2-normalized float32 at write; score is the cosine dot product
+- vectors are L2-normalized float32 at write; the score is the cosine dot
+  product, accumulated in float64 like QdrantLocal's scoring pipeline
 - the score threshold is inclusive (``score >= threshold`` is kept)
 - filters use flat-key MatchValue semantics: the payload value equals the
   filter value, or (for list payload values) contains it. Filter values must
@@ -142,7 +143,11 @@ class SqliteVectorStore(VectorStore):
             _, ids, matrix, payloads = self._load_cache()
             if not ids:
                 return []
-            scores = matrix @ _normalize(vector)
+            # float64 query promotes the whole matmul to float64 accumulation,
+            # matching QdrantLocal's pipeline at the 0.92/0.98 dedup boundaries
+            # (R4). Storage stays float32; the transient float64 matrix copy
+            # costs ~0.5 ms and ~30 MB per search at 10k x 384 — fine here.
+            scores = matrix @ _normalize(vector).astype(np.float64)
             results: List[Dict[str, Any]] = []
             for idx in np.argsort(scores)[::-1]:
                 score = float(scores[idx])
