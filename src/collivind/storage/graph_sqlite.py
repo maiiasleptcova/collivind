@@ -24,6 +24,9 @@ class SqliteGraphStore(GraphStore):
         self.conn = sqlite3.connect(str(db_path), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
+        # explicit rather than relying on the Python driver's 5 s default:
+        # concurrent writers must wait for the lock, not fail immediately
+        self.conn.execute("PRAGMA busy_timeout=5000")
         self.conn.execute("PRAGMA foreign_keys=ON")
 
     def initialize(self) -> None:
