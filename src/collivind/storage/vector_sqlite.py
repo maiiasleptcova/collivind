@@ -275,9 +275,18 @@ class SqliteVectorStore(VectorStore):
             self.conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, '1')", (_MIGRATION_FLAG,))
             self.conn.execute("COMMIT")
             logger.info(f"Migrated legacy embedded Qdrant data from {self._legacy_dir}")
-        except BaseException:
+        except BaseException as e:
             if self.conn.in_transaction:
                 self.conn.execute("ROLLBACK")
+            if isinstance(e, Exception) and not isinstance(e, CollivindError):
+                # corrupt/unreadable legacy data (M1/R5): fail loud but guided,
+                # never a raw qdrant-internal or JSONDecodeError
+                raise CollivindError(
+                    f"Cannot migrate legacy embedded Qdrant data at {self._legacy_dir}: {e}. "
+                    f"The legacy data was not modified. To recover, move the directory aside — "
+                    f"e.g. `mv {self._legacy_dir} {self._legacy_dir}.corrupt` — and rerun: the store "
+                    f"starts fresh and the original data stays preserved for inspection."
+                ) from e
             raise
 
     def _begin_exclusive_or_wait(self) -> bool:
