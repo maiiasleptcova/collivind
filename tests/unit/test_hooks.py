@@ -2,7 +2,9 @@ import json
 
 from click.testing import CliRunner
 
-from collivind.cli.commands.hook import get_state_file, hook, install_hooks
+from collivind.cli.commands.hook import collivind_bin, get_state_file, hook, install_hooks
+
+COLLIVIND = collivind_bin()
 
 
 def test_hook_stop(tmp_path, monkeypatch):
@@ -53,9 +55,9 @@ def test_install_hooks_creates_settings(tmp_path, monkeypatch):
 
     settings = _read_settings(tmp_path)
     stop_cmds = [h["command"] for e in settings["hooks"]["Stop"] for h in e["hooks"]]
-    assert stop_cmds == ["collivind hook stop --threshold 10"]
+    assert stop_cmds == [f"{COLLIVIND} hook stop --threshold 10"]
     pc_cmds = [h["command"] for e in settings["hooks"]["PreCompact"] for h in e["hooks"]]
-    assert pc_cmds == ["collivind hook precompact"]
+    assert pc_cmds == [f"{COLLIVIND} hook precompact"]
 
 
 def test_install_hooks_idempotent_and_updates_threshold(tmp_path, monkeypatch):
@@ -65,7 +67,7 @@ def test_install_hooks_idempotent_and_updates_threshold(tmp_path, monkeypatch):
 
     settings = _read_settings(tmp_path)
     stop_cmds = [h["command"] for e in settings["hooks"]["Stop"] for h in e["hooks"]]
-    assert stop_cmds == ["collivind hook stop --threshold 20"]
+    assert stop_cmds == [f"{COLLIVIND} hook stop --threshold 20"]
 
 
 def test_install_hooks_preserves_existing_settings(tmp_path, monkeypatch):
@@ -157,7 +159,7 @@ def test_install_hooks_registers_session_start(tmp_path, monkeypatch):
     assert "SessionStart" in events
     settings = _read_settings(tmp_path)
     cmds = [h["command"] for e in settings["hooks"]["SessionStart"] for h in e["hooks"]]
-    assert cmds == ["collivind hook session-start"]
+    assert cmds == [f"{COLLIVIND} hook session-start"]
 
 
 def test_install_hooks_codex_session_start_only(tmp_path, monkeypatch):
@@ -169,7 +171,7 @@ def test_install_hooks_codex_session_start_only(tmp_path, monkeypatch):
         settings = json.load(f)
     assert set(settings["hooks"].keys()) == {"SessionStart", "UserPromptSubmit"}
     cmds = [h["command"] for e in settings["hooks"]["SessionStart"] for h in e["hooks"]]
-    assert cmds == ["collivind hook session-start"]
+    assert cmds == [f"{COLLIVIND} hook session-start"]
 
 
 def test_install_all_hooks_detects_codex(tmp_path, monkeypatch):
@@ -226,3 +228,43 @@ def test_user_prompt_silent_on_garbage_stdin_or_broken_backend(monkeypatch):
     monkeypatch.setattr("collivind.cli.commands.hook._load_manager", boom)
     result = CliRunner().invoke(hook, ["user-prompt"], input=_prompt_payload("a long enough prompt to search"))
     assert result.exit_code == 0 and result.output.strip() == ""
+
+
+def test_hooks_use_absolute_binary_path(tmp_path, monkeypatch):
+    """The bug: a bare `collivind` never fires when the agent's PATH lacks
+    the install dir (uv tools / pipx / venv)."""
+    fake_bin = tmp_path / "uvtools" / "bin" / "collivind"
+    fake_bin.parent.mkdir(parents=True)
+    fake_bin.touch()
+    monkeypatch.setattr("sys.argv", [str(fake_bin), "hook", "install"])
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+
+    install_hooks(tool="codex")
+
+    with open(tmp_path / ".codex" / "hooks.json") as f:
+        settings = json.load(f)
+    cmds = [h["command"] for evs in settings["hooks"].values() for e in evs for h in e["hooks"]]
+    assert cmds and all(c.startswith(f"{fake_bin} hook ") for c in cmds)
+
+
+def test_install_replaces_stale_bare_command(tmp_path, monkeypatch):
+    """Re-running install must upgrade an old PATH-dependent entry, not add
+    a second one alongside it."""
+    fake_bin = tmp_path / "bin" / "collivind"
+    fake_bin.parent.mkdir(parents=True)
+    fake_bin.touch()
+    hooks_path = tmp_path / ".codex" / "hooks.json"
+    hooks_path.parent.mkdir(parents=True)
+    hooks_path.write_text(
+        json.dumps(
+            {"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "collivind hook user-prompt"}]}]}}
+        )
+    )
+    monkeypatch.setattr("sys.argv", [str(fake_bin), "hook", "install"])
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+
+    install_hooks(tool="codex")
+
+    settings = json.loads(hooks_path.read_text())
+    cmds = [h["command"] for e in settings["hooks"]["UserPromptSubmit"] for h in e["hooks"]]
+    assert cmds == [f"{fake_bin} hook user-prompt"]

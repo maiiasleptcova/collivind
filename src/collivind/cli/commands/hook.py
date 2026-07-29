@@ -1,4 +1,5 @@
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -47,6 +48,20 @@ def get_codex_hooks_path() -> Path:
     return Path.home() / ".codex" / "hooks.json"
 
 
+def collivind_bin() -> str:
+    """Absolute path to this collivind executable.
+
+    Agents spawn hooks with their own environment, so a bare `collivind` in
+    the hook command silently fails whenever the install dir (uv tools,
+    pipx, a venv) isn't on that PATH — the hook never fires and the agent
+    gets no memory context. Resolve it at install time instead.
+    """
+    exe = Path(sys.argv[0])
+    if exe.name.startswith("collivind") and exe.is_file():
+        return str(exe.resolve())
+    return shutil.which("collivind") or "collivind"
+
+
 def _merge_hook_entries(settings_path: Path, wanted: dict) -> None:
     """Merge collivind hook commands into a hooks JSON file. Idempotent:
     replaces existing collivind entries, preserves everything else."""
@@ -83,11 +98,12 @@ def install_hooks(
     (SessionStart, UserPromptSubmit) — their additionalContext support is
     documented, Stop/PreCompact injection isn't.
     """
+    bin_path = collivind_bin()
     recall = {}
     if enable_session_start:
-        recall["SessionStart"] = "collivind hook session-start"
+        recall["SessionStart"] = f"{bin_path} hook session-start"
     if enable_user_prompt:
-        recall["UserPromptSubmit"] = "collivind hook user-prompt"
+        recall["UserPromptSubmit"] = f"{bin_path} hook user-prompt"
 
     if tool == "codex":
         wanted = recall
@@ -95,9 +111,9 @@ def install_hooks(
     else:
         wanted = {}
         if enable_stop:
-            wanted["Stop"] = f"collivind hook stop --threshold {save_interval}"
+            wanted["Stop"] = f"{bin_path} hook stop --threshold {save_interval}"
         if enable_precompact:
-            wanted["PreCompact"] = "collivind hook precompact"
+            wanted["PreCompact"] = f"{bin_path} hook precompact"
         wanted.update(recall)
         settings_path = get_claude_settings_path()
 
