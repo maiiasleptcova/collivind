@@ -92,9 +92,6 @@ by not being published. Decide and implement:
   into the conversation; the current prompt likely never reaches the model.
   Options: switch to transcript-export capture (claude-mem approach) or
   verify current behavior against latest hooks docs.
-- **Hook PATH assumption**: registered hook commands call bare `collivind`;
-  pipx/venv installs may not expose it to the hook's shell. Consider
-  absolute-path registration.
 - **Graph expansion is N+1** (`find_related_memories` per entity per seed):
   batch it before the 10k-memory performance target is tested.
 - **Perf/scale test suite**: the design spec's 500ms @ 10k memories target
