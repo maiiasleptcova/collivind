@@ -73,3 +73,6 @@ venv.bak/
 ~/.collivind/
 .autopilot/
 .worktrees/
+
+# Agent tooling — local only
+.claude/
