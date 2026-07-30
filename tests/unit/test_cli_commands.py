@@ -177,3 +177,25 @@ class TestDockerCommand:
         result = runner.invoke(docker, ["down"])
         assert result.exit_code == 0
         assert "stopped" in result.output.lower()
+
+
+class TestStatusHookHealth:
+    def test_status_reports_missing_hooks(self, tmp_path, monkeypatch):
+        """Issue #5: recall silently stops and status never said so."""
+        from click.testing import CliRunner
+
+        from collivind.cli.commands.status import _status_hooks
+
+        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+        runner = CliRunner()
+        import click
+
+        @click.command()
+        def probe():
+            _status_hooks()
+
+        result = runner.invoke(probe)
+        assert result.exit_code == 0
+        assert "Recall hooks:" in result.output
+        assert "collivind hook install" in result.output
+        assert "claude" in result.output and "codex" in result.output

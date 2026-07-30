@@ -17,6 +17,8 @@ def status():
     else:
         _status_docker(config)
 
+    _status_hooks()
+
 
 def _status_embedded(config):
     """Check health of embedded backends."""
@@ -53,3 +55,27 @@ def _status_docker(config):
             click.secho(f"✓ {service}: {info['message']}", fg="green")
         else:
             click.secho(f"✗ {service}: {info['message']}", fg="red")
+
+
+def _status_hooks():
+    """Report recall-hook registration per agent.
+
+    The hooks fail silently by design, so without this a broken or missing
+    registration looks identical to "nothing worth recalling".
+    """
+    from collivind.cli.commands.hook import hook_health
+
+    click.echo("\nRecall hooks:")
+    for h in hook_health():
+        if not h["events"]:
+            why = "no collivind hooks registered" if h["config_exists"] else f"{h['path']} not found"
+            click.secho(f"✗ {h['tool']}: {why} — run `collivind hook install`", fg="yellow")
+        elif h["broken"]:
+            events = ", ".join(h["broken"])
+            click.secho(
+                f"✗ {h['tool']}: {events} registered but the command no longer resolves"
+                " — re-run `collivind hook install`",
+                fg="red",
+            )
+        else:
+            click.secho(f"✓ {h['tool']}: {', '.join(h['events'])}", fg="green")

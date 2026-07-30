@@ -110,7 +110,7 @@ Once connected, Claude Code gets these tools:
 
 ```bash
 collivind init              # Setup and start services
-collivind status            # Health check
+collivind status            # Health check (backends + recall-hook registration)
 collivind search "query"    # Search memories from terminal
 collivind add "content" -c decision -t db,infra  # Store a memory
 collivind get <id>          # Show one memory

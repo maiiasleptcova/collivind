@@ -268,3 +268,64 @@ def test_install_replaces_stale_bare_command(tmp_path, monkeypatch):
     settings = json.loads(hooks_path.read_text())
     cmds = [h["command"] for e in settings["hooks"]["UserPromptSubmit"] for h in e["hooks"]]
     assert cmds == [f"{fake_bin} hook user-prompt"]
+
+
+def _write_hooks(path, command, event="UserPromptSubmit"):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"hooks": {event: [{"hooks": [{"type": "command", "command": command}]}]}}))
+
+
+def test_hook_health_reports_nothing_registered(tmp_path, monkeypatch):
+    """The silent-failure case from issue #5: no hooks anywhere."""
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    from collivind.cli.commands.hook import hook_health
+
+    report = {h["tool"]: h for h in hook_health()}
+    assert set(report) == {"claude", "codex"}
+    for h in report.values():
+        assert h["events"] == [] and h["config_exists"] is False
+
+
+def test_hook_health_flags_command_that_no_longer_resolves(tmp_path, monkeypatch):
+    """Hooks registered but pointing at an uninstalled binary — recall is
+    silently dead, which is exactly what nothing used to detect."""
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    from collivind.cli.commands.hook import hook_health
+
+    _write_hooks(tmp_path / ".codex" / "hooks.json", f"{tmp_path}/gone/collivind hook user-prompt")
+    codex = {h["tool"]: h for h in hook_health()}["codex"]
+    assert codex["events"] == ["UserPromptSubmit"]
+    assert codex["broken"] == ["UserPromptSubmit"]
+
+
+def test_hook_health_ok_when_command_resolves(tmp_path, monkeypatch):
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    from collivind.cli.commands.hook import hook_health
+
+    real = tmp_path / "bin" / "collivind"
+    real.parent.mkdir(parents=True, exist_ok=True)
+    real.touch()
+    real.chmod(0o755)
+    _write_hooks(tmp_path / ".codex" / "hooks.json", f"{real} hook user-prompt")
+    codex = {h["tool"]: h for h in hook_health()}["codex"]
+    assert codex["events"] == ["UserPromptSubmit"] and codex["broken"] == []
+
+
+def test_hook_health_ignores_foreign_hooks(tmp_path, monkeypatch):
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    from collivind.cli.commands.hook import hook_health
+
+    _write_hooks(tmp_path / ".claude" / "settings.json", "some-other-tool run")
+    claude = {h["tool"]: h for h in hook_health()}["claude"]
+    assert claude["config_exists"] is True and claude["events"] == []
+
+
+def test_hook_health_survives_corrupt_config(tmp_path, monkeypatch):
+    """status must never crash on a hand-edited settings file."""
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    from collivind.cli.commands.hook import hook_health
+
+    p = tmp_path / ".codex" / "hooks.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text("{not json")
+    assert {h["tool"]: h for h in hook_health()}["codex"]["events"] == []
