@@ -1,4 +1,6 @@
 import json
+import os
+import shlex
 import shutil
 import sys
 from pathlib import Path
@@ -60,6 +62,56 @@ def collivind_bin() -> str:
     if exe.name.startswith("collivind") and exe.is_file():
         return str(exe.resolve())
     return shutil.which("collivind") or "collivind"
+
+
+def _registered_hooks(settings_path: Path) -> dict:
+    """Collivind hook commands in a hooks JSON file, keyed by event."""
+    if not settings_path.exists():
+        return {}
+    try:
+        settings = json.loads(settings_path.read_text())
+    except json.JSONDecodeError:
+        return {}  # a hand-mangled config must not break `status`
+    found = {}
+    for event, entries in (settings.get("hooks") or {}).items():
+        for entry in entries:
+            for h in entry.get("hooks", []):
+                if HOOK_MARKER in h.get("command", ""):
+                    found[event] = h["command"]
+    return found
+
+
+def _command_resolves(command: str) -> bool:
+    """True when the executable a hook command invokes still exists."""
+    parts = shlex.split(command)
+    if not parts:
+        return False
+    exe = parts[0]
+    if os.sep in exe:
+        return os.path.isfile(exe) and os.access(exe, os.X_OK)
+    return shutil.which(exe) is not None
+
+
+def hook_health() -> list[dict]:
+    """Per-agent recall-hook health.
+
+    Both recall hooks swallow every exception on purpose, so a missing
+    registration or an uninstalled binary makes memory injection stop
+    silently. This is what makes that visible.
+    """
+    report = []
+    for tool, path in (("claude", get_claude_settings_path()), ("codex", get_codex_hooks_path())):
+        registered = _registered_hooks(path)
+        report.append(
+            {
+                "tool": tool,
+                "path": str(path),
+                "config_exists": path.exists(),
+                "events": sorted(registered),
+                "broken": sorted(e for e, cmd in registered.items() if not _command_resolves(cmd)),
+            }
+        )
+    return report
 
 
 def _merge_hook_entries(settings_path: Path, wanted: dict) -> None:
