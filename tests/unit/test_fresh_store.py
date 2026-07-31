@@ -10,8 +10,20 @@ from collivind.storage.factory import create_all_backends
 from collivind.storage.graph_sqlite import SqliteGraphStore
 
 
-def test_fresh_data_dir_is_usable_without_running_init():
-    """A never-initialized store is empty, not broken."""
+def test_fresh_data_dir_is_usable_without_running_init(monkeypatch):
+    """A never-initialized store is empty, not broken.
+
+    The embedding provider is stubbed so this holds without the `embedded`
+    extra — CI runs `uv sync --dev`. The subject is the graph store's probe.
+    """
+    from collivind.storage import factory
+
+    class Healthy:
+        def health_check(self):
+            return {"status": "ok", "message": "stub"}
+
+    monkeypatch.setattr(factory, "create_embedding_provider", lambda c: Healthy())
+
     config = CollivindConfig(mode="embedded", data_dir=tempfile.mkdtemp())
     vector, graph, embeddings = create_all_backends(config)
     assert graph.health_check()["status"] == "ok"
