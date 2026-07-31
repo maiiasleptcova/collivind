@@ -21,6 +21,21 @@ class MCPServer:
         self._init_error = None
         self.session_id = str(uuid.uuid4())
 
+        if not self._build_backends():
+            logger.warning(f"Server starting in degraded mode: {self._init_error}")
+            print(
+                f"Warning: backends unavailable, starting in degraded mode: {self._init_error}",
+                file=sys.stderr,
+            )
+
+    def _build_backends(self) -> bool:
+        """Construct the backends. Returns whether they are usable.
+
+        Kept callable after __init__ so a server that started before its
+        backends can recover on a later request. This process is long-lived and
+        is normally launched before `collivind docker up` runs, so caching a
+        boot-time failure forever meant a manual restart (#24).
+        """
         try:
             self.config = load_config()
             self.vector_store, self.graph_store, self.embedding_provider = create_all_backends(self.config)
@@ -34,10 +49,12 @@ class MCPServer:
 
             self.tools = CollivindTools(self.manager, session_id=self.session_id)
             self.backends_available = True
+            self._init_error = None
+            return True
         except Exception as e:
             self._init_error = str(e)
-            logger.warning(f"Server starting in degraded mode: {e}")
-            print(f"Warning: backends unavailable, starting in degraded mode: {e}", file=sys.stderr)
+            self.backends_available = False
+            return False
 
     def serve(self):
         """Main stdio loop for JSON-RPC 2.0."""
@@ -85,6 +102,10 @@ class MCPServer:
         elif method == "tools/call":
             tool_name = params.get("name")
             tool_args = params.get("arguments", {})
+
+            # Retry before refusing: the backends may have come up since boot.
+            if not self.backends_available:
+                self._build_backends()
 
             if not self.backends_available:
                 return {
