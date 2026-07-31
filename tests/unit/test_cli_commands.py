@@ -29,11 +29,18 @@ class TestInitCommand:
         self, mock_config, mock_docker, mock_templates, mock_up, mock_health, mock_mcp, mock_hooks, mock_cmds
     ):
         mock_config.return_value = _mock_config("docker")
-        mock_health.return_value = {
+        healthy = {
             "qdrant": {"status": "ok", "message": "healthy"},
             "neo4j": {"status": "ok", "message": "healthy"},
             "embeddings": {"status": "ok", "message": "healthy"},
         }
+        # Services down on the first probe, healthy once provisioned. init now
+        # skips container setup when they already answer (#17), so exercising
+        # the provisioning path requires them to start out unreachable.
+        mock_health.side_effect = [
+            {**healthy, "qdrant": {"status": "error", "message": "connection refused"}},
+            healthy,
+        ]
         runner = CliRunner()
         result = runner.invoke(init)
         assert result.exit_code == 0

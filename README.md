@@ -15,6 +15,12 @@ collivind init
 
 This starts Qdrant (vector search), Neo4j (graph), and a sentence-transformers embedding service in Docker containers.
 
+If Qdrant and Neo4j are **already running** — inside the container collivind
+itself runs in, or managed by you — `init` detects them and skips container
+setup entirely. Point `~/.collivind/config.toml` at their endpoints (they
+default to `localhost:6333` and `bolt://localhost:7687`); no Docker daemon is
+needed in that case.
+
 ### Embedded mode (no Docker)
 
 For devcontainers, Codespaces, CI/CD, or anywhere Docker isn't available:
