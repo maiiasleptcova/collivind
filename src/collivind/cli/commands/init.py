@@ -135,8 +135,29 @@ def _init_remote(config):
         click.secho("\nSome services are not reachable. Check your config.", fg="red")
 
 
+def _services_already_running(config) -> bool:
+    """True when the configured Qdrant/Neo4j/embeddings endpoints all answer.
+
+    collivind may run inside a container that already provides them (an agent
+    image, a devcontainer, CI). Provisioning from there is impossible — no
+    daemon — and unnecessary (#17).
+    """
+    try:
+        return all(s["status"] == "ok" for s in check_all_services(config).values())
+    except Exception:
+        return False  # unreachable probe means not usable; fall through and provision
+
+
 def _init_docker(config, data_dir: Path):
-    """Initialize Docker mode: start containers."""
+    """Initialize Docker mode: use the configured Qdrant/Neo4j if they already
+    answer, otherwise start containers."""
+    if _services_already_running(config):
+        click.secho("✓ Using already-running Qdrant/Neo4j — skipping container setup", fg="green")
+        click.echo(f"  qdrant: {config.qdrant.host}:{config.qdrant.port}")
+        click.echo(f"  neo4j:  {config.neo4j.uri}")
+        click.secho("Collivind is ready.", fg="green")
+        return
+
     try:
         check_docker_running()
         click.echo("✓ Docker is running")
