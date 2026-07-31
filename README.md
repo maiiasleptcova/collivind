@@ -81,6 +81,18 @@ installed (`uv tool install /path/to/collivind` from a checkout). It resolves
 that binary itself rather than relying on PATH, since Claude Code spawns hooks
 with its own environment.
 
+### Web UI
+
+```
+collivind web
+```
+
+Opens a local browser UI on `127.0.0.1:8765` for searching, reading, editing
+and deleting memories. It reads `~/.collivind/config.toml`, so it shows exactly
+the store your hooks and MCP tools use, and says which mode that is in the
+header. Loopback only, no auth — it exposes the whole store to anything that
+can reach the port.
+
 ### Agent support
 
 | Agent | Memory tools (MCP) | Automatic recall |
