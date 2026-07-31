@@ -39,6 +39,16 @@ class QdrantVectorStore(VectorStore):
         else:
             self.client = QdrantClient(host=config.host, port=config.port)
 
+        # Ensure the collection here, not only in initialize(). Otherwise a
+        # running-but-uninitialized Qdrant passes the mode probe (#8) and then
+        # 404s on every search (#29) — the same hole the SQLite graph store had
+        # before 0.5.2. Creation is skipped when the collection already exists,
+        # and a server that is simply down is left for the probe to report.
+        try:
+            self.initialize()
+        except Exception:
+            pass
+
     def initialize(self) -> None:
         """Create collection if it doesn't exist."""
         try:
@@ -110,11 +120,25 @@ class QdrantVectorStore(VectorStore):
             raise CollivindError(f"Qdrant delete failed: {e}")
 
     def health_check(self) -> Dict[str, Any]:
+        """Report unusable when OUR collection is missing, not merely when the
+        server is down. Answering "ok" because Qdrant responds, while the
+        collection does not exist, let the mode probe pass and pushed the
+        failure into an opaque 404 on first search (#29).
+        """
         try:
-            collections = self.client.get_collections()
-            return {"status": "ok", "collections": [c.name for c in collections.collections]}
+            names = [c.name for c in self.client.get_collections().collections]
         except Exception as e:
             return {"status": "error", "message": str(e)}
+
+        if self.config.collection_name not in names:
+            return {
+                "status": "error",
+                "message": (
+                    f"collection {self.config.collection_name!r} does not exist "
+                    f"(run `collivind init`, or check the collection name in config.toml)"
+                ),
+            }
+        return {"status": "ok", "collections": names}
 
     def close(self) -> None:
         self.client.close()
