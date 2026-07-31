@@ -71,6 +71,15 @@ def _status_hooks():
         if not h["events"]:
             why = "no collivind hooks registered" if h["config_exists"] else f"{h['path']} not found"
             click.secho(f"✗ {h['tool']}: {why} — run `collivind hook install`", fg="yellow")
+        elif h["source"] == "both":
+            # Registered twice: every event fires once per source.
+            click.secho(
+                f"✗ {h['tool']}: {', '.join(h['events'])} registered BOTH by the plugin and in "
+                f"{h['path']} — every hook fires twice. Remove the collivind entries from that file.",
+                fg="red",
+            )
+        elif h["source"] == "plugin":
+            click.secho(f"✓ {h['tool']}: {', '.join(h['events'])} (via plugin)", fg="green")
         elif h["broken"]:
             events = ", ".join(h["broken"])
             click.secho(

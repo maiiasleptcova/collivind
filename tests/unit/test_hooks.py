@@ -329,3 +329,70 @@ def test_hook_health_survives_corrupt_config(tmp_path, monkeypatch):
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text("{not json")
     assert {h["tool"]: h for h in hook_health()}["codex"]["events"] == []
+
+
+def _plugin_hooks(home, version="0.5.3"):
+    """Reproduce Claude Code's plugin cache layout."""
+    d = home / ".claude" / "plugins" / "cache" / "collivind" / "collivind" / version / "hooks"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "hooks.json").write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    e: [{"hooks": [{"type": "command", "command": '"${CLAUDE_PLUGIN_ROOT}"/bin/collivind-run hook x'}]}]
+                    for e in ("SessionStart", "UserPromptSubmit", "Stop", "PreCompact")
+                }
+            }
+        )
+    )
+    return d / "hooks.json"
+
+
+def test_hook_health_sees_plugin_provided_hooks(tmp_path, monkeypatch):
+    """#23: the plugin owns the hooks; settings.json is correctly empty. Saying
+    'none registered' invites a second registration that fires everything twice."""
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    from collivind.cli.commands.hook import hook_health
+
+    _plugin_hooks(tmp_path)
+    claude = {h["tool"]: h for h in hook_health()}["claude"]
+    assert claude["events"] == ["PreCompact", "SessionStart", "Stop", "UserPromptSubmit"]
+    assert claude["source"] == "plugin"
+
+
+def test_hook_health_prefers_settings_when_both_exist(tmp_path, monkeypatch):
+    """Both registered is a real misconfiguration — report it, don't hide it."""
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    from collivind.cli.commands.hook import hook_health, install_hooks
+
+    _plugin_hooks(tmp_path)
+    install_hooks(tool="claude")
+    claude = {h["tool"]: h for h in hook_health()}["claude"]
+    assert claude["source"] == "both", "duplicate registration must be visible"
+
+
+def test_hook_health_reports_settings_source_when_no_plugin(tmp_path, monkeypatch):
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    from collivind.cli.commands.hook import hook_health, install_hooks
+
+    install_hooks(tool="claude")
+    claude = {h["tool"]: h for h in hook_health()}["claude"]
+    assert claude["source"] == "settings"
+
+
+def test_status_does_not_advise_install_when_plugin_provides_hooks(tmp_path, monkeypatch):
+    import click
+
+    from collivind.cli.commands.status import _status_hooks
+
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    _plugin_hooks(tmp_path)
+
+    @click.command()
+    def probe():
+        _status_hooks()
+
+    out = CliRunner().invoke(probe).output
+    claude_line = next(line for line in out.splitlines() if "claude:" in line)
+    assert "via plugin" in claude_line
+    assert "hook install" not in claude_line, "advising install here creates duplicate hooks"

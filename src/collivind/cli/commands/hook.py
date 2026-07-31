@@ -92,6 +92,33 @@ def _command_resolves(command: str) -> bool:
     return shutil.which(exe) is not None
 
 
+def _plugin_hook_events() -> list[str]:
+    """Events registered by an installed Claude Code plugin.
+
+    The plugin (#10) ships its own hooks/hooks.json and Claude Code loads them
+    from the plugin cache, leaving ~/.claude/settings.json untouched. Reporting
+    "none registered" there sent users to `hook install`, which adds a second
+    copy so every event fires twice (#23).
+    """
+    cache = Path.home() / ".claude" / "plugins"
+    if not cache.exists():
+        return []
+    events: set[str] = set()
+    for manifest in cache.rglob("hooks/hooks.json"):
+        if "collivind" not in str(manifest):
+            continue
+        try:
+            hooks = (json.loads(manifest.read_text()).get("hooks") or {}).items()
+        except (OSError, json.JSONDecodeError):
+            continue
+        for event, entries in hooks:
+            for entry in entries:
+                for h in entry.get("hooks", []):
+                    if HOOK_MARKER in h.get("command", "") or "collivind-run" in h.get("command", ""):
+                        events.add(event)
+    return sorted(events)
+
+
 def hook_health() -> list[dict]:
     """Per-agent recall-hook health.
 
@@ -100,14 +127,27 @@ def hook_health() -> list[dict]:
     silently. This is what makes that visible.
     """
     report = []
+    plugin_events = _plugin_hook_events()
     for tool, path in (("claude", get_claude_settings_path()), ("codex", get_codex_hooks_path())):
         registered = _registered_hooks(path)
+        from_plugin = plugin_events if tool == "claude" else []
+
+        if registered and from_plugin:
+            source = "both"  # a real misconfiguration: every event fires twice
+        elif from_plugin:
+            source = "plugin"
+        elif registered:
+            source = "settings"
+        else:
+            source = "none"
+
         report.append(
             {
                 "tool": tool,
                 "path": str(path),
                 "config_exists": path.exists(),
-                "events": sorted(registered),
+                "source": source,
+                "events": sorted(set(registered) | set(from_plugin)),
                 "broken": sorted(e for e, cmd in registered.items() if not _command_resolves(cmd)),
             }
         )
