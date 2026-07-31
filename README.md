@@ -50,6 +50,25 @@ npx collivind-memory init
 
 ## Claude Code Integration
 
+### As a Claude Code plugin (recommended)
+
+```
+/plugin marketplace add maiiasleptcova/collivind
+/plugin install collivind@collivind
+```
+
+The plugin registers the MCP server, all four hooks (SessionStart,
+UserPromptSubmit, Stop, PreCompact) and the `/mem-save` and `/mem-recall`
+commands in one step, and keeps them in sync with the plugin version. Toggle
+it from `/plugin` without editing `~/.claude/settings.json`.
+
+The plugin drives the `collivind` executable, so the package still needs to be
+installed (`uv tool install /path/to/collivind` from a checkout). It resolves
+that binary itself rather than relying on PATH, since Claude Code spawns hooks
+with its own environment.
+
+### Manual setup
+
 Register Collivind as an MCP server:
 
 ```bash

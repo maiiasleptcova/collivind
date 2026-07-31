@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Resolve the collivind executable and exec it.
+#
+# Claude Code spawns plugin hooks with its own environment, so PATH may not
+# include the dir collivind was installed into (uv tools, pipx, a venv). A
+# bare `collivind` there silently no-ops — that is issue #4, and a plugin
+# wiring hooks the same way would reintroduce it for every user.
+set -euo pipefail
+
+find_collivind() {
+  if command -v collivind >/dev/null 2>&1; then command -v collivind; return; fi
+  for c in \
+    "$HOME/.local/share/uv/tools/collivind-memory/bin/collivind" \
+    "$HOME/.local/bin/collivind" \
+    "$HOME/.local/pipx/venvs/collivind-memory/bin/collivind"; do
+    [ -x "$c" ] && { printf '%s' "$c"; return; }
+  done
+  return 1
+}
+
+if ! BIN=$(find_collivind); then
+  # No auto-install fallback on purpose: collivind-memory is not published to
+  # PyPI or npm yet, so `pip install` / `npx` would 404. Fail with something
+  # actionable rather than a registry error.
+  echo "collivind not found on PATH or in the usual install dirs." >&2
+  echo "Install it from a checkout:  uv tool install /path/to/collivind" >&2
+  exit 127
+fi
+
+if [ "${1:-}" = "--mcp" ]; then
+  # There is no `collivind mcp-server` subcommand; the server is a module.
+  # The interpreter owning the console script sits beside it.
+  PY="$(dirname "$BIN")/python"
+  [ -x "$PY" ] || PY="$(dirname "$BIN")/python3"
+  [ -x "$PY" ] || PY="python3"
+  exec "$PY" -m collivind.mcp.server
+fi
+
+exec "$BIN" "$@"

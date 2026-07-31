@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "collivind": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/collivind-run",
+      "args": ["--mcp"]
+    }
+  }
+}

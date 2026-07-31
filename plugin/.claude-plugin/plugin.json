@@ -1,0 +1,10 @@
+{
+  "name": "collivind",
+  "displayName": "Collivind Memory",
+  "description": "Graph-based memory for Claude Code: automatic recall on every prompt, extraction at session end, and MCP tools for search and storage.",
+  "version": "0.4.0",
+  "author": { "name": "Maiia Sleptcova" },
+  "repository": "https://github.com/maiiasleptcova/collivind",
+  "license": "MIT",
+  "keywords": ["memory", "recall", "mcp", "knowledge-graph"]
+}
