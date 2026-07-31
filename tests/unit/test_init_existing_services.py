@@ -42,8 +42,8 @@ def test_skips_provisioning_when_services_already_healthy(tmp_path):
         result = _run(config)
 
     assert result.exit_code == 0
-    daemon.assert_not_called(), "must not require a Docker daemon when services are up"
-    up.assert_not_called(), "must not start containers that already run"
+    daemon.assert_not_called()  # must not require a Docker daemon when services are up
+    up.assert_not_called()  # must not start containers that already run
     templates.assert_not_called()
     assert "already-running" in result.output.lower() or "already running" in result.output.lower()
     assert "Collivind is ready" in result.output, "the success banner must not be skipped"
