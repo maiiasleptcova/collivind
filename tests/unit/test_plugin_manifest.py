@@ -67,7 +67,7 @@ def test_runner_fails_loudly_when_collivind_is_absent(tmp_path):
 def test_runner_execs_the_resolved_binary(tmp_path):
     fake = tmp_path / "bin"
     fake.mkdir()
-    (fake / "collivind").write_text("#!/bin/sh\necho \"ran $*\"\n")
+    (fake / "collivind").write_text('#!/bin/sh\necho "ran $*"\n')
     (fake / "collivind").chmod(0o755)
     env = {"PATH": f"{fake}:/usr/bin:/bin", "HOME": str(tmp_path)}
     r = subprocess.run([str(RUNNER), "hook", "user-prompt"], capture_output=True, text=True, env=env)
@@ -81,7 +81,7 @@ def test_mcp_flag_runs_the_module_not_a_subcommand(tmp_path):
     fake.mkdir()
     (fake / "collivind").write_text("#!/bin/sh\nexit 1\n")
     (fake / "collivind").chmod(0o755)
-    (fake / "python").write_text("#!/bin/sh\necho \"py $*\"\n")
+    (fake / "python").write_text('#!/bin/sh\necho "py $*"\n')
     (fake / "python").chmod(0o755)
     env = {"PATH": f"{fake}:/usr/bin:/bin", "HOME": str(tmp_path)}
     r = subprocess.run([str(RUNNER), "--mcp"], capture_output=True, text=True, env=env)
