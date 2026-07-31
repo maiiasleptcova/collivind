@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Collivind — memory</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header class="masthead">
+  <h1><b>Collivind</b> memory</h1>
+  <span class="store-badge" id="store">reading …</span>
+</header>
+
+<div class="toolbar">
+  <div class="search">
+    <label class="sr-only" for="q">Search memories</label>
+    <input id="q" type="search" placeholder="Search your memories, or leave empty to browse" autocomplete="off" spellcheck="false">
+  </div>
+  <button id="compact" aria-pressed="false" title="Denser list — hides bodies">Compact</button>
+  <button id="new" class="primary">New memory</button>
+</div>
+
+<main>
+  <div id="error" hidden class="error" role="alert"></div>
+  <div id="list" aria-busy="true" aria-live="polite">
+    <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+  </div>
+</main>
+
+<dialog id="confirm">
+  <h2 id="confirm-title">Forget this memory?</h2>
+  <p id="confirm-body">This cannot be undone. Invalidating instead keeps the version chain intact.</p>
+  <div class="actions">
+    <button id="confirm-cancel" autofocus>Cancel</button>
+    <button id="confirm-ok" class="primary">Forget permanently</button>
+  </div>
+</dialog>
+
+<script src="/app.js"></script>
+</body>
+</html>

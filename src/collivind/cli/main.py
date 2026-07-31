@@ -18,6 +18,7 @@ from collivind.cli.commands.memory import (
 from collivind.cli.commands.reset import reset
 from collivind.cli.commands.search import search
 from collivind.cli.commands.status import status
+from collivind.cli.commands.web import web
 from collivind.version import __version__
 
 
@@ -43,6 +44,7 @@ def cli(ctx):
 
 cli.add_command(init)
 cli.add_command(status)
+cli.add_command(web)
 cli.add_command(hook)
 cli.add_command(search)
 cli.add_command(reset)
