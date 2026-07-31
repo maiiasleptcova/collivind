@@ -1,0 +1,14 @@
+{
+  "name": "collivind",
+  "owner": {
+    "name": "Maiia Sleptcova"
+  },
+  "plugins": [
+    {
+      "name": "collivind",
+      "source": "./plugin",
+      "description": "Graph-based memory for Claude Code: automatic recall on every prompt, extraction at session end, and MCP tools for search and storage."
+    }
+  ],
+  "description": "Collivind \u2014 graph-based memory for AI coding assistants."
+}
