@@ -1,3 +1,4 @@
+import json
 import subprocess
 import sys
 import time
@@ -236,6 +237,71 @@ def register_codex_mcp() -> bool:
     return True
 
 
+def _json_register(config_path: Path, container: str, name: str, entry: dict) -> bool:
+    """Add `entry` under `container[name]` in a JSON config. Returns whether
+    the file changed.
+
+    Every agent config here holds the user's own settings, so this merges into
+    the existing document rather than replacing it, and refuses to touch a file
+    it cannot parse instead of appending blind.
+    """
+    existing = {}
+    if config_path.exists():
+        try:
+            existing = json.loads(config_path.read_text() or "{}")
+        except json.JSONDecodeError:
+            return False
+        if name in (existing.get(container) or {}):
+            return False  # already registered
+
+    existing.setdefault(container, {})[name] = entry
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(json.dumps(existing, indent=2) + "\n")
+    return True
+
+
+def register_opencode_mcp() -> bool:
+    """Add collivind to ~/.config/opencode/opencode.json.
+
+    opencode's schema differs from the others: the key is `mcp`, entries carry
+    `type: local`, and `command` is a list rather than a command plus args.
+    """
+    opencode_dir = Path.home() / ".config" / "opencode"
+    if not opencode_dir.exists():
+        return False  # not an opencode user; do not create the directory
+
+    return _json_register(
+        opencode_dir / "opencode.json",
+        "mcp",
+        "collivind",
+        {
+            "type": "local",
+            "command": [_mcp_interpreter(), "-m", "collivind.mcp.server"],
+            "enabled": True,
+        },
+    )
+
+
+def register_copilot_mcp() -> bool:
+    """Add collivind to VS Code's user-level MCP config (~/.vscode/mcp.json),
+    which is what GitHub Copilot reads. Its key is `servers`, not `mcpServers`.
+    """
+    vscode_dir = Path.home() / ".vscode"
+    if not vscode_dir.exists():
+        return False  # VS Code not installed for this user
+
+    return _json_register(
+        vscode_dir / "mcp.json",
+        "servers",
+        "collivind",
+        {
+            "type": "stdio",
+            "command": _mcp_interpreter(),
+            "args": ["-m", "collivind.mcp.server"],
+        },
+    )
+
+
 def _register_mcp_server():
     """Register Collivind as an MCP server with Claude Code, plus Codex when
     ~/.codex exists."""
@@ -261,3 +327,16 @@ def _register_mcp_server():
         except OSError as e:
             click.secho(f"skipped ({e})", fg="yellow")
             click.echo("Add [mcp_servers.collivind] to ~/.codex/config.toml manually.")
+
+    for label, registrar, hint in (
+        ("opencode", register_opencode_mcp, "~/.config/opencode/opencode.json"),
+        ("Copilot", register_copilot_mcp, "~/.vscode/mcp.json"),
+    ):
+        try:
+            changed = registrar()
+        except OSError as e:
+            click.secho(f"Registering MCP server with {label}... skipped ({e})", fg="yellow")
+            click.echo(f"Add the collivind entry to {hint} manually.")
+            continue
+        if changed:
+            click.secho(f"Registering MCP server with {label}... done", fg="green")

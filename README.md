@@ -81,6 +81,22 @@ installed (`uv tool install /path/to/collivind` from a checkout). It resolves
 that binary itself rather than relying on PATH, since Claude Code spawns hooks
 with its own environment.
 
+### Agent support
+
+| Agent | Memory tools (MCP) | Automatic recall |
+|---|---|---|
+| Claude Code | yes | yes — 4 hooks, via the plugin |
+| Codex | yes | yes — SessionStart + UserPromptSubmit |
+| opencode | yes | **no** — opencode has no hook system |
+| GitHub Copilot | yes | **no** — Copilot has no hook system |
+
+`collivind init` registers the MCP server for every agent it finds installed.
+opencode and Copilot get the memory tools, so you can search and save
+explicitly, but nothing is injected into your prompts automatically — neither
+exposes a hook comparable to `UserPromptSubmit`.
+
+`collivind status` reports what is registered where.
+
 ### Manual setup
 
 Register Collivind as an MCP server:

@@ -19,6 +19,7 @@ def status():
 
     _status_hooks()
     _status_codex_mcp()
+    _status_other_agent_mcp()
 
 
 def _status_embedded(config):
@@ -117,3 +118,33 @@ def _status_codex_mcp():
         click.secho("✓ codex MCP: registered", fg="green")
     else:
         click.secho("✗ codex MCP: not registered — run `collivind init`", fg="yellow")
+
+
+def _status_other_agent_mcp():
+    """Report MCP registration for opencode and Copilot.
+
+    Neither has a hook system, so they get tools on demand but no automatic
+    recall — worth being explicit rather than implying parity with Claude
+    Code and Codex (#21).
+    """
+    import json
+    from pathlib import Path
+
+    checks = (
+        ("opencode", Path.home() / ".config" / "opencode", Path.home() / ".config/opencode/opencode.json", "mcp"),
+        ("copilot", Path.home() / ".vscode", Path.home() / ".vscode/mcp.json", "servers"),
+    )
+    for label, agent_dir, config_path, container in checks:
+        if not agent_dir.exists():
+            continue  # agent not installed; stay quiet
+        registered = False
+        if config_path.exists():
+            try:
+                registered = "collivind" in (json.loads(config_path.read_text() or "{}").get(container) or {})
+            except json.JSONDecodeError:
+                click.secho(f"✗ {label} MCP: {config_path} is not valid JSON", fg="red")
+                continue
+        if registered:
+            click.secho(f"✓ {label} MCP: registered (tools only — no recall hooks)", fg="green")
+        else:
+            click.secho(f"✗ {label} MCP: not registered — run `collivind init`", fg="yellow")
