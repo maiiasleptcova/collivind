@@ -27,12 +27,34 @@ if ! BIN=$(find_collivind); then
   exit 127
 fi
 
+# Follow symlinks before deriving anything from the path. `uv tool install`
+# puts a symlink in ~/.local/bin pointing into ~/.local/share/uv/tools/...,
+# so dirname() of the *link* is ~/.local/bin, which holds no interpreter.
+resolve_link() {
+  p=$1
+  n=0
+  while [ -L "$p" ] && [ "$n" -lt 40 ]; do
+    t=$(readlink "$p")
+    case "$t" in
+      /*) p=$t ;;
+      *)  p=$(dirname "$p")/$t ;;
+    esac
+    n=$((n + 1))
+  done
+  printf '%s' "$p"
+}
+
 if [ "${1:-}" = "--mcp" ]; then
-  # There is no `collivind mcp-server` subcommand; the server is a module.
-  # The interpreter owning the console script sits beside it.
-  PY="$(dirname "$BIN")/python"
-  [ -x "$PY" ] || PY="$(dirname "$BIN")/python3"
-  [ -x "$PY" ] || PY="python3"
+  # There is no `collivind mcp-server` subcommand; the server is a module, so
+  # it needs the interpreter that can import it — the one in the same venv as
+  # the resolved console script, never a bare `python3` off PATH.
+  REAL=$(resolve_link "$BIN")
+  PY="$(dirname "$REAL")/python"
+  [ -x "$PY" ] || PY="$(dirname "$REAL")/python3"
+  if [ ! -x "$PY" ]; then
+    echo "collivind: no interpreter beside $REAL; cannot start the MCP server." >&2
+    exit 127
+  fi
   exec "$PY" -m collivind.mcp.server
 fi
 

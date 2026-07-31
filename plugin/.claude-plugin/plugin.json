@@ -2,7 +2,7 @@
   "name": "collivind",
   "displayName": "Collivind Memory",
   "description": "Graph-based memory for Claude Code: automatic recall on every prompt, extraction at session end, and MCP tools for search and storage.",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "author": {
     "name": "Maiia Sleptcova"
   },
