@@ -18,6 +18,7 @@ def status():
         _status_docker(config)
 
     _status_hooks()
+    _status_codex_mcp()
 
 
 def _status_embedded(config):
@@ -79,3 +80,31 @@ def _status_hooks():
             )
         else:
             click.secho(f"✓ {h['tool']}: {', '.join(h['events'])}", fg="green")
+
+
+def _status_codex_mcp():
+    """Report whether Codex can see the MCP tools.
+
+    Hooks and MCP are registered separately, so Codex can have working recall
+    hooks and still expose no collivind tools at all (#13).
+    """
+    import tomllib
+    from pathlib import Path
+
+    codex = Path.home() / ".codex"
+    if not codex.exists():
+        return  # not a Codex user; nothing to report
+
+    config_path = codex / "config.toml"
+    registered = False
+    if config_path.exists():
+        try:
+            registered = "collivind" in tomllib.loads(config_path.read_text()).get("mcp_servers", {})
+        except tomllib.TOMLDecodeError:
+            click.secho(f"✗ codex MCP: {config_path} is not valid TOML", fg="red")
+            return
+
+    if registered:
+        click.secho("✓ codex MCP: registered", fg="green")
+    else:
+        click.secho("✗ codex MCP: not registered — run `collivind init`", fg="yellow")

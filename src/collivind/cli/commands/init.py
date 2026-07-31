@@ -1,5 +1,7 @@
 import subprocess
+import sys
 import time
+import tomllib
 from pathlib import Path
 
 import click
@@ -175,8 +177,47 @@ def _init_docker(config, data_dir: Path):
     click.echo("Run 'collivind status' to see current state.")
 
 
+def _mcp_interpreter() -> str:
+    """Absolute interpreter that can import collivind.
+
+    Agents spawn MCP servers with their own environment, so a bare `python3`
+    may resolve to one without collivind installed — the same class of
+    failure as the bare `collivind` in the hook commands (#4).
+    """
+    return sys.executable or "python3"
+
+
+def register_codex_mcp() -> bool:
+    """Add `[mcp_servers.collivind]` to ~/.codex/config.toml. Returns whether
+    the file was changed.
+
+    Appends rather than rewrites: that file holds the user's own model,
+    approval and MCP settings, and losing them would be worse than the gap
+    this closes (#13).
+    """
+    codex_dir = Path.home() / ".codex"
+    if not codex_dir.exists():
+        return False  # not a Codex user; do not create the directory
+
+    config_path = codex_dir / "config.toml"
+    existing = config_path.read_text() if config_path.exists() else ""
+    if existing:
+        try:
+            if "collivind" in tomllib.loads(existing).get("mcp_servers", {}):
+                return False  # already registered
+        except tomllib.TOMLDecodeError:
+            return False  # hand-mangled; appending blind would compound it
+
+    block = f'\n[mcp_servers.collivind]\ncommand = "{_mcp_interpreter()}"\nargs = ["-m", "collivind.mcp.server"]\n'
+    if existing and not existing.endswith("\n"):
+        block = "\n" + block
+    config_path.write_text(existing + block)
+    return True
+
+
 def _register_mcp_server():
-    """Register Collivind as an MCP server with Claude Code."""
+    """Register Collivind as an MCP server with Claude Code, plus Codex when
+    ~/.codex exists."""
     click.echo("Registering MCP server with Claude Code... ", nl=False)
     try:
         subprocess.run(
@@ -190,3 +231,12 @@ def _register_mcp_server():
     except subprocess.CalledProcessError:
         click.secho("skipped (registration failed)", fg="yellow")
         click.echo("Run manually: claude mcp add --global collivind -- python3 -m collivind.mcp.server")
+
+    if (Path.home() / ".codex").exists():
+        click.echo("Registering MCP server with Codex... ", nl=False)
+        try:
+            changed = register_codex_mcp()
+            click.secho("done" if changed else "already registered", fg="green")
+        except OSError as e:
+            click.secho(f"skipped ({e})", fg="yellow")
+            click.echo("Add [mcp_servers.collivind] to ~/.codex/config.toml manually.")
