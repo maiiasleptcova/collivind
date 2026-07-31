@@ -53,9 +53,17 @@ npx collivind-memory init
 ### As a Claude Code plugin (recommended)
 
 ```
-/plugin marketplace add maiiasleptcova/collivind
+/plugin marketplace add https://github.com/maiiasleptcova/collivind
 /plugin install collivind@collivind
+/reload-plugins
 ```
+
+Use the full HTTPS URL. The `owner/repo` shorthand clones over SSH by
+default, so `maiiasleptcova/collivind` fails unless you have a GitHub SSH key
+loaded (or set `CLAUDE_CODE_PLUGIN_PREFER_HTTPS=1`).
+
+`install` takes `plugin@marketplace` — not a URL. Both names here are
+`collivind`, hence `collivind@collivind`. Check it landed with `/plugin`.
 
 The plugin registers the MCP server, all four hooks (SessionStart,
 UserPromptSubmit, Stop, PreCompact) and the `/mem-save` and `/mem-recall`
