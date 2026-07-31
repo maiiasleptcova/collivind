@@ -28,6 +28,13 @@ class SqliteGraphStore(GraphStore):
         # concurrent writers must wait for the lock, not fail immediately
         self.conn.execute("PRAGMA busy_timeout=5000")
         self.conn.execute("PRAGMA foreign_keys=ON")
+        # Create the schema here, not only in initialize(). create_all_backends
+        # probes every backend (#8) and this store's probe queries `memories`,
+        # so a data dir that never had `collivind init` run against it reported
+        # the whole mode as unavailable rather than simply empty. The statements
+        # are CREATE TABLE IF NOT EXISTS, so re-opening an existing store is a
+        # no-op and never touches its rows.
+        self.initialize()
 
     def initialize(self) -> None:
         cur = self.conn.cursor()
