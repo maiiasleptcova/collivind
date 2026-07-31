@@ -45,11 +45,28 @@ class LocalEmbeddingProvider(EmbeddingProvider):
             raise CollivindError(f"Local batch embedding failed: {e}")
 
     def health_check(self) -> Dict[str, Any]:
-        try:
-            self._load_model()
+        """Verify the model *can* load, without loading it.
+
+        create_all_backends probes every backend on construction, so anything
+        expensive here is paid by every code path — including SessionStart,
+        which only reads the timeline and never embeds. Loading the model here
+        cost 6.2s per invocation (#16). Importing sentence-transformers is the
+        failure this catches; instantiating the model is not needed to catch
+        it, and `embed()` still loads lazily on first use.
+        """
+        if self._model is not None:
             return {"status": "ok", "message": f"Model {self.config.model} loaded"}
-        except Exception as e:
-            return {"status": "error", "message": str(e)}
+        try:
+            import sentence_transformers  # noqa: F401
+        except ImportError:
+            return {
+                "status": "error",
+                "message": (
+                    "sentence-transformers is required for embedded mode. "
+                    "Install with: pip install collivind-memory[embedded]"
+                ),
+            }
+        return {"status": "ok", "message": f"Model {self.config.model} not yet loaded (loads on first use)"}
 
     @property
     def dimension(self) -> int:
