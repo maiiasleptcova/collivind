@@ -11,6 +11,10 @@ from collivind.models import MemoryCategory, MemoryCreate, SearchQuery
 Result = Tuple[int, Dict[str, Any]]
 
 
+def _is_tag_list(value: Any) -> bool:
+    return isinstance(value, list) and all(isinstance(t, str) for t in value)
+
+
 def _memory_dict(node) -> Dict[str, Any]:
     d = node.to_dict()
     cat = d.get("category")
@@ -58,6 +62,8 @@ class MemoryAPI:
     # --- write ------------------------------------------------------------
 
     def create(self, body: Dict[str, Any]) -> Result:
+        if not isinstance(body.get("content", ""), str) or not isinstance(body.get("summary", ""), str):
+            return 400, {"error": "content and summary must be strings"}
         content = (body.get("content") or "").strip()
         if not content:
             return 400, {"error": "content is required"}
@@ -65,16 +71,25 @@ class MemoryAPI:
             category = MemoryCategory(body.get("category") or "fact")
         except ValueError:
             return 400, {"error": f"unknown category {body.get('category')!r}"}
+        # create was the open half of the same guard update already had: a
+        # non-list here reaches SQLite as a JSON object, comes back as a dict,
+        # and throws in the UI — taking the whole list render down with it.
+        if "tags" in body and not _is_tag_list(body["tags"]):
+            return 400, {"error": "tags must be a list of strings"}
 
-        node = self.manager.add_memory(
-            MemoryCreate(
-                content=content,
-                summary=(body.get("summary") or content[:120]).strip(),
-                category=category,
-                project_id=body.get("project_id") or "default",
-                tags=body.get("tags") or [],
+        try:
+            node = self.manager.add_memory(
+                MemoryCreate(
+                    content=content,
+                    summary=(body.get("summary") or content[:120]).strip(),
+                    category=category,
+                    project_id=body.get("project_id") or "default",
+                    tags=body.get("tags") or [],
+                    confidence=body.get("confidence", 1.0),
+                )
             )
-        )
+        except ValueError as e:
+            return 400, {"error": str(e)}
         return 201, _memory_dict(node)
 
     def update(self, memory_id: str, body: Dict[str, Any]) -> Result:
@@ -88,16 +103,14 @@ class MemoryAPI:
             except ValueError:
                 return 400, {"error": f"unknown category {body['category']!r}"}
 
-        # A non-list reaches SQLite as a JSON object and comes back as a dict,
-        # which throws in the UI and takes the whole list down with it.
-        if "tags" in fields:
-            tags = fields["tags"]
-            if not isinstance(tags, list) or not all(isinstance(t, str) for t in tags):
-                return 400, {"error": "tags must be a list of strings"}
+        if "tags" in fields and not _is_tag_list(fields["tags"]):
+            return 400, {"error": "tags must be a list of strings"}
 
-        # create() refuses empty content; update must not be the back door.
-        if "content" in fields and not str(fields["content"]).strip():
-            return 400, {"error": "content is required"}
+        # Untyped values reach the sqlite driver and surface as a 500 carrying
+        # its internal message; the engine rejects blanks, this rejects shapes.
+        for key in ("content", "summary"):
+            if key in fields and not isinstance(fields[key], str):
+                return 400, {"error": f"{key} must be a string"}
 
         if "confidence" in fields:
             # bool is an int subclass, so True would sail through float() as 1.0.
@@ -113,7 +126,12 @@ class MemoryAPI:
 
         if not fields:
             return 400, {"error": "nothing to update"}
-        node = self.manager.update_memory(memory_id, **fields)
+        try:
+            node = self.manager.update_memory(memory_id, **fields)
+        except ValueError as e:
+            # The engine validates too; a drift between the two lists must not
+            # turn a bad request into a 500.
+            return 400, {"error": str(e)}
         if node is None:
             return 404, {"error": f"No memory {memory_id}"}
         return 200, _memory_dict(node)

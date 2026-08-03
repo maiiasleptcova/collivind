@@ -105,18 +105,6 @@ def test_update_memory_reembed_keeps_the_entity_names():
     assert "neo4j store" in text, f"a name-less neighbour must still contribute: {text}"
 
 
-def test_update_memory_skips_the_reembed_when_the_text_is_unchanged():
-    """The web UI posts every field on every save, so 'a field was supplied'
-    must not be mistaken for 'the memory reads differently'."""
-    manager, vs, gs, ep = _make_manager(existing=_node(tags=["same"]))
-    gs.update_memory.return_value = _node(tags=["same"])
-
-    manager.update_memory("m-1", tags=["same"], summary="old", content="old")
-
-    ep.embed.assert_not_called()
-    vs.upsert.assert_not_called()
-
-
 @pytest.mark.parametrize("bad", [1.5, -0.1, float("nan"), float("inf"), True, "0.5", [0.5]])
 def test_update_memory_rejects_bad_confidence_at_the_engine(bad):
     """The CLI does not validate, so a range check in the HTTP layer alone let

@@ -1,3 +1,4 @@
+import logging
 from typing import Any, Dict, List, Optional
 
 from collivind.config import CollivindConfig
@@ -14,8 +15,10 @@ from collivind.models import (
     SearchResult,
 )
 from collivind.models.entity import EntityType
-from collivind.models.memory import MemoryCategory, MemorySource
+from collivind.models.memory import MemoryCategory, MemorySource, validate_confidence
 from collivind.storage.interfaces import EmbeddingProvider, GraphStore, VectorStore
+
+logger = logging.getLogger(__name__)
 
 
 class MemoryManager:
@@ -125,16 +128,18 @@ class MemoryManager:
     ) -> Optional[MemoryNode]:
         """Update fields on a memory; re-embeds when the embedded text changes.
 
-        Raises ValueError on a confidence outside 0-1. The guard lives here
-        rather than in a caller because every surface routes through this
-        method: with it in the HTTP layer only, `collivind update --confidence
-        nan` reached the store and read back as NULL.
+        Raises ValueError on a bad confidence or on blanking content/summary.
+        The guards live here rather than in a caller because every surface
+        routes through this method: with the range check in the HTTP layer
+        only, `collivind update --confidence nan` reached the store and read
+        back as NULL, and `--content ""` wiped a memory in place with no
+        version chain to recover it from.
         """
         if confidence is not None:
-            if isinstance(confidence, bool) or not isinstance(confidence, (int, float)):
-                raise ValueError("confidence must be a number between 0 and 1")
-            if not 0.0 <= float(confidence) <= 1.0:  # also rejects NaN, which compares False
-                raise ValueError(f"confidence must be between 0 and 1, got {confidence!r}")
+            confidence = validate_confidence(confidence)
+        for name, value in (("content", content), ("summary", summary)):
+            if value is not None and not str(value).strip():
+                raise ValueError(f"{name} cannot be blank; forget the memory instead")
 
         existing = self.graph_store.get_memory(memory_id)
         if not existing:
@@ -158,14 +163,18 @@ class MemoryManager:
 
         # Confidence is the only editable field outside the embedded text, so a
         # confidence-only edit skips the graph lookup and the round-trip below.
+        #
+        # Deliberately keyed on "a field was supplied" rather than on the
+        # enriched text differing. The stored vector is not always what the
+        # current fields imply — add_memory embeds before the dedup tag-merge
+        # and before MENTIONS edges exist — so a text-equality gate would look
+        # at an unchanged memory and skip a re-embed that was in fact overdue.
+        # Re-embedding an unchanged memory costs one round-trip; skipping one
+        # that was needed leaves a permanently wrong index.
         if updated and any(f is not None for f in (content, summary, category, tags)):
-            entity_names = self._entity_names(memory_id)
-            before = build_enriched_text(self._as_create(existing), entity_names=entity_names)
-            after = build_enriched_text(self._as_create(updated), entity_names=entity_names)
-            # Compare the text that actually gets embedded rather than which
-            # fields were passed: the UI sends every field on every save, so
-            # "category was supplied" is not "the memory reads differently".
-            if before != after:
+            entity_names, ok = self._entity_names(memory_id)
+            if ok:
+                after = build_enriched_text(self._as_create(updated), entity_names=entity_names)
                 self.vector_store.upsert(updated.id, self.embedding_provider.embed(after), updated.to_dict())
         return updated
 
@@ -180,25 +189,29 @@ class MemoryManager:
             tags=node.tags,
         )
 
-    def _entity_names(self, memory_id: str) -> Optional[List[str]]:
-        """Entity names linked to a memory, for rebuilding its enriched text.
+    def _entity_names(self, memory_id: str) -> tuple[Optional[List[str]], bool]:
+        """Entity names linked to a memory, and whether the lookup succeeded.
 
         add_memory feeds entity names into the embedding; without them here a
-        re-embed would quietly strip that whole segment out of the vector.
+        re-embed would quietly strip that whole segment out of the vector. So
+        a failed lookup returns ok=False and the caller leaves the existing
+        vector alone: a vector that is stale on tags beats one silently
+        missing its entity signal, and the next edit retries.
 
-        ponytail: the SQLite store returns only the slugged id, so a name is
-        reconstructed from it and loses hyphens and case ("data-integrity"
-        comes back as "data integrity"). Close enough for embedding; give
-        GraphStore a real entity lookup if exact round-tripping ever matters.
+        ponytail: the SQLite store returns only the slugged id (no name), so a
+        name is reconstructed from it and loses hyphens and case —
+        "data-integrity" comes back as "data integrity". Neo4j returns the real
+        name. Give GraphStore an entity-by-id lookup if that drift ever matters.
         """
         try:
             neighbors = self.graph_store.get_neighbors(
                 memory_id, [RelType.ABOUT.value, RelType.MENTIONS.value], direction="OUT"
             )
         except Exception:
-            return None  # a graph hiccup must not corrupt the vector instead
+            logger.warning("entity lookup failed for %s; leaving its vector as-is", memory_id, exc_info=True)
+            return None, False
         names = [n.get("name") or str(n.get("id") or "").replace("_", " ") for n in neighbors]
-        return [n for n in names if n] or None
+        return ([n for n in names if n] or None), True
 
     def forget(self, memory_id: str) -> bool:
         """Permanently delete a memory from graph and vector stores."""
