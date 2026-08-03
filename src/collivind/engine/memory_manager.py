@@ -137,9 +137,12 @@ class MemoryManager:
         """
         if confidence is not None:
             confidence = validate_confidence(confidence)
-        for name, value in (("content", content), ("summary", summary)):
-            if value is not None and not str(value).strip():
-                raise ValueError(f"{name} cannot be blank; forget the memory instead")
+        # Only content. A blank summary is a state create() itself produces
+        # (`add "x" -s "   "` stores ""), and the web editor posts summary on
+        # every save — so guarding it here discarded the user's whole edit and
+        # left any blank-summary memory permanently unsavable from the UI.
+        if content is not None and not str(content).strip():
+            raise ValueError("content cannot be blank; forget the memory instead")
 
         existing = self.graph_store.get_memory(memory_id)
         if not existing:
@@ -242,7 +245,12 @@ class MemoryManager:
                     category=MemoryCategory(rec.get("category", "fact")),
                     project_id=rec.get("project_id", "default"),
                     user_id=rec.get("user_id", "local"),
-                    confidence=rec.get("confidence", 1.0),
+                    # An export written before confidence was validated can
+                    # carry null (a NaN stored by an older build reads back as
+                    # NULL). MemoryCreate now rejects that, and there is no
+                    # per-record handling here — one bad row would abort the
+                    # loop after earlier rows had already been committed.
+                    confidence=rec.get("confidence") if rec.get("confidence") is not None else 1.0,
                     tags=rec.get("tags") or [],
                 )
             )

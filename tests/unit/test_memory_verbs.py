@@ -301,3 +301,21 @@ def test_cli_sync_first_run_creates_file(tmp_path):
     assert result.exit_code == 0
     manager.import_memories.assert_not_called()
     assert (tmp_path / "shared" / "proj.jsonl").exists()
+
+
+def test_import_survives_a_null_confidence_from_an_older_export():
+    """A NaN stored by a pre-validation build reads back as NULL and exports as
+    null. MemoryCreate now rejects that, and import has no per-record handling —
+    one bad row would abort the loop after earlier rows were already committed."""
+    manager, _, gs, _ = _make_manager(existing=None)
+    gs.create_memory.return_value = _node()
+
+    count = manager.import_memories(
+        [
+            {"content": "a", "summary": "a", "category": "fact", "confidence": None},
+            {"content": "b", "summary": "b", "category": "fact"},
+        ]
+    )
+
+    assert count == 2
+    assert gs.create_memory.call_count == 2

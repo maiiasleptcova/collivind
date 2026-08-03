@@ -64,6 +64,25 @@ def test_reembed_finds_the_linked_entities_through_a_real_store(manager):
     assert "data integrity" in text.lower(), f"the entity segment was dropped: {text}"
 
 
+def test_reembed_also_follows_mentions_edges(manager):
+    """add_memory only ever creates ABOUT edges, so a fixture built from it
+    cannot tell whether MENTIONS is in the rel-type list. Wire one directly."""
+    from collivind.models import RelationshipCreate, RelType
+
+    mgr, embedder = manager
+    node = _add(mgr)
+    ent = mgr.graph_store.create_entity(EntityCreate(name="Redis", type=EntityType.SERVICE))
+    mgr.graph_store.create_relationship(
+        RelationshipCreate(source_id=node.id, target_id=ent.id, type=RelType.MENTIONS, confidence=1.0)
+    )
+    embedder.embed.reset_mock()
+
+    mgr.update_memory(node.id, tags=["infra", "migration"])
+
+    text = embedder.embed.call_args.args[0]
+    assert "redis" in text.lower(), f"MENTIONS edges were not followed: {text}"
+
+
 def test_a_failing_entity_lookup_leaves_the_vector_alone(manager):
     """A degraded vector is worse than a stale one: without the entity segment
     the memory stops matching entity-bearing queries, and nothing says so."""
@@ -86,10 +105,21 @@ def test_blanking_content_is_refused_at_the_engine(manager):
     mgr, _ = manager
     node = _add(mgr)
 
-    for field in ("content", "summary"):
-        with pytest.raises(ValueError):
-            mgr.update_memory(node.id, **{field: "   "})
-        assert mgr.graph_store.get_memory(node.id).content == node.content
+    with pytest.raises(ValueError):
+        mgr.update_memory(node.id, content="   ")
+    assert mgr.graph_store.get_memory(node.id).content == node.content
+
+
+def test_a_blank_summary_is_allowed(manager):
+    """create() itself produces blank summaries (`add "x" -s "   "` stores ""),
+    and the web editor posts summary on every save — so refusing it here threw
+    away the user's whole edit and left such a memory unsavable from the UI."""
+    mgr, _ = manager
+    node = _add(mgr)
+
+    result = mgr.update_memory(node.id, summary="  ", content="a real edit that must land")
+
+    assert result.content == "a real edit that must land"
 
 
 @pytest.mark.parametrize("bad", [99, -5, float("nan"), float("inf"), True, "0.5"])

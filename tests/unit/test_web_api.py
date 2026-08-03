@@ -131,6 +131,12 @@ class TestWriting:
         status, payload = call(api, "POST", "/api/memories", body={"content": "x", "confidence": 99})
         assert status == 400 and "confidence" in payload["error"]
 
+    def test_create_passes_the_clients_confidence_through(self, api):
+        """Hardcoding confidence=1.0 in create() left the suite green."""
+        api.manager.add_memory.return_value = _node()
+        assert call(api, "POST", "/api/memories", body={"content": "x", "confidence": 0.25})[0] == 201
+        assert api.manager.add_memory.call_args.args[0].confidence == 0.25
+
     def test_create_returns_201(self, api):
         api.manager.add_memory.return_value = _node()
         status, payload = call(api, "POST", "/api/memories", body={"content": "remember this"})
@@ -181,6 +187,14 @@ class TestWriting:
         api.manager.update_memory.side_effect = ValueError("content cannot be blank")
         status, payload = call(api, "PATCH", "/api/memories/abc", body={"summary": "s"})
         assert status == 400 and "blank" in payload["error"]
+
+    @pytest.mark.parametrize("bad", [{"a": 1}, "db,infra", [1, 2], [None]])
+    def test_update_rejects_tags_that_are_not_a_list_of_strings(self, api, bad):
+        """The PATCH half of the guard had no test, so deleting it left the
+        suite green — on the side that had the guard first."""
+        status, _ = call(api, "PATCH", "/api/memories/abc", body={"tags": bad})
+        assert status == 400, f"{bad!r} was accepted"
+        api.manager.update_memory.assert_not_called()
 
     def test_clearing_the_tags_is_an_edit_not_a_no_op(self, api):
         """An empty list must reach the store; treating it as absent would make
