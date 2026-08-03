@@ -88,12 +88,26 @@ class MemoryAPI:
             except ValueError:
                 return 400, {"error": f"unknown category {body['category']!r}"}
 
+        # A non-list reaches SQLite as a JSON object and comes back as a dict,
+        # which throws in the UI and takes the whole list down with it.
+        if "tags" in fields:
+            tags = fields["tags"]
+            if not isinstance(tags, list) or not all(isinstance(t, str) for t in tags):
+                return 400, {"error": "tags must be a list of strings"}
+
+        # create() refuses empty content; update must not be the back door.
+        if "content" in fields and not str(fields["content"]).strip():
+            return 400, {"error": "content is required"}
+
         if "confidence" in fields:
+            # bool is an int subclass, so True would sail through float() as 1.0.
+            if isinstance(fields["confidence"], bool):
+                return 400, {"error": "confidence must be a number between 0 and 1"}
             try:
                 confidence = float(fields["confidence"])
             except (TypeError, ValueError):
                 return 400, {"error": "confidence must be a number between 0 and 1"}
-            if not 0.0 <= confidence <= 1.0:
+            if not 0.0 <= confidence <= 1.0:  # also rejects NaN, which compares False
                 return 400, {"error": "confidence must be between 0 and 1"}
             fields["confidence"] = confidence
 

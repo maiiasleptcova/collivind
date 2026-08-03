@@ -1,6 +1,7 @@
 import json
 from unittest.mock import MagicMock, patch
 
+import pytest
 from click.testing import CliRunner
 
 from collivind.cli.commands.memory import (
@@ -14,6 +15,7 @@ from collivind.cli.commands.memory import (
     update,
 )
 from collivind.config import CollivindConfig
+from collivind.engine.enrichment import CATEGORY_KEYWORDS
 from collivind.engine.memory_manager import MemoryManager
 from collivind.models import MemoryCategory, MemoryNode
 
@@ -21,6 +23,7 @@ from collivind.models import MemoryCategory, MemoryNode
 def _make_manager(existing=None):
     vs, gs, ep = MagicMock(), MagicMock(), MagicMock()
     gs.get_memory.return_value = existing
+    gs.get_neighbors.return_value = []
     ep.embed.return_value = [0.1]
     vs.search.return_value = []
     manager = MemoryManager(vs, gs, ep, CollivindConfig())
@@ -48,32 +51,80 @@ def test_update_memory_reembeds_on_content_change():
     vs.upsert.assert_called_once()
 
 
-def test_update_memory_tags_only_reembeds():
+def _embedded_text(ep):
+    """What was actually sent to the embedder — asserting that `embed` was
+    merely *called* passes against an implementation that re-embeds the
+    pre-edit text, which is the exact bug these tests exist to catch."""
+    assert ep.embed.call_count == 1, f"expected one embed, got {ep.embed.call_count}"
+    return ep.embed.call_args.args[0]
+
+
+def test_update_memory_tags_only_reembeds_the_new_tags():
     """Overturns an earlier test that asserted the opposite.
 
     build_enriched_text folds tags into the embedded text, so skipping the
     re-embed left the vector answering for tags the memory no longer carries —
     a silently stale index, not a saved round-trip.
     """
-    manager, vs, gs, ep = _make_manager(existing=_node())
-    gs.update_memory.return_value = _node(tags=["a"])
+    manager, vs, gs, ep = _make_manager(existing=_node(tags=["old-tag"]))
+    gs.update_memory.return_value = _node(tags=["new-tag"])
 
-    manager.update_memory("m-1", tags=["a"])
+    manager.update_memory("m-1", tags=["new-tag"])
 
-    ep.embed.assert_called_once()
+    text = _embedded_text(ep)
+    assert "new-tag" in text and "old-tag" not in text, text
     vs.upsert.assert_called_once()
 
 
-def test_update_memory_category_only_reembeds():
+def test_update_memory_category_only_reembeds_the_new_category():
     """Category contributes keywords to the embedded text for the same reason."""
-    manager, vs, gs, ep = _make_manager(existing=_node())
+    manager, vs, gs, ep = _make_manager(existing=_node(category=MemoryCategory.FACT))
     gs.update_memory.return_value = _node(category=MemoryCategory.DECISION)
 
     manager.update_memory("m-1", category=MemoryCategory.DECISION)
 
     assert gs.update_memory.call_args.kwargs["category"] is MemoryCategory.DECISION
-    ep.embed.assert_called_once()
+    fact_words = " ".join(CATEGORY_KEYWORDS[MemoryCategory.FACT])
+    decision_words = " ".join(CATEGORY_KEYWORDS[MemoryCategory.DECISION])
+    text = _embedded_text(ep)
+    assert decision_words in text and fact_words not in text, text
     vs.upsert.assert_called_once()
+
+
+def test_update_memory_reembed_keeps_the_entity_names():
+    """add_memory folds linked entity names into the embedded text. A re-embed
+    that drops them trades a stale vector for one missing its entity signal."""
+    manager, vs, gs, ep = _make_manager(existing=_node(tags=["old-tag"]))
+    gs.update_memory.return_value = _node(tags=["new-tag"])
+    gs.get_neighbors.return_value = [{"id": "qdrant", "name": "Qdrant"}, {"id": "neo4j_store"}]
+
+    manager.update_memory("m-1", tags=["new-tag"])
+
+    text = _embedded_text(ep)
+    assert "Qdrant" in text, text
+    assert "neo4j store" in text, f"a name-less neighbour must still contribute: {text}"
+
+
+def test_update_memory_skips_the_reembed_when_the_text_is_unchanged():
+    """The web UI posts every field on every save, so 'a field was supplied'
+    must not be mistaken for 'the memory reads differently'."""
+    manager, vs, gs, ep = _make_manager(existing=_node(tags=["same"]))
+    gs.update_memory.return_value = _node(tags=["same"])
+
+    manager.update_memory("m-1", tags=["same"], summary="old", content="old")
+
+    ep.embed.assert_not_called()
+    vs.upsert.assert_not_called()
+
+
+@pytest.mark.parametrize("bad", [1.5, -0.1, float("nan"), float("inf"), True, "0.5", [0.5]])
+def test_update_memory_rejects_bad_confidence_at_the_engine(bad):
+    """The CLI does not validate, so a range check in the HTTP layer alone let
+    `collivind update --confidence nan` reach the store and read back as NULL."""
+    manager, _, gs, _ = _make_manager(existing=_node())
+    with pytest.raises(ValueError):
+        manager.update_memory("m-1", confidence=bad)
+    gs.update_memory.assert_not_called()
 
 
 def test_update_memory_confidence_only_skips_reembed():

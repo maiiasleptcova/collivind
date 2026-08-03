@@ -126,8 +126,11 @@ function detailsMarkup(m) {
 function editorMarkup(m) {
   const isNew = m === null;
   const chosen = m?.category || "fact";
-  const options = CATEGORIES.map(
-    (c) => `<option value="${c}"${c === chosen ? " selected" : ""}>${c}</option>`).join("");
+  // A stored category the client does not know about would otherwise leave no
+  // option selected, and Save would silently reclassify the memory as "fact".
+  const choices = CATEGORIES.includes(chosen) ? CATEGORIES : [...CATEGORIES, chosen];
+  const options = choices.map(
+    (c) => `<option value="${esc(c)}"${c === chosen ? " selected" : ""}>${esc(c)}</option>`).join("");
   return `<article class="memory">
     <div class="editor">
       <label>Summary
@@ -183,11 +186,18 @@ async function save(id) {
   try {
     clearError();
     if (id) {
-      const confidence = Number($("#f-confidence").value);
-      if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
-        return showError(new Error("Confidence must be a number between 0 and 1"));
+      // An empty number input reads as "" and Number("") is 0, so sending it
+      // unconditionally would silently rewrite a 1.00 memory to 0.00. Blank
+      // means "I did not touch this"; a missing field is left alone upstream.
+      const raw = $("#f-confidence").value.trim();
+      if (raw !== "") {
+        const confidence = Number(raw);
+        if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
+          return showError(new Error("Confidence must be a number between 0 and 1"));
+        }
+        body.confidence = confidence;
       }
-      await api(`/api/memories/${encodeURIComponent(id)}`, { method: "PATCH", body: { ...body, confidence } });
+      await api(`/api/memories/${encodeURIComponent(id)}`, { method: "PATCH", body });
     } else await api("/api/memories", { method: "POST", body });
     editingId = null; creating = false;
     await load();

@@ -123,7 +123,19 @@ class MemoryManager:
         confidence: Optional[float] = None,
         category: Optional[MemoryCategory] = None,
     ) -> Optional[MemoryNode]:
-        """Update fields on a memory; re-embeds when the embedded text changes."""
+        """Update fields on a memory; re-embeds when the embedded text changes.
+
+        Raises ValueError on a confidence outside 0-1. The guard lives here
+        rather than in a caller because every surface routes through this
+        method: with it in the HTTP layer only, `collivind update --confidence
+        nan` reached the store and read back as NULL.
+        """
+        if confidence is not None:
+            if isinstance(confidence, bool) or not isinstance(confidence, (int, float)):
+                raise ValueError("confidence must be a number between 0 and 1")
+            if not 0.0 <= float(confidence) <= 1.0:  # also rejects NaN, which compares False
+                raise ValueError(f"confidence must be between 0 and 1, got {confidence!r}")
+
         existing = self.graph_store.get_memory(memory_id)
         if not existing:
             return None
@@ -143,21 +155,50 @@ class MemoryManager:
             return existing
 
         updated = self.graph_store.update_memory(memory_id, **updates)
-        # build_enriched_text folds in category keywords and tags, not just the
-        # prose — so editing either without re-embedding leaves the vector
-        # answering for text the memory no longer has.
-        embedded_changed = any(f is not None for f in (content, summary, category, tags))
-        if updated and embedded_changed:
-            recreate = MemoryCreate(
-                content=updated.content,
-                summary=updated.summary,
-                category=updated.category,
-                project_id=updated.project_id,
-                tags=updated.tags,
-            )
-            vector = self.embedding_provider.embed(build_enriched_text(recreate))
-            self.vector_store.upsert(updated.id, vector, updated.to_dict())
+
+        # Confidence is the only editable field outside the embedded text, so a
+        # confidence-only edit skips the graph lookup and the round-trip below.
+        if updated and any(f is not None for f in (content, summary, category, tags)):
+            entity_names = self._entity_names(memory_id)
+            before = build_enriched_text(self._as_create(existing), entity_names=entity_names)
+            after = build_enriched_text(self._as_create(updated), entity_names=entity_names)
+            # Compare the text that actually gets embedded rather than which
+            # fields were passed: the UI sends every field on every save, so
+            # "category was supplied" is not "the memory reads differently".
+            if before != after:
+                self.vector_store.upsert(updated.id, self.embedding_provider.embed(after), updated.to_dict())
         return updated
+
+    @staticmethod
+    def _as_create(node: MemoryNode) -> MemoryCreate:
+        """The subset of a stored memory that build_enriched_text reads."""
+        return MemoryCreate(
+            content=node.content,
+            summary=node.summary,
+            category=node.category,
+            project_id=node.project_id,
+            tags=node.tags,
+        )
+
+    def _entity_names(self, memory_id: str) -> Optional[List[str]]:
+        """Entity names linked to a memory, for rebuilding its enriched text.
+
+        add_memory feeds entity names into the embedding; without them here a
+        re-embed would quietly strip that whole segment out of the vector.
+
+        ponytail: the SQLite store returns only the slugged id, so a name is
+        reconstructed from it and loses hyphens and case ("data-integrity"
+        comes back as "data integrity"). Close enough for embedding; give
+        GraphStore a real entity lookup if exact round-tripping ever matters.
+        """
+        try:
+            neighbors = self.graph_store.get_neighbors(
+                memory_id, [RelType.ABOUT.value, RelType.MENTIONS.value], direction="OUT"
+            )
+        except Exception:
+            return None  # a graph hiccup must not corrupt the vector instead
+        names = [n.get("name") or str(n.get("id") or "").replace("_", " ") for n in neighbors]
+        return [n for n in names if n] or None
 
     def forget(self, memory_id: str) -> bool:
         """Permanently delete a memory from graph and vector stores."""

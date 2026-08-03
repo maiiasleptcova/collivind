@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 from collivind.config import Neo4jConfig
@@ -47,6 +48,10 @@ def test_update_memory_stamps_updated_at():
     sent = session.run.call_args.kwargs
     assert "updated_at" in sent, "an edit left updated_at untouched"
     assert "m.updated_at = $updated_at" in session.run.call_args.args[0]
+    # A datetime object would reach the driver and then crash fromisoformat on
+    # read-back, so the type matters as much as the presence.
+    assert isinstance(sent["updated_at"], str)
+    datetime.fromisoformat(sent["updated_at"])
 
 
 def test_update_memory_serializes_a_category_enum():
@@ -59,4 +64,8 @@ def test_update_memory_serializes_a_category_enum():
 
     store.update_memory("m-1", category=MemoryCategory.DECISION)
 
-    assert session.run.call_args.kwargs["category"] == "decision"
+    sent = session.run.call_args.kwargs["category"]
+    # MemoryCategory subclasses str, so == "decision" passes even for the raw
+    # enum object. Only the exact type tells the two apart.
+    assert type(sent) is str, f"the enum object reached the driver: {sent!r}"
+    assert sent == "decision"
