@@ -179,6 +179,8 @@ collivind add "content" -c decision -t db,infra  # Store a memory
 collivind get <id>          # Show one memory
 collivind context "query"   # Formatted context block (pipe into prompts)
 collivind update <id> --content "..."  # Update a memory (re-embeds)
+collivind update <id> -c decision      # Reclassify (also re-embeds)
+collivind update <id> -t ""            # Clear every tag
 collivind invalidate <id> -r outdated  # Mark outdated, keep history
 collivind forget <id>       # Delete permanently (with confirmation)
 collivind export -p proj -o mem.jsonl  # Backup / portability
