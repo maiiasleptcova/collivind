@@ -12,6 +12,32 @@ let creating = false;
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
+// An ISO timestamp is data, not reading material — show it the way the reader
+// keeps time, and fall back to the raw string rather than printing "Invalid Date".
+const fmtTime = (v) => {
+  if (v === null || v === undefined || v === "") return null;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? String(v) : d.toLocaleString();
+};
+
+// Every field the store carries beyond summary/content/category. Rows whose
+// value is absent are dropped, so `valid to` showing up means invalidated.
+const META_ROWS = [
+  ["Project", (m) => m.project_id],
+  ["Source", (m) => m.source],
+  ["Confidence", (m) => (m.confidence === null || m.confidence === undefined ? null : Number(m.confidence).toFixed(2))],
+  ["Version", (m) => m.version],
+  ["Previous version", (m) => m.previous_version_id],
+  ["Superseded by", (m) => m.superseded_by],
+  ["Valid from", (m) => fmtTime(m.valid_from)],
+  ["Valid to", (m) => fmtTime(m.valid_to)],
+  ["Created", (m) => fmtTime(m.created_at)],
+  ["Updated", (m) => fmtTime(m.updated_at)],
+  ["Session", (m) => m.session_id],
+  ["User", (m) => m.user_id],
+  ["ID", (m) => m.id],
+];
+
 async function api(path, options = {}) {
   const res = await fetch(path, {
     headers: { "Content-Type": "application/json" },
@@ -65,7 +91,26 @@ function card(m) {
         <button class="danger" data-forget="${esc(m.id)}">Forget</button>
       </span>
     </div>
+    ${detailsMarkup(m)}
   </article>`;
+}
+
+// Density on demand (PRODUCT.md): the full record is one disclosure away,
+// never in the way of reading. <details> is keyboard-reachable for free.
+function detailsMarkup(m) {
+  const tags = (m.tags || []).map(
+    (t) => `<button class="entity" data-entity="${esc(t)}">${esc(t)}</button>`).join("");
+  const rows = META_ROWS
+    .map(([label, read]) => [label, read(m)])
+    .filter(([, v]) => v !== null && v !== undefined && v !== "")
+    .map(([label, v]) => `<dt>${esc(label)}</dt><dd>${esc(v)}</dd>`)
+    .join("");
+  if (!tags && !rows) return "";
+  return `<details class="details">
+    <summary>Details</summary>
+    ${tags ? `<div class="meta tags">${tags}</div>` : ""}
+    ${rows ? `<dl class="fields">${rows}</dl>` : ""}
+  </details>`;
 }
 
 function editorMarkup(m) {

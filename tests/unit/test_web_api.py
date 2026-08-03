@@ -13,6 +13,26 @@ def _node(content="a stored fact", summary="a stored fact"):
     return MemoryNode(content=content, summary=summary, category=MemoryCategory.FACT)
 
 
+# The metadata the card's Details disclosure renders. Kept here so a rename on
+# either side of the boundary fails a test instead of blanking a row silently.
+UI_METADATA_FIELDS = (
+    "id",
+    "project_id",
+    "source",
+    "confidence",
+    "version",
+    "previous_version_id",
+    "superseded_by",
+    "valid_from",
+    "valid_to",
+    "created_at",
+    "updated_at",
+    "session_id",
+    "user_id",
+    "tags",
+)
+
+
 @pytest.fixture
 def api():
     manager = MagicMock()
@@ -49,6 +69,20 @@ class TestReading:
     def test_status_reports_the_mode(self, api):
         """Principle 3: never let the reader guess which store they are in."""
         assert call(api, "GET", "/api/status")[1]["mode"] == "docker"
+
+    def test_list_carries_every_field_the_ui_renders(self, api):
+        _, payload = call(api, "GET", "/api/memories")
+        missing = [f for f in UI_METADATA_FIELDS if f not in payload["memories"][0]]
+        assert not missing, f"absent from the API payload: {missing}"
+
+    def test_app_js_still_reads_every_field(self):
+        """The other half of the contract: the payload growing a field the UI
+        dropped would otherwise leave the test above passing on nothing."""
+        from collivind.web import server
+
+        js = (server.STATIC / "app.js").read_text()
+        missing = [f for f in UI_METADATA_FIELDS if f"m.{f}" not in js]
+        assert not missing, f"app.js no longer reads: {missing}"
 
 
 class TestWriting:

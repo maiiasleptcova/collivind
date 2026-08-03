@@ -119,7 +119,8 @@ main { max-width: 78rem; margin: 0 auto; padding: 0 1.5rem 5rem; }
 
 /* Density on demand — the reading surface is the default (PRODUCT.md). */
 body.compact .memory { padding: 0.6rem 0.9rem; margin-bottom: 0.4rem; border-radius: 10px; }
-body.compact .memory .content { display: none; }
+body.compact .memory .content,
+body.compact .memory .details { display: none; }
 body.compact .memory .summary { margin-bottom: 0.15rem; }
 
 .memory .summary {
@@ -147,6 +148,26 @@ body.compact .memory .summary { margin-bottom: 0.15rem; }
 }
 
 .row-actions { margin-left: auto; display: flex; gap: 0.15rem; }
+
+/* The full record, one disclosure away — reading stays the default. */
+.details { margin-top: 0.55rem; }
+.details > summary {
+  display: inline-flex; align-items: center; gap: 0.3rem; width: fit-content;
+  font-size: var(--step--1); color: var(--ink-muted);
+  cursor: pointer; list-style: none; padding: 0.15rem 0;
+}
+.details > summary::-webkit-details-marker { display: none; }
+.details > summary::before { content: "\25B8"; display: inline-block; transition: transform 160ms ease; }
+.details[open] > summary::before { transform: rotate(90deg); }
+.details > summary:hover { color: var(--ink); }
+.details .tags { margin-top: 0.5rem; }
+
+.fields {
+  display: grid; grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.2rem 1rem; margin: 0.5rem 0 0; font-size: var(--step--1);
+}
+.fields dt { color: var(--ink-muted); }
+.fields dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 
 /* ---------- states ---------- */
 
