@@ -121,22 +121,33 @@ class MemoryManager:
         summary: Optional[str] = None,
         tags: Optional[List[str]] = None,
         confidence: Optional[float] = None,
+        category: Optional[MemoryCategory] = None,
     ) -> Optional[MemoryNode]:
-        """Update fields on a memory; re-embeds when the text changes."""
+        """Update fields on a memory; re-embeds when the embedded text changes."""
         existing = self.graph_store.get_memory(memory_id)
         if not existing:
             return None
 
         updates = {
             k: v
-            for k, v in {"content": content, "summary": summary, "tags": tags, "confidence": confidence}.items()
+            for k, v in {
+                "content": content,
+                "summary": summary,
+                "tags": tags,
+                "confidence": confidence,
+                "category": category,
+            }.items()
             if v is not None
         }
         if not updates:
             return existing
 
         updated = self.graph_store.update_memory(memory_id, **updates)
-        if updated and (content is not None or summary is not None):
+        # build_enriched_text folds in category keywords and tags, not just the
+        # prose — so editing either without re-embedding leaves the vector
+        # answering for text the memory no longer has.
+        embedded_changed = any(f is not None for f in (content, summary, category, tags))
+        if updated and embedded_changed:
             recreate = MemoryCreate(
                 content=updated.content,
                 summary=updated.summary,

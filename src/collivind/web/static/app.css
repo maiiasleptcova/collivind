@@ -187,6 +187,10 @@ body.compact .memory .summary { margin-bottom: 0.15rem; }
   width: 100%; resize: vertical;
 }
 .editor label { font-size: var(--step--1); color: var(--ink-muted); display: grid; gap: 0.25rem; }
+/* Category and confidence are short — pairing them keeps the editor from
+   becoming a column of near-empty rows. Stacks under 34rem. */
+.editor-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+@media (max-width: 34rem) { .editor-row { grid-template-columns: 1fr; } }
 
 dialog { border: 0; border-radius: 14px; padding: 1.5rem; max-width: 34rem; box-shadow: 0 20px 50px oklch(0.3 0.02 40 / 0.18); background: var(--surface); color: var(--ink); }
 dialog::backdrop { background: oklch(0.25 0.02 40 / 0.35); }

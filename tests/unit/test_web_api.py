@@ -124,6 +124,39 @@ class TestWriting:
         api.manager.update_memory.return_value = None
         assert call(api, "PATCH", "/api/memories/ghost", body={"summary": "s"})[0] == 404
 
+    def test_update_accepts_a_category(self, api):
+        """Fixing a wrong category is a named curation task (PRODUCT.md)."""
+        api.manager.update_memory.return_value = _node()
+        status, _ = call(api, "PATCH", "/api/memories/abc", body={"category": "decision"})
+        assert status == 200
+        assert api.manager.update_memory.call_args.kwargs["category"] is MemoryCategory.DECISION
+
+    def test_update_rejects_an_unknown_category(self, api):
+        status, payload = call(api, "PATCH", "/api/memories/abc", body={"category": "nonsense"})
+        assert status == 400 and "nonsense" in payload["error"]
+        api.manager.update_memory.assert_not_called()
+
+    @pytest.mark.parametrize("bad", [1.5, -0.1, "high", None])
+    def test_update_rejects_confidence_outside_zero_to_one(self, api, bad):
+        status, _ = call(api, "PATCH", "/api/memories/abc", body={"confidence": bad})
+        assert status == 400, f"{bad!r} was accepted"
+        api.manager.update_memory.assert_not_called()
+
+    def test_update_accepts_confidence_at_the_bounds(self, api):
+        api.manager.update_memory.return_value = _node()
+        for good in (0, 1, 0.5, "0.25"):
+            api.manager.update_memory.reset_mock()
+            assert call(api, "PATCH", "/api/memories/abc", body={"confidence": good})[0] == 200
+            assert api.manager.update_memory.call_args.kwargs["confidence"] == float(good)
+
+    def test_clearing_the_tags_is_an_edit_not_a_no_op(self, api):
+        """An empty list must reach the store; treating it as absent would make
+        removing the last tag impossible from the UI."""
+        api.manager.update_memory.return_value = _node()
+        status, _ = call(api, "PATCH", "/api/memories/abc", body={"tags": []})
+        assert status == 200
+        assert api.manager.update_memory.call_args.kwargs["tags"] == []
+
     def test_forget_missing_memory_is_404(self, api):
         api.manager.forget.return_value = False
         assert call(api, "DELETE", "/api/memories/ghost")[0] == 404

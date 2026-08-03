@@ -125,6 +125,9 @@ function detailsMarkup(m) {
 
 function editorMarkup(m) {
   const isNew = m === null;
+  const chosen = m?.category || "fact";
+  const options = CATEGORIES.map(
+    (c) => `<option value="${c}"${c === chosen ? " selected" : ""}>${c}</option>`).join("");
   return `<article class="memory">
     <div class="editor">
       <label>Summary
@@ -133,9 +136,17 @@ function editorMarkup(m) {
       <label>Content
         <textarea id="f-content" rows="5" placeholder="What is worth remembering?">${esc(m?.content || "")}</textarea>
       </label>
-      ${isNew ? `<label>Category
-        <select id="f-category">${CATEGORIES.map((c) => `<option value="${c}">${c}</option>`).join("")}</select>
-      </label>` : ""}
+      <div class="editor-row">
+        <label>Category
+          <select id="f-category">${options}</select>
+        </label>
+        ${isNew ? "" : `<label>Confidence
+          <input id="f-confidence" type="number" min="0" max="1" step="0.05" value="${esc(m?.confidence ?? 1)}">
+        </label>`}
+      </div>
+      <label>Tags
+        <input id="f-tags" value="${esc((m?.tags || []).join(", "))}" placeholder="Comma separated — replaces the existing set">
+      </label>
       <div class="meta">
         <span class="row-actions">
           <button class="quiet" data-cancel="1">Cancel</button>
@@ -157,13 +168,27 @@ function wire() {
     b.onclick = () => { $("#q").value = b.dataset.entity; load(); });
 }
 
+// Tags are a set, not prose: an empty box means "no tags", which is a real
+// edit, so it is sent rather than treated as "leave them alone".
+const readTags = () => $("#f-tags").value.split(",").map((t) => t.trim()).filter(Boolean);
+
 async function save(id) {
-  const body = { summary: $("#f-summary").value.trim(), content: $("#f-content").value.trim() };
+  const body = {
+    summary: $("#f-summary").value.trim(),
+    content: $("#f-content").value.trim(),
+    category: $("#f-category").value,
+    tags: readTags(),
+  };
   if (!body.content) return showError(new Error("Content cannot be empty"));
   try {
     clearError();
-    if (id) await api(`/api/memories/${encodeURIComponent(id)}`, { method: "PATCH", body });
-    else await api("/api/memories", { method: "POST", body: { ...body, category: $("#f-category").value } });
+    if (id) {
+      const confidence = Number($("#f-confidence").value);
+      if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
+        return showError(new Error("Confidence must be a number between 0 and 1"));
+      }
+      await api(`/api/memories/${encodeURIComponent(id)}`, { method: "PATCH", body: { ...body, confidence } });
+    } else await api("/api/memories", { method: "POST", body });
     editingId = null; creating = false;
     await load();
   } catch (e) { showError(e); }

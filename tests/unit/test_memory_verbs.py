@@ -48,11 +48,41 @@ def test_update_memory_reembeds_on_content_change():
     vs.upsert.assert_called_once()
 
 
-def test_update_memory_tags_only_skips_reembed():
+def test_update_memory_tags_only_reembeds():
+    """Overturns an earlier test that asserted the opposite.
+
+    build_enriched_text folds tags into the embedded text, so skipping the
+    re-embed left the vector answering for tags the memory no longer carries —
+    a silently stale index, not a saved round-trip.
+    """
     manager, vs, gs, ep = _make_manager(existing=_node())
     gs.update_memory.return_value = _node(tags=["a"])
 
     manager.update_memory("m-1", tags=["a"])
+
+    ep.embed.assert_called_once()
+    vs.upsert.assert_called_once()
+
+
+def test_update_memory_category_only_reembeds():
+    """Category contributes keywords to the embedded text for the same reason."""
+    manager, vs, gs, ep = _make_manager(existing=_node())
+    gs.update_memory.return_value = _node(category=MemoryCategory.DECISION)
+
+    manager.update_memory("m-1", category=MemoryCategory.DECISION)
+
+    assert gs.update_memory.call_args.kwargs["category"] is MemoryCategory.DECISION
+    ep.embed.assert_called_once()
+    vs.upsert.assert_called_once()
+
+
+def test_update_memory_confidence_only_skips_reembed():
+    """Confidence is the one editable field outside the embedded text, so it
+    must not pay for an embedding round-trip."""
+    manager, vs, gs, ep = _make_manager(existing=_node())
+    gs.update_memory.return_value = _node(confidence=0.4)
+
+    manager.update_memory("m-1", confidence=0.4)
 
     ep.embed.assert_not_called()
     vs.upsert.assert_not_called()

@@ -79,6 +79,24 @@ class MemoryAPI:
 
     def update(self, memory_id: str, body: Dict[str, Any]) -> Result:
         fields = {k: body[k] for k in ("content", "summary", "tags", "confidence") if k in body}
+
+        # Category is the one editable field with a closed vocabulary, and a
+        # bad value would reach the store as a string no reader recognises.
+        if "category" in body:
+            try:
+                fields["category"] = MemoryCategory(body["category"])
+            except ValueError:
+                return 400, {"error": f"unknown category {body['category']!r}"}
+
+        if "confidence" in fields:
+            try:
+                confidence = float(fields["confidence"])
+            except (TypeError, ValueError):
+                return 400, {"error": "confidence must be a number between 0 and 1"}
+            if not 0.0 <= confidence <= 1.0:
+                return 400, {"error": "confidence must be between 0 and 1"}
+            fields["confidence"] = confidence
+
         if not fields:
             return 400, {"error": "nothing to update"}
         node = self.manager.update_memory(memory_id, **fields)
