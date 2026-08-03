@@ -20,12 +20,20 @@ const fmtTime = (v) => {
   return isNaN(d.getTime()) ? String(v) : d.toLocaleString();
 };
 
+// Number("") and Number(null) are both 0, so an absent confidence would
+// otherwise render as a confident 0.00. Reject empties before coercing.
+const fmtNum = (v) => {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n.toFixed(2) : null;
+};
+
 // Every field the store carries beyond summary/content/category. Rows whose
 // value is absent are dropped, so `valid to` showing up means invalidated.
 const META_ROWS = [
   ["Project", (m) => m.project_id],
   ["Source", (m) => m.source],
-  ["Confidence", (m) => (m.confidence === null || m.confidence === undefined ? null : Number(m.confidence).toFixed(2))],
+  ["Confidence", (m) => fmtNum(m.confidence)],
   ["Version", (m) => m.version],
   ["Previous version", (m) => m.previous_version_id],
   ["Superseded by", (m) => m.superseded_by],
@@ -105,9 +113,11 @@ function detailsMarkup(m) {
     .filter(([, v]) => v !== null && v !== undefined && v !== "")
     .map(([label, v]) => `<dt>${esc(label)}</dt><dd>${esc(v)}</dd>`)
     .join("");
-  if (!tags && !rows) return "";
+  // Every card carries the same visible word, so the accessible name says
+  // which memory — otherwise a screen reader reads "Details" a hundred times.
+  const label = `Details for ${(m.summary || m.content || "this memory").slice(0, 60)}`;
   return `<details class="details">
-    <summary>Details</summary>
+    <summary aria-label="${esc(label)}">Details</summary>
     ${tags ? `<div class="meta tags">${tags}</div>` : ""}
     ${rows ? `<dl class="fields">${rows}</dl>` : ""}
   </details>`;

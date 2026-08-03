@@ -77,12 +77,26 @@ class TestReading:
 
     def test_app_js_still_reads_every_field(self):
         """The other half of the contract: the payload growing a field the UI
-        dropped would otherwise leave the test above passing on nothing."""
+        dropped would otherwise leave the test above passing on nothing.
+
+        Substring matching is coarse — it cannot prove the field reaches the
+        DOM — so it is paired with the wiring assertion below. Between them a
+        model rename fails here rather than blanking a row in a browser.
+        """
         from collivind.web import server
 
         js = (server.STATIC / "app.js").read_text()
         missing = [f for f in UI_METADATA_FIELDS if f"m.{f}" not in js]
         assert not missing, f"app.js no longer reads: {missing}"
+
+    def test_the_card_actually_renders_the_disclosure(self):
+        """Without this, deleting the call from card() keeps the test above
+        green while the disclosure silently stops rendering."""
+        from collivind.web import server
+
+        js = (server.STATIC / "app.js").read_text()
+        card = js.split("function card(")[1].split("\nfunction ")[0]
+        assert "detailsMarkup(m)" in card, "card() no longer renders the metadata disclosure"
 
 
 class TestWriting:
