@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 from collivind.config import Neo4jConfig
@@ -33,3 +34,38 @@ def test_parse_properties_reads_json_and_legacy_repr():
     assert store._parse_properties("{'a': 1, 'b': True}") == {"a": 1, "b": True}
     assert store._parse_properties("garbage") == {}
     assert store._parse_properties(None) == {}
+
+
+def test_update_memory_stamps_updated_at():
+    """The SQLite store stamps this on every update. Without parity, an edit in
+    docker mode leaves `updated_at` frozen at creation — and the web UI now
+    shows that field, so the drift is visible."""
+    store, session = _make_store()
+    store.get_memory = lambda _id: None  # the return path is not under test
+
+    store.update_memory("m-1", summary="sharper")
+
+    sent = session.run.call_args.kwargs
+    assert "updated_at" in sent, "an edit left updated_at untouched"
+    assert "m.updated_at = $updated_at" in session.run.call_args.args[0]
+    # A datetime object would reach the driver and then crash fromisoformat on
+    # read-back, so the type matters as much as the presence.
+    assert isinstance(sent["updated_at"], str)
+    datetime.fromisoformat(sent["updated_at"])
+
+
+def test_update_memory_serializes_a_category_enum():
+    """The web UI and CLI can now reclassify a memory; the enum must reach
+    Cypher as its string value, not as a Python object."""
+    from collivind.models.memory import MemoryCategory
+
+    store, session = _make_store()
+    store.get_memory = lambda _id: None
+
+    store.update_memory("m-1", category=MemoryCategory.DECISION)
+
+    sent = session.run.call_args.kwargs["category"]
+    # MemoryCategory subclasses str, so == "decision" passes even for the raw
+    # enum object. Only the exact type tells the two apart.
+    assert type(sent) is str, f"the enum object reached the driver: {sent!r}"
+    assert sent == "decision"

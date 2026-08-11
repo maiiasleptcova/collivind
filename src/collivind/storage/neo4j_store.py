@@ -132,6 +132,9 @@ class Neo4jGraphStore(GraphStore):
         if not updates:
             return self.get_memory(id)
         updates = {k: self._normalize_update_value(k, v) for k, v in updates.items()}
+        # The SQLite store stamps this on every update; without the same here,
+        # an edit in docker mode leaves `updated_at` frozen at creation time.
+        updates["updated_at"] = datetime.now(timezone.utc).isoformat()
         set_clauses = ", ".join([f"m.{k} = ${k}" for k in updates.keys()])
         query = f"MATCH (m:Memory {{id: $id}}) SET {set_clauses} RETURN m"
 

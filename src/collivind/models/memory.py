@@ -5,6 +5,20 @@ from enum import Enum
 from typing import List, Optional
 
 
+def validate_confidence(value: float) -> float:
+    """Coerce and range-check a confidence, or raise ValueError.
+
+    bool is an int subclass, so True would otherwise pass float() as 1.0; NaN
+    and inf are rejected by the range test, which both compare False against.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"confidence must be a number between 0 and 1, got {value!r}")
+    value = float(value)
+    if not 0.0 <= value <= 1.0:
+        raise ValueError(f"confidence must be between 0 and 1, got {value!r}")
+    return value
+
+
 class MemoryCategory(str, Enum):
     FACT = "fact"
     DECISION = "decision"
@@ -75,3 +89,14 @@ class MemoryCreate:
     source: MemorySource = MemorySource.MANUAL
     confidence: float = 1.0
     tags: List[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        """Validate here rather than per-surface.
+
+        Every create path builds a MemoryCreate — CLI `add`, the MCP add and
+        batch tools, extraction, `import`, the web POST — so a check in any one
+        of them leaves the rest open. `collivind add --confidence nan` reached
+        the store and read back as NULL precisely because the guard sat in one
+        caller.
+        """
+        self.confidence = validate_confidence(self.confidence)
