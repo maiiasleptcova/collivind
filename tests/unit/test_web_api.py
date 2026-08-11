@@ -110,6 +110,33 @@ class TestWriting:
         assert status == 400
         api.manager.add_memory.assert_not_called()
 
+    @pytest.mark.parametrize("bad", [{"a": 1}, "db,infra", [1, 2], [None]])
+    def test_create_rejects_tags_that_are_not_a_list_of_strings(self, api, bad):
+        """create was the open half of the guard update already had: a dict here
+        is stored as a JSON object, comes back as a dict, and throws in the UI —
+        taking the whole list render down with it."""
+        status, _ = call(api, "POST", "/api/memories", body={"content": "x", "tags": bad})
+        assert status == 400, f"{bad!r} was accepted"
+        api.manager.add_memory.assert_not_called()
+
+    @pytest.mark.parametrize("body", [{"content": [1, 2]}, {"content": "x", "summary": {"a": 1}}])
+    def test_create_rejects_non_string_text(self, api, body):
+        """Untyped values reach the sqlite driver and surface as a 500 carrying
+        its internal message."""
+        assert call(api, "POST", "/api/memories", body=body)[0] == 400
+        api.manager.add_memory.assert_not_called()
+
+    def test_create_surfaces_an_engine_rejection_as_400(self, api):
+        api.manager.add_memory.side_effect = ValueError("confidence must be between 0 and 1")
+        status, payload = call(api, "POST", "/api/memories", body={"content": "x", "confidence": 99})
+        assert status == 400 and "confidence" in payload["error"]
+
+    def test_create_passes_the_clients_confidence_through(self, api):
+        """Hardcoding confidence=1.0 in create() left the suite green."""
+        api.manager.add_memory.return_value = _node()
+        assert call(api, "POST", "/api/memories", body={"content": "x", "confidence": 0.25})[0] == 201
+        assert api.manager.add_memory.call_args.args[0].confidence == 0.25
+
     def test_create_returns_201(self, api):
         api.manager.add_memory.return_value = _node()
         status, payload = call(api, "POST", "/api/memories", body={"content": "remember this"})
@@ -123,6 +150,59 @@ class TestWriting:
     def test_update_missing_memory_is_404(self, api):
         api.manager.update_memory.return_value = None
         assert call(api, "PATCH", "/api/memories/ghost", body={"summary": "s"})[0] == 404
+
+    def test_update_accepts_a_category(self, api):
+        """Fixing a wrong category is a named curation task (PRODUCT.md)."""
+        api.manager.update_memory.return_value = _node()
+        status, _ = call(api, "PATCH", "/api/memories/abc", body={"category": "decision"})
+        assert status == 200
+        assert api.manager.update_memory.call_args.kwargs["category"] is MemoryCategory.DECISION
+
+    def test_update_rejects_an_unknown_category(self, api):
+        status, payload = call(api, "PATCH", "/api/memories/abc", body={"category": "nonsense"})
+        assert status == 400 and "nonsense" in payload["error"]
+        api.manager.update_memory.assert_not_called()
+
+    @pytest.mark.parametrize("bad", [1.5, -0.1, "high", None])
+    def test_update_rejects_confidence_outside_zero_to_one(self, api, bad):
+        status, _ = call(api, "PATCH", "/api/memories/abc", body={"confidence": bad})
+        assert status == 400, f"{bad!r} was accepted"
+        api.manager.update_memory.assert_not_called()
+
+    def test_update_accepts_confidence_at_the_bounds(self, api):
+        api.manager.update_memory.return_value = _node()
+        for good in (0, 1, 0.5, "0.25"):
+            api.manager.update_memory.reset_mock()
+            assert call(api, "PATCH", "/api/memories/abc", body={"confidence": good})[0] == 200
+            assert api.manager.update_memory.call_args.kwargs["confidence"] == float(good)
+
+    @pytest.mark.parametrize("body", [{"content": [1, 2]}, {"summary": {"a": 1}}])
+    def test_update_rejects_non_string_text(self, api, body):
+        assert call(api, "PATCH", "/api/memories/abc", body=body)[0] == 400
+        api.manager.update_memory.assert_not_called()
+
+    def test_update_surfaces_an_engine_rejection_as_400(self, api):
+        """The engine validates too; drift between the two lists must not turn
+        a bad request into a 500."""
+        api.manager.update_memory.side_effect = ValueError("content cannot be blank")
+        status, payload = call(api, "PATCH", "/api/memories/abc", body={"summary": "s"})
+        assert status == 400 and "blank" in payload["error"]
+
+    @pytest.mark.parametrize("bad", [{"a": 1}, "db,infra", [1, 2], [None]])
+    def test_update_rejects_tags_that_are_not_a_list_of_strings(self, api, bad):
+        """The PATCH half of the guard had no test, so deleting it left the
+        suite green — on the side that had the guard first."""
+        status, _ = call(api, "PATCH", "/api/memories/abc", body={"tags": bad})
+        assert status == 400, f"{bad!r} was accepted"
+        api.manager.update_memory.assert_not_called()
+
+    def test_clearing_the_tags_is_an_edit_not_a_no_op(self, api):
+        """An empty list must reach the store; treating it as absent would make
+        removing the last tag impossible from the UI."""
+        api.manager.update_memory.return_value = _node()
+        status, _ = call(api, "PATCH", "/api/memories/abc", body={"tags": []})
+        assert status == 200
+        assert api.manager.update_memory.call_args.kwargs["tags"] == []
 
     def test_forget_missing_memory_is_404(self, api):
         api.manager.forget.return_value = False

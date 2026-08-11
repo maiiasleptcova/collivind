@@ -1,3 +1,4 @@
+import logging
 from typing import Any, Dict, List, Optional
 
 from collivind.config import CollivindConfig
@@ -14,8 +15,10 @@ from collivind.models import (
     SearchResult,
 )
 from collivind.models.entity import EntityType
-from collivind.models.memory import MemoryCategory, MemorySource
+from collivind.models.memory import MemoryCategory, MemorySource, validate_confidence
 from collivind.storage.interfaces import EmbeddingProvider, GraphStore, VectorStore
+
+logger = logging.getLogger(__name__)
 
 
 class MemoryManager:
@@ -121,32 +124,97 @@ class MemoryManager:
         summary: Optional[str] = None,
         tags: Optional[List[str]] = None,
         confidence: Optional[float] = None,
+        category: Optional[MemoryCategory] = None,
     ) -> Optional[MemoryNode]:
-        """Update fields on a memory; re-embeds when the text changes."""
+        """Update fields on a memory; re-embeds when the embedded text changes.
+
+        Raises ValueError on a bad confidence or on blanking content/summary.
+        The guards live here rather than in a caller because every surface
+        routes through this method: with the range check in the HTTP layer
+        only, `collivind update --confidence nan` reached the store and read
+        back as NULL, and `--content ""` wiped a memory in place with no
+        version chain to recover it from.
+        """
+        if confidence is not None:
+            confidence = validate_confidence(confidence)
+        # Only content. A blank summary is a state create() itself produces
+        # (`add "x" -s "   "` stores ""), and the web editor posts summary on
+        # every save — so guarding it here discarded the user's whole edit and
+        # left any blank-summary memory permanently unsavable from the UI.
+        if content is not None and not str(content).strip():
+            raise ValueError("content cannot be blank; forget the memory instead")
+
         existing = self.graph_store.get_memory(memory_id)
         if not existing:
             return None
 
         updates = {
             k: v
-            for k, v in {"content": content, "summary": summary, "tags": tags, "confidence": confidence}.items()
+            for k, v in {
+                "content": content,
+                "summary": summary,
+                "tags": tags,
+                "confidence": confidence,
+                "category": category,
+            }.items()
             if v is not None
         }
         if not updates:
             return existing
 
         updated = self.graph_store.update_memory(memory_id, **updates)
-        if updated and (content is not None or summary is not None):
-            recreate = MemoryCreate(
-                content=updated.content,
-                summary=updated.summary,
-                category=updated.category,
-                project_id=updated.project_id,
-                tags=updated.tags,
-            )
-            vector = self.embedding_provider.embed(build_enriched_text(recreate))
-            self.vector_store.upsert(updated.id, vector, updated.to_dict())
+
+        # Confidence is the only editable field outside the embedded text, so a
+        # confidence-only edit skips the graph lookup and the round-trip below.
+        #
+        # Deliberately keyed on "a field was supplied" rather than on the
+        # enriched text differing. The stored vector is not always what the
+        # current fields imply — add_memory embeds before the dedup tag-merge
+        # and before MENTIONS edges exist — so a text-equality gate would look
+        # at an unchanged memory and skip a re-embed that was in fact overdue.
+        # Re-embedding an unchanged memory costs one round-trip; skipping one
+        # that was needed leaves a permanently wrong index.
+        if updated and any(f is not None for f in (content, summary, category, tags)):
+            entity_names, ok = self._entity_names(memory_id)
+            if ok:
+                after = build_enriched_text(self._as_create(updated), entity_names=entity_names)
+                self.vector_store.upsert(updated.id, self.embedding_provider.embed(after), updated.to_dict())
         return updated
+
+    @staticmethod
+    def _as_create(node: MemoryNode) -> MemoryCreate:
+        """The subset of a stored memory that build_enriched_text reads."""
+        return MemoryCreate(
+            content=node.content,
+            summary=node.summary,
+            category=node.category,
+            project_id=node.project_id,
+            tags=node.tags,
+        )
+
+    def _entity_names(self, memory_id: str) -> tuple[Optional[List[str]], bool]:
+        """Entity names linked to a memory, and whether the lookup succeeded.
+
+        add_memory feeds entity names into the embedding; without them here a
+        re-embed would quietly strip that whole segment out of the vector. So
+        a failed lookup returns ok=False and the caller leaves the existing
+        vector alone: a vector that is stale on tags beats one silently
+        missing its entity signal, and the next edit retries.
+
+        ponytail: the SQLite store returns only the slugged id (no name), so a
+        name is reconstructed from it and loses hyphens and case —
+        "data-integrity" comes back as "data integrity". Neo4j returns the real
+        name. Give GraphStore an entity-by-id lookup if that drift ever matters.
+        """
+        try:
+            neighbors = self.graph_store.get_neighbors(
+                memory_id, [RelType.ABOUT.value, RelType.MENTIONS.value], direction="OUT"
+            )
+        except Exception:
+            logger.warning("entity lookup failed for %s; leaving its vector as-is", memory_id, exc_info=True)
+            return None, False
+        names = [n.get("name") or str(n.get("id") or "").replace("_", " ") for n in neighbors]
+        return ([n for n in names if n] or None), True
 
     def forget(self, memory_id: str) -> bool:
         """Permanently delete a memory from graph and vector stores."""
@@ -177,7 +245,12 @@ class MemoryManager:
                     category=MemoryCategory(rec.get("category", "fact")),
                     project_id=rec.get("project_id", "default"),
                     user_id=rec.get("user_id", "local"),
-                    confidence=rec.get("confidence", 1.0),
+                    # An export written before confidence was validated can
+                    # carry null (a NaN stored by an older build reads back as
+                    # NULL). MemoryCreate now rejects that, and there is no
+                    # per-record handling here — one bad row would abort the
+                    # loop after earlier rows had already been committed.
+                    confidence=rec.get("confidence") if rec.get("confidence") is not None else 1.0,
                     tags=rec.get("tags") or [],
                 )
             )

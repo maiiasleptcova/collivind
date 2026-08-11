@@ -124,9 +124,18 @@ their own environment, where a bare `python3` usually resolves to the system
 one and the server dies at import. `collivind init` does this for you and
 fills in the right interpreter automatically.
 
-Already have a `collivind` entry that points at the wrong interpreter?
-`claude mcp add` refuses to overwrite an existing name, so drop it first with
-`claude mcp remove -s user collivind` (`collivind init` now does this for you).
+`collivind init` registers this only when Claude Code has no collivind server
+already — including the one the plugin provides — since `claude mcp add`
+cannot update an entry in place and would leave you with two.
+
+Already have an entry pointing at the wrong interpreter? Replace it yourself;
+`claude mcp remove` finds it in whichever scope it lives in, which matters
+because a `local`-scope entry outranks a `user`-scope one:
+
+```bash
+claude mcp remove collivind
+collivind init
+```
 
 ### Hooks
 
@@ -186,6 +195,8 @@ collivind add "content" -c decision -t db,infra  # Store a memory
 collivind get <id>          # Show one memory
 collivind context "query"   # Formatted context block (pipe into prompts)
 collivind update <id> --content "..."  # Update a memory (re-embeds)
+collivind update <id> -c decision      # Reclassify (also re-embeds)
+collivind update <id> -t ""            # Clear every tag
 collivind invalidate <id> -r outdated  # Mark outdated, keep history
 collivind forget <id>       # Delete permanently (with confirmation)
 collivind export -p proj -o mem.jsonl  # Backup / portability

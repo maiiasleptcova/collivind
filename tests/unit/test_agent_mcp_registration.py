@@ -14,7 +14,22 @@ import sys
 
 import pytest
 
-from collivind.cli.commands.init import _register_mcp_server, register_copilot_mcp, register_opencode_mcp
+from collivind.cli.commands.init import (
+    _register_mcp_server,
+    claude_mcp_server_names,
+    register_copilot_mcp,
+    register_opencode_mcp,
+)
+
+# Verbatim `claude mcp list` output (Claude Code 2.1.227). Names may contain
+# colons; the health-check header and the multi-scope warning lines are not
+# server entries.
+CLAUDE_LIST = """Checking MCP server health…
+
+claude.ai Google Drive: https://drivemcp.googleapis.com/mcp/v1 - ✔ Connected
+github: npx -y @modelcontextprotocol/server-github - ✔ Connected
+plugin:collivind:collivind: /Users/x/.claude/plugins/cache/collivind/0.5.3/bin/collivind-run --mcp - ✔ Connected
+"""
 
 
 @pytest.fixture
@@ -65,37 +80,86 @@ class TestOpencode:
         assert p.read_text() == "{not json"
 
 
-class TestClaudeCode:
-    """Issue #33: registration with Claude Code was broken in two ways at once.
+class TestClaudeServerNames:
+    """Parsing `claude mcp list`, which is the only usable signal: `claude mcp
+    get <name>` exits 0 even for a server that does not exist."""
 
-    1. It passed a bare `python3`. Claude Code spawns the MCP server with its
-       own environment, so that resolves to whichever interpreter comes first
-       on PATH — normally the system one, which has no collivind installed.
-       The server then dies at import and every tool reports the store as
-       unavailable.
-    2. It passed `--global`, which the CLI does not accept (`claude mcp add`
-       takes `-s/--scope local|user|project`). Verified against Claude Code
-       2.1.227: the command exits non-zero with "unknown option '--global'"
-       and writes nothing, so registration had never actually happened — and
-       `capture_output` hid the reason behind a bare "registration failed".
+    def _listing(self, monkeypatch, stdout, returncode=0):
+        def fake_run(cmd, **kw):
+            return type("R", (), {"returncode": returncode, "stdout": stdout, "stderr": ""})()
+
+        monkeypatch.setattr("collivind.cli.commands.init.subprocess.run", fake_run)
+
+    def test_reads_names_that_contain_colons(self, monkeypatch):
+        """A plugin server is `plugin:collivind:collivind`. Splitting on the
+        first colon rather than the first colon-space truncates that to
+        `plugin`, and the duplicate check then never fires."""
+        self._listing(monkeypatch, CLAUDE_LIST)
+        assert claude_mcp_server_names() == {
+            "claude.ai Google Drive",
+            "github",
+            "plugin:collivind:collivind",
+        }
+
+    def test_ignores_the_multi_scope_warning_lines(self, monkeypatch):
+        self._listing(
+            monkeypatch,
+            'x: /a/python -m y - Failed\n├ Server "x" is defined in multiple scopes\n└ Keep the correct one\n',
+        )
+        assert claude_mcp_server_names() == {"x"}
+
+    def test_returns_none_when_the_cli_is_missing(self, monkeypatch):
+        def boom(cmd, **kw):
+            raise FileNotFoundError("claude")
+
+        monkeypatch.setattr("collivind.cli.commands.init.subprocess.run", boom)
+        assert claude_mcp_server_names() is None
+
+    def test_returns_none_on_a_failing_cli(self, monkeypatch):
+        """An empty set would read as 'nothing registered' and trigger an add."""
+        self._listing(monkeypatch, "", returncode=1)
+        assert claude_mcp_server_names() is None
+
+
+class TestClaudeCode:
+    """Issue #33 turned out to be three faults on one line.
+
+    1. A bare `python3`. Claude Code spawns the server with its own
+       environment, so that resolves to the system interpreter, which has no
+       collivind: the server dies at import and every tool reports the store
+       as unavailable.
+    2. `--global`, which the CLI does not accept (it takes `-s/--scope`).
+       Verified against Claude Code 2.1.227: "unknown option '--global'",
+       non-zero exit, nothing written — so this had never registered anything,
+       and `capture_output` hid the reason.
+    3. Registering unconditionally. The plugin already serves collivind as
+       `plugin:collivind:collivind`, and `add` cannot update an entry in
+       place, so a blind add duplicates the server for everyone following the
+       recommended install.
     """
 
     @pytest.fixture
-    def calls(self, home, monkeypatch):
-        """Every argv `_register_mcp_server` hands to subprocess."""
-        seen = []
+    def run_with(self, home, monkeypatch):
+        """Run registration against a given `claude mcp list` output, and
+        return every argv that reached subprocess."""
 
-        def fake_run(cmd, **kw):
-            seen.append(cmd)
-            return type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+        def go(listing):
+            seen = []
 
-        monkeypatch.setattr("collivind.cli.commands.init.subprocess.run", fake_run)
-        _register_mcp_server()
-        assert seen, "the claude CLI was never invoked"
-        return seen
+            def fake_run(cmd, **kw):
+                seen.append(cmd)
+                stdout = listing if cmd[:3] == ["claude", "mcp", "list"] else ""
+                return type("R", (), {"returncode": 0, "stdout": stdout, "stderr": ""})()
+
+            monkeypatch.setattr("collivind.cli.commands.init.subprocess.run", fake_run)
+            _register_mcp_server()
+            return seen
+
+        return go
 
     @pytest.fixture
-    def add_argv(self, calls):
+    def add_argv(self, run_with):
+        calls = run_with("github: npx -y whatever - Connected\n")
         add = [c for c in calls if c[:3] == ["claude", "mcp", "add"]]
         assert add, f"no `claude mcp add` among {calls}"
         return add[0]
@@ -105,35 +169,70 @@ class TestClaudeCode:
         assert sys.executable in add_argv
 
     def test_uses_a_scope_the_cli_accepts(self, add_argv):
-        """`--global` is rejected outright, so the whole command never ran."""
+        """`--global` is rejected outright, so the command never ran at all.
+
+        Asserted whole rather than by slice: truncating the argv is how the
+        wrong `-s` value slipped past a green suite once already.
+        """
         assert "--global" not in add_argv, "claude mcp add has no --global flag"
-        assert add_argv[3:5] == ["-s", "user"], f"expected user scope, got {add_argv}"
+        assert add_argv == [
+            "claude",
+            "mcp",
+            "add",
+            "-s",
+            "user",
+            "collivind",
+            "--",
+            sys.executable,
+            "-m",
+            "collivind.mcp.server",
+        ]
 
-    def test_still_runs_the_server_as_a_module(self, add_argv):
-        """The interpreter changes; what it is told to run must not."""
-        assert add_argv[-2:] == ["-m", "collivind.mcp.server"]
+    def test_leaves_the_plugins_server_alone(self, run_with):
+        """The recommended install already provides one. Adding on top gives
+        two identical servers and two copies of every tool in context."""
+        calls = run_with(CLAUDE_LIST)
+        assert not [c for c in calls if c[:3] == ["claude", "mcp", "add"]], f"duplicated the plugin server: {calls}"
 
-    def test_drops_a_stale_entry_before_adding(self, calls):
-        """`claude mcp add` refuses a name that already exists rather than
-        updating it, so without this the users who actually hit #33 — the ones
-        carrying a broken python3 entry — could never repair it by upgrading
-        and re-running init."""
-        kinds = [c[:3] for c in calls if c[0] == "claude"]
-        assert ["claude", "mcp", "remove"] in kinds, f"stale entry never dropped: {calls}"
-        assert kinds.index(["claude", "mcp", "remove"]) < kinds.index(["claude", "mcp", "add"])
+    def test_leaves_a_hand_made_entry_alone(self, run_with):
+        """`add` cannot update in place, and its collision check is per-scope,
+        so a same-named entry in another scope would silently keep winning."""
+        calls = run_with("collivind: /usr/bin/python3 -m collivind.mcp.server - Failed to connect\n")
+        assert not [c for c in calls if c[:3] == ["claude", "mcp", "add"]], f"clobbered an existing entry: {calls}"
+
+    def test_never_removes_anything(self, run_with):
+        """A blind remove can strip a working registration and, if the add
+        then fails, leave the user with none at all."""
+        for listing in (CLAUDE_LIST, "github: npx -y whatever - Connected\n"):
+            calls = run_with(listing)
+            assert not [c for c in calls if c[:3] == ["claude", "mcp", "remove"]], f"destructive: {calls}"
+
+    def test_names_what_is_already_registered(self, run_with, capsys):
+        """Silence here reads as 'did nothing'; the user needs to know which
+        server is answering."""
+        run_with(CLAUDE_LIST)
+        assert "plugin:collivind:collivind" in capsys.readouterr().out
+
+    def test_skips_cleanly_when_the_cli_is_absent(self, home, monkeypatch, capsys):
+        def boom(cmd, **kw):
+            raise FileNotFoundError("claude")
+
+        monkeypatch.setattr("collivind.cli.commands.init.subprocess.run", boom)
+        _register_mcp_server()
+        assert "claude CLI not found" in capsys.readouterr().out
 
     def test_surfaces_why_registration_failed(self, home, monkeypatch, capsys):
         """A swallowed stderr is how `--global` survived: init reported a bare
-        'registration failed' for every run and nobody could see the cause."""
+        'registration failed' every run and nobody could see the cause."""
 
         def fake_run(cmd, **kw):
             if cmd[:3] == ["claude", "mcp", "add"]:
-                raise subprocess.CalledProcessError(1, cmd, stderr="error: unknown option '--nonsense'")
+                raise subprocess.CalledProcessError(1, cmd, stderr="error: not allowed by enterprise policy")
             return type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
 
         monkeypatch.setattr("collivind.cli.commands.init.subprocess.run", fake_run)
         _register_mcp_server()
-        assert "unknown option '--nonsense'" in capsys.readouterr().out
+        assert "not allowed by enterprise policy" in capsys.readouterr().out
 
 
 class TestCopilot:

@@ -103,13 +103,19 @@ def context(query, project, limit, max_tokens):
 @click.option("--summary", "-s", default=None)
 @click.option("--tags", "-t", default=None, help="Comma-separated tags (replaces existing)")
 @click.option("--confidence", default=None, type=float)
+@click.option("--category", "-c", default=None, type=click.Choice(CATEGORIES), help="Reclassify the memory")
 @click.option("--json", "as_json", is_flag=True, help="JSON output")
-def update(memory_id, content, summary, tags, confidence, as_json):
-    """Update fields on a memory (re-embeds when text changes)."""
+def update(memory_id, content, summary, tags, confidence, category, as_json):
+    """Update fields on a memory (re-embeds when the embedded text changes)."""
     tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags is not None else None
     try:
         memory = _manager().update_memory(
-            memory_id, content=content, summary=summary, tags=tag_list, confidence=confidence
+            memory_id,
+            content=content,
+            summary=summary,
+            tags=tag_list,
+            confidence=confidence,
+            category=MemoryCategory(category) if category else None,
         )
     except Exception as e:
         _fail(f"Update failed: {e}")

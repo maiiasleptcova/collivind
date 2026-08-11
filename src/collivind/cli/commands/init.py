@@ -1,4 +1,5 @@
 import json
+import shlex
 import subprocess
 import sys
 import time
@@ -209,6 +210,43 @@ def _mcp_interpreter() -> str:
     return sys.executable or "python3"
 
 
+def claude_mcp_server_names() -> set[str] | None:
+    """Server names Claude Code already knows about, or None if it cannot be asked.
+
+    `claude mcp get <name>` exits 0 even for a server that does not exist, so
+    the listing is the only usable signal. Its lines read
+    `<name>: <command> - <status>`; a name may itself contain colons
+    (`plugin:collivind:collivind`) but never a colon followed by a space, so
+    the first `": "` is the boundary.
+    """
+    try:
+        proc = subprocess.run(["claude", "mcp", "list"], capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0:
+        return None
+
+    names = set()
+    for line in proc.stdout.splitlines():
+        if not line or line[0].isspace() or line[0] in "├└│":
+            continue  # continuation lines of a multi-scope warning
+        name, sep, _ = line.partition(": ")
+        if sep:
+            names.add(name)
+    return names
+
+
+def _collivind_already_registered(names: set[str]) -> str | None:
+    """The name Claude Code already serves collivind under, if any.
+
+    The plugin — the install this project recommends — registers its own
+    server as `plugin:collivind:collivind`, which does not collide with a
+    plain `collivind` add. Adding on top of it would give the user two
+    identical servers and two copies of every tool in context.
+    """
+    return next((n for n in sorted(names) if n == "collivind" or n.endswith(":collivind")), None)
+
+
 def register_codex_mcp() -> bool:
     """Add `[mcp_servers.collivind]` to ~/.codex/config.toml. Returns whether
     the file was changed.
@@ -307,23 +345,34 @@ def _register_mcp_server():
     ~/.codex exists."""
     click.echo("Registering MCP server with Claude Code... ", nl=False)
     interpreter = _mcp_interpreter()
+    # `-s user` so it applies everywhere. The old `--global` is not a flag the
+    # CLI has ever accepted: it exited with "unknown option" and wrote nothing,
+    # so this registration had never once succeeded — and capture_output hid
+    # the reason behind a bare "registration failed".
     add = ["claude", "mcp", "add", "-s", "user", "collivind", "--", interpreter, "-m", "collivind.mcp.server"]
+
+    known = claude_mcp_server_names()
+    if known is None:
+        click.secho("skipped (claude CLI not found)", fg="yellow")
+        return
+    # Registering on top of an existing server is never what the user wants:
+    # the plugin already provides one, `add` cannot update an entry in place,
+    # and its collision check is per-scope, so a same-named entry in another
+    # scope would silently keep winning. Leave whatever is there alone and say
+    # what it is.
+    if existing := _collivind_already_registered(known):
+        click.secho(f"already registered as {existing}", fg="green")
+        return
+
     try:
-        # `claude mcp add` refuses a name that already exists rather than
-        # updating it, so re-running init could never repair a stale entry —
-        # which is precisely the state the users who hit #33 are in. Drop it
-        # first; a missing name just fails harmlessly.
-        subprocess.run(["claude", "mcp", "remove", "-s", "user", "collivind"], capture_output=True, check=False)
         subprocess.run(add, capture_output=True, check=True, text=True)
         click.secho("done", fg="green")
-    except FileNotFoundError:
+    except OSError:
         click.secho("skipped (claude CLI not found)", fg="yellow")
     except subprocess.CalledProcessError as e:
-        # Reporting a bare "registration failed" is how `--global` survived
-        # unnoticed: the CLI had been rejecting the flag outright all along.
         detail = (e.stderr or "").strip().splitlines()
         click.secho(f"skipped ({detail[0] if detail else 'registration failed'})", fg="yellow")
-        click.echo(f"Run manually: {' '.join(add)}")
+        click.echo(f"Run manually: {shlex.join(add)}")
 
     if (Path.home() / ".codex").exists():
         click.echo("Registering MCP server with Codex... ", nl=False)
