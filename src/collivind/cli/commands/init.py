@@ -307,18 +307,23 @@ def _register_mcp_server():
     ~/.codex exists."""
     click.echo("Registering MCP server with Claude Code... ", nl=False)
     interpreter = _mcp_interpreter()
+    add = ["claude", "mcp", "add", "-s", "user", "collivind", "--", interpreter, "-m", "collivind.mcp.server"]
     try:
-        subprocess.run(
-            ["claude", "mcp", "add", "--global", "collivind", "--", interpreter, "-m", "collivind.mcp.server"],
-            capture_output=True,
-            check=True,
-        )
+        # `claude mcp add` refuses a name that already exists rather than
+        # updating it, so re-running init could never repair a stale entry —
+        # which is precisely the state the users who hit #33 are in. Drop it
+        # first; a missing name just fails harmlessly.
+        subprocess.run(["claude", "mcp", "remove", "-s", "user", "collivind"], capture_output=True, check=False)
+        subprocess.run(add, capture_output=True, check=True, text=True)
         click.secho("done", fg="green")
     except FileNotFoundError:
         click.secho("skipped (claude CLI not found)", fg="yellow")
-    except subprocess.CalledProcessError:
-        click.secho("skipped (registration failed)", fg="yellow")
-        click.echo(f"Run manually: claude mcp add --global collivind -- {interpreter} -m collivind.mcp.server")
+    except subprocess.CalledProcessError as e:
+        # Reporting a bare "registration failed" is how `--global` survived
+        # unnoticed: the CLI had been rejecting the flag outright all along.
+        detail = (e.stderr or "").strip().splitlines()
+        click.secho(f"skipped ({detail[0] if detail else 'registration failed'})", fg="yellow")
+        click.echo(f"Run manually: {' '.join(add)}")
 
     if (Path.home() / ".codex").exists():
         click.echo("Registering MCP server with Codex... ", nl=False)
