@@ -16,7 +16,7 @@ import pytest
 
 from collivind.cli.commands.init import (
     _register_mcp_server,
-    claude_mcp_server_names,
+    claude_mcp_servers,
     register_copilot_mcp,
     register_opencode_mcp,
 )
@@ -95,30 +95,36 @@ class TestClaudeServerNames:
         first colon rather than the first colon-space truncates that to
         `plugin`, and the duplicate check then never fires."""
         self._listing(monkeypatch, CLAUDE_LIST)
-        assert claude_mcp_server_names() == {
+        servers, problem = claude_mcp_servers()
+        assert problem == ""
+        assert set(servers) == {
             "claude.ai Google Drive",
             "github",
             "plugin:collivind:collivind",
         }
+        assert servers["plugin:collivind:collivind"] == "✔ Connected"
 
     def test_ignores_the_multi_scope_warning_lines(self, monkeypatch):
         self._listing(
             monkeypatch,
             'x: /a/python -m y - Failed\n├ Server "x" is defined in multiple scopes\n└ Keep the correct one\n',
         )
-        assert claude_mcp_server_names() == {"x"}
+        servers, _ = claude_mcp_servers()
+        assert set(servers) == {"x"}
 
     def test_returns_none_when_the_cli_is_missing(self, monkeypatch):
         def boom(cmd, **kw):
             raise FileNotFoundError("claude")
 
         monkeypatch.setattr("collivind.cli.commands.init.subprocess.run", boom)
-        assert claude_mcp_server_names() is None
+        servers, problem = claude_mcp_servers()
+        assert servers is None and "not found" in problem
 
     def test_returns_none_on_a_failing_cli(self, monkeypatch):
         """An empty set would read as 'nothing registered' and trigger an add."""
         self._listing(monkeypatch, "", returncode=1)
-        assert claude_mcp_server_names() is None
+        servers, problem = claude_mcp_servers()
+        assert servers is None and problem, "the reason must survive"
 
 
 class TestClaudeCode:
@@ -233,6 +239,67 @@ class TestClaudeCode:
         monkeypatch.setattr("collivind.cli.commands.init.subprocess.run", fake_run)
         _register_mcp_server()
         assert "not allowed by enterprise policy" in capsys.readouterr().out
+
+    def test_a_dead_entry_is_not_reported_as_healthy(self, run_with, capsys):
+        """The person who filed #33 has exactly this entry. Telling them it is
+        `already registered`, in green, from the very command they run to fix
+        it, is worse than the pre-PR behaviour, which at least tried to add.
+        """
+        run_with("collivind: /usr/bin/python3 -m collivind.mcp.server - ✘ Failed to connect\n")
+        out = capsys.readouterr().out
+        assert "not answering" in out, out
+        assert "claude mcp remove collivind" in out, "no repair path offered"
+
+    def test_a_live_entry_is_reported_as_healthy(self, run_with, capsys):
+        run_with(CLAUDE_LIST)
+        out = capsys.readouterr().out
+        assert "already registered as plugin:collivind:collivind" in out
+        assert "not answering" not in out
+
+    @pytest.mark.parametrize(
+        ("exc", "returncode", "expected"),
+        [
+            (FileNotFoundError("claude"), 0, "claude CLI not found"),
+            (subprocess.TimeoutExpired("claude", 60), 0, "timed out"),
+            (None, 1, "unable to read config"),
+        ],
+    )
+    def test_an_unreadable_listing_reports_its_own_cause(self, home, monkeypatch, capsys, exc, returncode, expected):
+        """All three used to print `claude CLI not found`, so a hung listing or
+        a broken config was diagnosed as a missing install — and registration
+        was skipped with no fallback command to recover with."""
+
+        def fake_run(cmd, **kw):
+            if exc:
+                raise exc
+            return type("R", (), {"returncode": returncode, "stdout": "", "stderr": "error: unable to read config"})()
+
+        monkeypatch.setattr("collivind.cli.commands.init.subprocess.run", fake_run)
+        _register_mcp_server()
+        out = capsys.readouterr().out
+        assert expected in out, out
+        assert "Run manually: claude mcp add -s user collivind" in out, "no recovery command offered"
+
+    def test_the_listing_is_decoded_as_text(self, home, monkeypatch):
+        """Nothing pinned this: without text=True the parser gets bytes and
+        `collivind init` dies with AttributeError on the first line.
+
+        Keyed to the `list` call specifically — asserting over every call
+        passes on the `add` call's own text=True while the listing stays
+        undecoded, which is exactly how this slipped through once.
+        """
+        seen = {}
+
+        def fake_run(cmd, **kw):
+            seen[tuple(cmd[:3])] = kw
+            return type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+        monkeypatch.setattr("collivind.cli.commands.init.subprocess.run", fake_run)
+        _register_mcp_server()
+        listing = seen.get(("claude", "mcp", "list"))
+        assert listing is not None, f"the listing was never requested: {list(seen)}"
+        assert listing.get("text") is True, "the listing must be decoded, not bytes"
+        assert listing.get("timeout"), "an unbounded listing hangs init on a slow server"
 
 
 class TestCopilot:
