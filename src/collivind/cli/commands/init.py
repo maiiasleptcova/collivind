@@ -306,9 +306,10 @@ def _register_mcp_server():
     """Register Collivind as an MCP server with Claude Code, plus Codex when
     ~/.codex exists."""
     click.echo("Registering MCP server with Claude Code... ", nl=False)
+    interpreter = _mcp_interpreter()
     try:
         subprocess.run(
-            ["claude", "mcp", "add", "--global", "collivind", "--", "python3", "-m", "collivind.mcp.server"],
+            ["claude", "mcp", "add", "--global", "collivind", "--", interpreter, "-m", "collivind.mcp.server"],
             capture_output=True,
             check=True,
         )
@@ -317,7 +318,7 @@ def _register_mcp_server():
         click.secho("skipped (claude CLI not found)", fg="yellow")
     except subprocess.CalledProcessError:
         click.secho("skipped (registration failed)", fg="yellow")
-        click.echo("Run manually: claude mcp add --global collivind -- python3 -m collivind.mcp.server")
+        click.echo(f"Run manually: claude mcp add --global collivind -- {interpreter} -m collivind.mcp.server")
 
     if (Path.home() / ".codex").exists():
         click.echo("Registering MCP server with Codex... ", nl=False)
