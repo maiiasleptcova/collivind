@@ -43,9 +43,17 @@ services:
       # neo4j:5.26-community; see #39.
     volumes:
       - neo4j-data:/data
-      # Declared explicitly: undeclared, Docker backs /logs with an anonymous
-      # volume that is unmanaged and unrotated, and a write failure inside it
-      # takes the database down permanently (#39).
+      # Declared explicitly so the logs land somewhere findable and prunable.
+      # Undeclared, Docker mints a fresh anonymous volume, and `docker-compose
+      # down` without -v leaves it dangling, so every down/up cycle leaks
+      # another one.
+      #
+      # This does NOT stop #39 recurring: a named volume sits on the same
+      # filesystem as an anonymous one, so a full disk makes it equally
+      # unwritable and Neo4j still treats the failed append as fatal. The fix
+      # for that is ignoreExceptions="true" on the appender in
+      # conf/user-logs.xml, which is not done here. Rotation is already
+      # handled by log4j2 inside the image (20 MB x 7) either way.
       - neo4j-logs:/logs
     deploy:
       resources:

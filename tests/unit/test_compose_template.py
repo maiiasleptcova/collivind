@@ -5,14 +5,21 @@ volume. When that volume could not be written, Neo4j treated the failed log
 append as fatal and exited; `restart: unless-stopped` then crash-looped it 67
 times over 46 hours, and collivind was unusable for the whole period.
 
-The named `/logs` volume is the fix for that specific failure.
+Neither change here fixes that. Being precise about what they do, because
+two rounds of review were spent on claims that outran the diff:
 
-The healthchecks are NOT. Measured: a crash-looping container shows
-`Restarting (1)` in `docker ps`, not `(unhealthy)`, and its probe runs zero
-times, because health probes only execute while the container is running.
-Healthchecks cover the other shape — a container that is up but not serving —
-which is worth having but is a different bug. Stating it plainly here so the
-next reader does not inherit the wrong claim.
+- The named `/logs` volume stops each down/up cycle leaking another dangling
+  anonymous volume and makes the logs findable. It does NOT prevent the crash
+  loop: named and anonymous volumes share a filesystem, so a full disk is
+  equally fatal. That needs ignoreExceptions="true" in conf/user-logs.xml.
+- The healthchecks do NOT surface a crash loop either. Measured: a
+  crash-looping container shows `Restarting (1)` in `docker ps`, not
+  `(unhealthy)`, and its probe runs zero times, because probes only execute
+  while the container is running. They cover up-but-not-serving — and note
+  the neo4j probe only proves the JVM is up and Jetty is bound, not that the
+  database can answer a query.
+
+What is unambiguously fixed is the invalid stdout setting, below.
 """
 
 import re
@@ -41,10 +48,10 @@ def test_the_template_still_parses(compose):
 
 @pytest.mark.parametrize("service", SERVICES)
 def test_every_service_declares_a_healthcheck(compose, service):
-    """Without one a crash loop shows as "Restarting", which no tooling and no
-    human notices until the product has already been unusable for days."""
+    """Covers the up-but-not-serving shape only — see the module docstring for
+    why these do NOT surface a crash loop."""
     hc = compose["services"][service].get("healthcheck")
-    assert hc, f"{service} has no healthcheck; a crash loop would be invisible"
+    assert hc, f"{service} declares no healthcheck"
     assert hc.get("test"), f"{service} healthcheck has no test command"
     assert hc.get("start_period"), f"{service} needs a start_period or boot counts as failure"
 
@@ -87,8 +94,12 @@ def test_dev_tcp_probes_invoke_bash_explicitly(compose, service):
 
 
 def test_neo4j_logs_are_not_an_anonymous_volume(compose):
-    """The root cause of #39. Undeclared, /logs gets an unmanaged anonymous
-    volume, and a write failure inside it is fatal to the database."""
+    """Undeclared, /logs gets a fresh anonymous volume that `docker-compose
+    down` leaves dangling, so each down/up cycle leaks another one and the
+    incident logs are unfindable.
+
+    Naming it does not stop #39 recurring — same filesystem, so a full disk is
+    equally fatal. See the module docstring."""
     neo4j = compose["services"]["neo4j"]
     targets = {v.split(":")[1] for v in neo4j["volumes"] if ":" in v}
     assert "/logs" in targets, "/logs is undeclared and would fall back to an anonymous volume"
