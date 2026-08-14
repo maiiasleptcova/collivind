@@ -3,12 +3,16 @@
 Issue #39: `/logs` was never declared, so Docker backed it with an anonymous
 volume. When that volume could not be written, Neo4j treated the failed log
 append as fatal and exited; `restart: unless-stopped` then crash-looped it 67
-times over 46 hours. Nothing surfaced it, because no service declared a
-healthcheck, so `docker ps` reported "Restarting" rather than "unhealthy" and
-the outage was invisible until someone ran a status check by hand.
+times over 46 hours, and collivind was unusable for the whole period.
 
-These assert the two properties that failure needed, so neither can be
-removed silently.
+The named `/logs` volume is the fix for that specific failure.
+
+The healthchecks are NOT. Measured: a crash-looping container shows
+`Restarting (1)` in `docker ps`, not `(unhealthy)`, and its probe runs zero
+times, because health probes only execute while the container is running.
+Healthchecks cover the other shape — a container that is up but not serving —
+which is worth having but is a different bug. Stating it plainly here so the
+next reader does not inherit the wrong claim.
 """
 
 import re
@@ -47,7 +51,7 @@ def test_every_service_declares_a_healthcheck(compose, service):
 
 @pytest.mark.parametrize("service", SERVICES)
 def test_healthchecks_use_a_tool_the_image_actually_has(compose, service):
-    """A probe binary that is absent exits 127 every time, which is a
+    """A probe binary that is absent exits non-zero every time, which is a
     permanently-unhealthy service rather than a working check. Verified
     against the real images: qdrant and python:3.11-slim carry neither curl
     nor wget; neo4j carries wget but not curl.
@@ -57,6 +61,29 @@ def test_healthchecks_use_a_tool_the_image_actually_has(compose, service):
     assert "curl" not in joined, f"{service}'s image has no curl"
     if service != "neo4j":
         assert "wget" not in joined, f"only the neo4j image carries wget, not {service}'s"
+
+
+@pytest.mark.parametrize("service", SERVICES)
+def test_dev_tcp_probes_invoke_bash_explicitly(compose, service):
+    """`/dev/tcp` is a bash builtin, not a file and not POSIX. `CMD-SHELL`
+    runs `/bin/sh -c`, and /bin/sh is dash in these images, so a /dev/tcp
+    probe under CMD-SHELL fails on every run:
+
+        sh: 1: cannot create /dev/tcp/127.0.0.1/6333: Directory nonexistent
+
+    That is worse than having no healthcheck — the service reports unhealthy
+    forever while serving fine, which teaches everyone to ignore the field.
+    Verified against qdrant/qdrant:v1.12.6, where /bin/sh -> dash and
+    /bin/bash exists separately.
+    """
+    test = compose["services"][service]["healthcheck"]["test"]
+    joined = " ".join(test) if isinstance(test, list) else test
+    if "/dev/tcp" not in joined:
+        pytest.skip(f"{service} does not use /dev/tcp")
+    assert isinstance(test, list) and test[0] == "CMD", (
+        f"{service} uses /dev/tcp under {test[0]}; CMD-SHELL is `sh -c` and dash has no /dev/tcp"
+    )
+    assert test[1] == "bash", f"{service} must invoke bash explicitly for /dev/tcp, got {test[1]!r}"
 
 
 def test_neo4j_logs_are_not_an_anonymous_volume(compose):

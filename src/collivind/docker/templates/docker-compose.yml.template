@@ -13,9 +13,13 @@ services:
           memory: 512M
     restart: unless-stopped
     # The image carries no curl or wget, so probe the port with bash's
-    # /dev/tcp builtin rather than an HTTP client that is not there.
+    # /dev/tcp builtin. bash must be invoked explicitly: CMD-SHELL means
+    # `/bin/sh -c`, /bin/sh is dash here, and /dev/tcp is a bash builtin
+    # dash does not implement — under CMD-SHELL every probe fails with
+    # "cannot create /dev/tcp/...: Directory nonexistent" and the service
+    # reports unhealthy forever while serving perfectly.
     healthcheck:
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/6333"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/6333"]
       interval: 15s
       timeout: 5s
       retries: 5
