@@ -49,7 +49,7 @@ def test_create_embedding_provider_embedded():
     config = CollivindConfig(mode="embedded")
     with patch("collivind.storage.embedding_local.LocalEmbeddingProvider") as mock_cls:
         create_embedding_provider(config)
-        mock_cls.assert_called_once_with(config.embeddings)
+        mock_cls.assert_called_once_with(config.embeddings, data_dir=config.data_dir)
 
 
 def test_create_embedding_provider_docker():
