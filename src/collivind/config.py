@@ -42,6 +42,10 @@ class EmbeddingsConfig:
     query_prefix: str = "Represent this sentence for searching relevant passages: "
     api_key: str = ""  # API key for OpenAI or compatible services
     base_url: str = ""  # custom base URL for OpenAI-compatible APIs
+    # provider "local" only: keep the model resident in a background process
+    # so short-lived hooks don't reload it every prompt (#16)
+    daemon: bool = True
+    daemon_idle_timeout: int = 1800  # seconds without requests before it exits
 
 
 @dataclass
@@ -94,6 +98,7 @@ DEFAULT_CONFIG_TEMPLATE = """\
 #   COLLIVIND_QDRANT_URL       — Qdrant connection URL
 #   COLLIVIND_EMBEDDINGS_BASE_URL — custom embeddings endpoint
 #   COLLIVIND_MODE             — override mode (embedded/docker/remote)
+#   COLLIVIND_EMBED_DAEMON=0   — keep the local model in-process (no daemon)
 
 [collivind]
 user_id = "local"
@@ -138,6 +143,8 @@ query_prefix = "Represent this sentence for searching relevant passages: "
 # service_url = "http://localhost:8090"  # for provider = "http"
 # api_key = ""                            # for provider = "openai"
 # base_url = ""                           # custom OpenAI-compatible endpoint
+# daemon = true               # provider "local": keep the model resident between hooks
+# daemon_idle_timeout = 1800  # seconds idle before the resident model exits
 
 [search]
 default_limit = 10

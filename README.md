@@ -46,6 +46,8 @@ This uses SQLite for both vectors and the graph, and loads the embedding model d
 
 > **Concurrent sessions:** embedded mode is multi-process safe — any number of agent sessions, CLI commands, and hooks can share the store, and a write from one session is immediately visible to the others.
 >
+> **Resident model:** hooks are short-lived processes, so the first embed starts a small background process that keeps the model loaded (`~/.collivind/embed.sock`, owner-only); later hooks embed in milliseconds instead of reloading the model every prompt. It exits after 30 idle minutes (`daemon_idle_timeout` under `[embeddings]`). Manage it with `collivind embed-daemon start|stop|status`; turn it off with `daemon = false` or `COLLIVIND_EMBED_DAEMON=0`.
+>
 > **Upgrading from ≤ 0.1.x:** older versions kept vectors in a single-process Qdrant store (`~/.collivind/qdrant_data`). It is migrated automatically on first use and left in place as a backup; restart any agent sessions still running the old version once after upgrading. If you later downgrade, memories written after the upgrade live only in the new store — carry them over with `collivind export` / `import`.
 
 ### npm (alternative)

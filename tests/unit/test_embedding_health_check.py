@@ -38,19 +38,25 @@ def test_health_check_never_loads_the_model_even_without_the_dependency():
 
 
 def test_health_check_reports_error_when_dependency_missing():
-    """The failure it exists to catch must still be caught."""
+    """The failure it exists to catch must still be caught — by a spec lookup,
+    not an import: importing sentence-transformers pulls in torch."""
     provider = LocalEmbeddingProvider(EmbeddingsConfig())
-    real_import = __import__
-
-    def missing(name, *args, **kwargs):
-        if name == "sentence_transformers":
-            raise ImportError("No module named 'sentence_transformers'")
-        return real_import(name, *args, **kwargs)
-
-    with patch("builtins.__import__", side_effect=missing):
+    with (
+        patch.dict(sys.modules),
+        patch("importlib.util.find_spec", return_value=None),
+    ):
+        sys.modules.pop("sentence_transformers", None)
         result = provider.health_check()
     assert result["status"] == "error"
     assert "sentence-transformers" in result["message"]
+
+
+def test_health_check_does_not_import_the_dependency():
+    provider = LocalEmbeddingProvider(EmbeddingsConfig())
+    with patch.dict(sys.modules):
+        sys.modules.pop("sentence_transformers", None)
+        provider.health_check()
+        assert "sentence_transformers" not in sys.modules
 
 
 def test_embed_still_loads_the_model_lazily():
