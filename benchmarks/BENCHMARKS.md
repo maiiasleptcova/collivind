@@ -86,8 +86,8 @@ first (vector cache load) out.
 
 | Backend (10k memories) | p50 before | p95 before | p50 after | p95 after |
 |---|---|---|---|---|
-| embedded (SQLite) | 117 ms | 148 ms | 40 ms | 48 ms |
-| docker (Neo4j 5.26 + Qdrant 1.12) | 1709 ms | 2071 ms | 59 ms | 69 ms |
+| embedded (SQLite) | 117 ms | 148 ms | 32 ms | 41 ms |
+| docker (Neo4j 5.26 + Qdrant 1.12) | 1804 ms | 2120 ms | 65 ms | 81 ms |
 
 "Before" is origin/main at v0.11.0; "after" is the batched graph expansion.
 Both were measured 2026-11-19 on an Apple-silicon laptop. The docker row uses
