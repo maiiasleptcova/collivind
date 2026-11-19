@@ -109,7 +109,7 @@ opencode and Copilot get the memory tools, so you can search and save
 explicitly, but nothing is injected into your prompts automatically — neither
 exposes a hook comparable to `UserPromptSubmit`.
 
-`collivind status` reports what is registered where.
+`collivind status` reports what is registered where — including Claude Code's MCP server, flagging a dead or duplicated entry — and, in docker mode, each container's state, so a crash-looping container is named rather than showing up only as "connection refused". It exits 1 when anything is broken, so it can run from cron or a script.
 
 ### Manual setup
 
@@ -189,7 +189,7 @@ Once connected, Claude Code gets these tools:
 
 ```bash
 collivind init              # Setup and start services
-collivind status            # Health check (backends + recall-hook registration)
+collivind status            # Health check: backends, containers, hooks, MCP registration (exit 1 if unhealthy)
 collivind search "query"    # Search memories from terminal
 collivind add "content" -c decision -t db,infra  # Store a memory
 collivind get <id>          # Show one memory

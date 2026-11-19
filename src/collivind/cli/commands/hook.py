@@ -288,8 +288,11 @@ def session_start(project, limit):
     """Emit a compact memory index as SessionStart context. Never fails."""
     try:
         memories = _load_manager().get_timeline(project, limit=limit)
-    except Exception:
-        return  # a broken backend must never break session start
+    except Exception as e:
+        # Never break session start, but never go silent either: an empty
+        # recall looked identical to a dead store for 46 hours in #39.
+        _emit_context("SessionStart", _unavailable_warning(e))
+        return
     if not memories:
         return
 
@@ -304,15 +307,20 @@ def session_start(project, limit):
         + "\nUse collivind_search or collivind_get_context to recall details.\n"
         "</collivind_memory_index>"
     )
-    click.echo(
-        json.dumps(
-            {
-                "hookSpecificOutput": {
-                    "hookEventName": "SessionStart",
-                    "additionalContext": text,
-                }
-            }
-        )
+    _emit_context("SessionStart", text)
+
+
+def _emit_context(event: str, text: str) -> None:
+    click.echo(json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": text}}))
+
+
+def _unavailable_warning(error: Exception) -> str:
+    first_line = (str(error).strip().splitlines() or [type(error).__name__])[0][:200]
+    return (
+        "<collivind_warning>\n"
+        f"Collivind memory is UNAVAILABLE, so no stored context was recalled: {first_line}\n"
+        "Tell the user, and suggest running `collivind status` to see which backend is down.\n"
+        "</collivind_warning>"
     )
 
 
@@ -329,26 +337,28 @@ def user_prompt(project, max_tokens):
     try:
         payload = json.load(sys.stdin)
         prompt = (payload.get("prompt") or "").strip()
-        if len(prompt) < 15:
-            return  # "yes", "ok", etc. — not worth an embedding round-trip
-
-        # ponytail: embedded mode loads the model per invocation; add a
-        # daemon/warm cache if per-prompt latency hurts (see ROADMAP.md)
-        context = _load_manager().get_context(prompt, project_id=project, limit=5, max_tokens=max_tokens)
-        if "No relevant context found" in context:
-            return
-        click.echo(
-            json.dumps(
-                {
-                    "hookSpecificOutput": {
-                        "hookEventName": "UserPromptSubmit",
-                        "additionalContext": f"<collivind_recall>\n{context}\n</collivind_recall>",
-                    }
-                }
-            )
-        )
     except Exception:
-        return  # recall must never break prompt submission
+        return  # malformed payload: nothing to recall against
+    if len(prompt) < 15:
+        return  # "yes", "ok", etc. — not worth an embedding round-trip
+
+    try:
+        manager = _load_manager()
+        # Nothing stored for this project means nothing to recall: skip the
+        # embedding, which in embedded mode is a cold model load that can blow
+        # the hook timeout on a first run (#16). A timeline read is plain SQL.
+        if not manager.get_timeline(project, limit=1):
+            return
+        # ponytail: embedded mode still loads the model per invocation on a
+        # populated store; a resident daemon is the real fix (ROADMAP.md, #16)
+        context = manager.get_context(prompt, project_id=project, limit=5, max_tokens=max_tokens)
+    except Exception as e:
+        # Recall must never break prompt submission — but say it failed.
+        _emit_context("UserPromptSubmit", _unavailable_warning(e))
+        return
+    if "No relevant context found" in context:
+        return
+    _emit_context("UserPromptSubmit", f"<collivind_recall>\n{context}\n</collivind_recall>")
 
 
 @hook.command()

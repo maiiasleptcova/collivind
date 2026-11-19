@@ -5,6 +5,7 @@ from collivind.config import CollivindConfig
 from collivind.engine.dedup import Deduplicator
 from collivind.engine.enrichment import build_enriched_text
 from collivind.engine.search_engine import SearchEngine
+from collivind.exceptions import BatchPartiallyStoredError
 from collivind.models import (
     EntityCreate,
     MemoryCreate,
@@ -324,39 +325,57 @@ class MemoryManager:
         return self.graph_store.get_version_chain(memory_id)
 
     def batch_add_memories(self, memories: List[Dict[str, Any]]) -> List[str]:
-        """Batch insert memories."""
-        ids = []
-        for mem_data in memories:
-            entities = []
-            for e in mem_data.get("entities", []):
-                entities.append(
-                    EntityCreate(name=e["name"], type=EntityType(e["type"]), properties=e.get("properties", {}))
-                )
+        """Batch insert memories, validating every item before writing any (#37)."""
+        prepared = []
+        for i, mem_data in enumerate(memories):
+            try:
+                prepared.append(self._prepare_batch_item(mem_data))
+            except (KeyError, ValueError, TypeError) as e:
+                detail = f"missing field {e}" if isinstance(e, KeyError) else str(e)
+                raise ValueError(f"memory[{i}]: {detail} — nothing in the batch was stored") from e
+        return self.store_batch(prepared)
 
-            relationships = []
-            for r in mem_data.get("relationships", []):
-                relationships.append(
-                    RelationshipCreate(
-                        source_id="",
-                        target_id=r["target_id"],
-                        type=RelType(r["type"]),
-                        properties=r.get("properties", {}),
-                    )
-                )
+    def store_batch(self, prepared: List[tuple]) -> List[str]:
+        """Store already-validated (MemoryCreate, entities, relationships) items.
 
-            mem_create = MemoryCreate(
-                content=mem_data["content"],
-                summary=mem_data["summary"],
-                category=MemoryCategory(mem_data["category"]),
-                project_id=mem_data.get("project_id", "default"),
-                session_id=mem_data.get("session_id"),
-                user_id=mem_data.get("user_id", "local"),
-                source=MemorySource(mem_data.get("source", "manual")),
-                confidence=mem_data.get("confidence", 1.0),
-                tags=mem_data.get("tags", []),
-            )
-
-            node = self.add_memory(mem_create, entities=entities, relationships=relationships)
+        A backend failure part-way raises BatchPartiallyStoredError carrying
+        the ids that did land, rather than discarding them.
+        """
+        ids: List[str] = []
+        for i, (mem_create, entities, relationships) in enumerate(prepared):
+            try:
+                node = self.add_memory(mem_create, entities=entities, relationships=relationships)
+            except Exception as e:
+                if not ids:
+                    raise
+                raise BatchPartiallyStoredError(ids, i, e) from e
             ids.append(node.id)
-
         return ids
+
+    @staticmethod
+    def _prepare_batch_item(mem_data: Dict[str, Any]) -> tuple:
+        entities = [
+            EntityCreate(name=e["name"], type=EntityType(e["type"]), properties=e.get("properties", {}))
+            for e in mem_data.get("entities", [])
+        ]
+        relationships = [
+            RelationshipCreate(
+                source_id="",
+                target_id=r["target_id"],
+                type=RelType(r["type"]),
+                properties=r.get("properties", {}),
+            )
+            for r in mem_data.get("relationships", [])
+        ]
+        mem_create = MemoryCreate(
+            content=mem_data["content"],
+            summary=mem_data["summary"],
+            category=MemoryCategory(mem_data["category"]),
+            project_id=mem_data.get("project_id", "default"),
+            session_id=mem_data.get("session_id"),
+            user_id=mem_data.get("user_id", "local"),
+            source=MemorySource(mem_data.get("source", "manual")),
+            confidence=mem_data.get("confidence", 1.0),
+            tags=mem_data.get("tags", []),
+        )
+        return mem_create, entities, relationships

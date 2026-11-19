@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional
 
 from collivind.engine.extractor import build_extraction_prompt, parse_extraction_response
 from collivind.engine.memory_manager import MemoryManager
+from collivind.exceptions import BatchPartiallyStoredError, CollivindError
 from collivind.models import (
     EntityCreate,
     EntityType,
@@ -11,6 +12,11 @@ from collivind.models import (
     RelationshipCreate,
     RelType,
     SearchQuery,
+)
+
+BACKEND_HINT = (
+    "A storage backend is failing. Run `collivind status` (or the collivind_status tool) "
+    "to see which one; in docker mode check `docker ps` for a restarting container."
 )
 
 
@@ -469,7 +475,7 @@ class CollivindTools:
                 if not results:
                     return json.dumps({"status": "no_memories", "count": 0})
                 project_id = args.get("project_id", "default")
-                ids = []
+                prepared = []
                 for r in results:
                     entities = [EntityCreate(name=e["name"], type=EntityType(e["type"])) for e in r.entities]
                     mem_create = MemoryCreate(
@@ -481,12 +487,27 @@ class CollivindTools:
                         tags=r.tags,
                         session_id=self.session_id,
                     )
-                    node = self.memory_manager.add_memory(mem_create, entities=entities)
-                    ids.append(node.id)
+                    prepared.append((mem_create, entities, []))
+                # Validate all, then store: same all-or-report contract as batch_add (#37).
+                ids = self.memory_manager.store_batch(prepared)
                 return json.dumps({"status": "success", "count": len(ids), "memory_ids": ids})
 
             else:
                 return json.dumps({"error": f"Unknown tool: {name}"})
 
+        except BatchPartiallyStoredError as e:
+            return json.dumps(
+                {
+                    "error": str(e),
+                    "partial": True,
+                    "stored_memory_ids": e.stored_ids,
+                    "failed_index": e.failed_index,
+                    "hint": BACKEND_HINT,
+                }
+            )
+        except CollivindError as e:
+            # Backend failures used to surface as a bare driver trace with no
+            # pointer at the cause (#39).
+            return json.dumps({"error": str(e), "hint": BACKEND_HINT})
         except Exception as e:
             return json.dumps({"error": str(e)})
