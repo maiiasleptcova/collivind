@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple, cast
 
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 def _retry(fn, max_retries=3, base_delay=0.5):
     """Retry with exponential backoff."""
-    last_error = None
+    last_error: Exception = RuntimeError("_retry needs max_retries >= 1")
     for attempt in range(max_retries):
         try:
             return fn()
@@ -89,7 +89,7 @@ class QdrantVectorStore(VectorStore):
         # Basic filter conversion (only handles simple exact matches for now)
         qdrant_filter = None
         if filters:
-            must_conditions = []
+            must_conditions: List[qmodels.Condition] = []
             for k, v in filters.items():
                 must_conditions.append(qmodels.FieldCondition(key=k, match=qmodels.MatchValue(value=v)))
             qdrant_filter = qmodels.Filter(must=must_conditions)
@@ -130,7 +130,8 @@ class QdrantVectorStore(VectorStore):
                 with_vectors=True,
             )
             for point in points:
-                yield str(point.id), list(point.vector), dict(point.payload or {})
+                # the collection has one unnamed dense vector (see initialize)
+                yield str(point.id), list(cast(List[float], point.vector)), dict(point.payload or {})
             if offset is None:
                 return
 

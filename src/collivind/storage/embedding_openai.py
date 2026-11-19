@@ -20,7 +20,7 @@ OPENAI_DIMENSIONS = {
 
 
 def _retry(fn, max_retries=3, base_delay=1.0):
-    last_error = None
+    last_error: Exception = RuntimeError("_retry needs max_retries >= 1")
     for attempt in range(max_retries):
         try:
             return fn()

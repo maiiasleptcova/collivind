@@ -3,7 +3,8 @@
 Every hook run is a fresh process, so without this each prompt pays the
 sentence-transformers import and model load (~9s warm, worse cold). The daemon
 loads the model once and answers JSON-line requests over a unix socket in the
-data dir (mode 0600). It exits after an idle timeout.
+data dir (mode 0600), or in a private per-user dir under /tmp
+when that path is over the AF_UNIX limit. It exits after an idle timeout.
 
 Protocol, one request per connection:
   -> {"op": "embed", "texts": [...], "version": "...", "model": "..."}
@@ -22,23 +23,29 @@ This module must stay cheap to import: hooks import it on every prompt.
 """
 
 import argparse
+import hashlib
 import json
 import logging
 import os
 import socket
 import socketserver
+import stat
 import subprocess
 import sys
 import time
 from pathlib import Path
+from types import ModuleType
 from typing import Any, Dict, List, Optional
 
 from collivind.version import __version__
 
+fcntl: Optional[ModuleType]
 try:
-    import fcntl
+    import fcntl as _fcntl
+
+    fcntl = _fcntl
 except ImportError:  # Windows: no flock, no unix sockets; embed in-process
-    fcntl = None  # type: ignore[assignment]
+    fcntl = None
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +54,10 @@ LOCK_NAME = "embed.lock"
 LOG_NAME = "embed-daemon.log"
 ENV_DISABLE = "COLLIVIND_EMBED_DAEMON"  # "0" disables the daemon
 MAX_SOCKET_PATH = 100  # AF_UNIX limit is 104 on macOS, 108 on Linux
+# Fixed, not tempfile.gettempdir(): $TMPDIR differs between a sandboxed agent
+# and the user's shell, and both must find the same daemon. The 0700 + owner
+# check below is what makes a shared sticky /tmp safe.
+SHORT_SOCKET_BASE = "/tmp"
 CONNECT_TIMEOUT = 1.0
 # A busy or hung daemon must leave the hook time to load in-process (6-9s)
 # within Claude Code's 30s hook timeout, so small requests give up fast.
@@ -61,13 +72,38 @@ def daemon_enabled(config_flag: bool) -> bool:
 
 
 def socket_path_for(data_dir: Path) -> Path:
-    return Path(data_dir).expanduser() / SOCKET_NAME
+    """The socket for a data dir: inside it, or, when that path is over the
+    AF_UNIX limit, in a private per-user dir under /tmp keyed by a hash of the
+    data dir. Lock and log live next to the socket either way. Callers resolve
+    it per use, so the directory check is redone before every connect/spawn.
+
+    If the short dir cannot be made safe (someone else owns it, or it is open
+    to others) the long path is returned and the daemon stays off for it.
+    """
+    data_dir = Path(data_dir).expanduser()
+    path = data_dir / SOCKET_NAME
+    if len(str(path)) <= MAX_SOCKET_PATH or not hasattr(os, "getuid"):
+        return path
+    key = hashlib.sha256(str(data_dir.resolve()).encode()).hexdigest()[:16]
+    short = Path(SHORT_SOCKET_BASE) / f"collivind-{os.getuid()}-{key}"
+    try:
+        short.mkdir(mode=0o700, exist_ok=True)
+        st = short.lstat()  # lstat: a planted symlink is not a directory we own
+    except OSError:
+        return path
+    if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid() or st.st_mode & 0o077:
+        logger.warning(f"refusing embed daemon dir {short}: not a private directory owned by this user")
+        return path
+    fallback = short / SOCKET_NAME
+    return fallback if len(str(fallback)) <= MAX_SOCKET_PATH else path
 
 
 # --- server ---------------------------------------------------------------
 
 
 class _Handler(socketserver.StreamRequestHandler):
+    server: "EmbedServer"
+
     def handle(self):
         self.request.settimeout(HANDLER_TIMEOUT)
         try:
@@ -82,7 +118,13 @@ class _Handler(socketserver.StreamRequestHandler):
             pass  # client gave up; it falls back in-process
 
 
-class EmbedServer(getattr(socketserver, "UnixStreamServer", socketserver.TCPServer)):
+if sys.platform == "win32":  # no unix sockets: the class only has to import (fcntl is None there)
+    _ServerBase = socketserver.TCPServer
+else:
+    _ServerBase = socketserver.UnixStreamServer
+
+
+class EmbedServer(_ServerBase):
     """Single-threaded on purpose: requests are serialized, so the model is
     never used from two threads."""
 
@@ -128,6 +170,8 @@ class EmbedServer(getattr(socketserver, "UnixStreamServer", socketserver.TCPServ
 
 def acquire_lock(lock_path: Path, wait: float = 0.0):
     """Exclusive flock on lock_path, or None if someone else holds it."""
+    if fcntl is None:  # callers gate on fcntl first; this only makes it explicit
+        raise OSError("flock is not available on this platform")
     fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
     deadline = time.monotonic() + wait
     while True:

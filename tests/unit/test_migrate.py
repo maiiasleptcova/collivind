@@ -266,3 +266,28 @@ def test_docker_service_model_is_not_taken_from_config():
     """Review r1 #5: MiniLM (384d) on embedded is not the space the bge docker service writes."""
     assert embedding_space("local", "all-MiniLM-L6-v2", 384) != embedding_space("http", "all-MiniLM-L6-v2", 384)
     assert embedding_space("local", "BAAI/bge-small-en-v1.5", 384) == embedding_space("http", "anything", 384)
+
+
+def test_rerun_does_not_bring_back_the_vector_of_a_memory_invalidated_on_the_target(populated, tmp_path):
+    """invalidate() deletes the vector; a re-run must not copy the source's live-looking one back."""
+    src, ids = populated
+    dst = _stores(tmp_path / "dst")
+    migrate(src, dst, reembed=False, dry_run=False)
+    MemoryManager(dst.vector, dst.graph, dst.embedder, CollivindConfig()).invalidate(ids["other"], "", "wrong")
+
+    report = migrate(src, dst, reembed=False, dry_run=False)
+
+    assert report.ok
+    assert set(_vectors(dst)) == {ids["new"]}
+
+
+def test_vector_left_behind_by_an_older_invalidate_is_not_migrated(populated, tmp_path):
+    """Before 0.11.1 invalidate() kept the vector; migrating must not carry it into the new store."""
+    src, ids = populated
+    src.graph.invalidate_memory(ids["other"], "", "wrong")  # graph only, as old builds did
+    dst = _stores(tmp_path / "dst")
+
+    report = migrate(src, dst, reembed=False, dry_run=False)
+
+    assert report.ok
+    assert set(_vectors(dst)) == {ids["new"]}

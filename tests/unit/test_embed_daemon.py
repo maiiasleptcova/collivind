@@ -255,3 +255,68 @@ def test_spawn_detaches_stdio(data_dir):
     kwargs = popen.call_args.kwargs
     assert kwargs["stdin"] == kwargs["stdout"] == embed_daemon.subprocess.DEVNULL
     assert kwargs["start_new_session"] is True
+
+
+@pytest.fixture
+def short_tmp(monkeypatch):
+    """A private, short system temp dir for the fallback socket."""
+    d = tempfile.mkdtemp(prefix="cvt", dir="/tmp")
+    monkeypatch.setattr(embed_daemon, "SHORT_SOCKET_BASE", d)
+    yield Path(d)
+    shutil.rmtree(d, ignore_errors=True)
+
+
+def test_overlong_data_dir_falls_back_to_a_short_private_socket(short_tmp):
+    long_dir = Path("/tmp/" + "x" * 120)
+    path = embed_daemon.socket_path_for(long_dir)
+
+    assert len(str(path)) <= embed_daemon.MAX_SOCKET_PATH
+    assert path.parent.parent == short_tmp and path.name == embed_daemon.SOCKET_NAME
+    st = path.parent.lstat()
+    assert stat.S_IMODE(st.st_mode) == 0o700 and st.st_uid == os.getuid()
+    assert embed_daemon.socket_path_for(long_dir) == path  # stable per data dir
+    assert embed_daemon.socket_path_for(Path("/tmp/" + "y" * 120)) != path
+
+
+def test_fallback_daemon_serves_and_status_names_its_socket(short_tmp, monkeypatch):
+    from click.testing import CliRunner
+
+    from collivind.cli.commands import embed_daemon as cli
+
+    long_dir = Path("/tmp/" + "z" * 120)
+    config = type("C", (), {"expanded_data_dir": long_dir})()
+    monkeypatch.setattr("collivind.config.load_config", lambda: config)
+    expected = embed_daemon.socket_path_for(long_dir)
+    assert str(expected) in CliRunner().invoke(cli.embed_daemon, ["status"]).output  # named even when down
+
+    path, thread, _ = start_daemon(long_dir)
+    try:
+        assert path == expected and stat.S_IMODE(path.stat().st_mode) == 0o600
+        out = CliRunner().invoke(cli.embed_daemon, ["status"]).output
+        assert "Running" in out and str(path) in out
+    finally:
+        stop(path, thread)
+
+
+def test_fallback_refuses_a_temp_dir_someone_else_could_write(short_tmp):
+    long_dir = Path("/tmp/" + "w" * 120)
+    path = embed_daemon.socket_path_for(long_dir)
+    path.parent.chmod(0o777)
+    try:
+        assert len(str(embed_daemon.socket_path_for(long_dir))) > embed_daemon.MAX_SOCKET_PATH
+    finally:
+        path.parent.chmod(0o700)
+
+
+def test_fallback_dir_is_rechecked_on_every_use(short_tmp, daemon_on):
+    """A long-lived process must not keep trusting a dir that was replaced or opened up since start."""
+    long_dir = Path("/tmp/" + "v" * 120)
+    provider = provider_for(long_dir)
+    private = embed_daemon.socket_path_for(long_dir).parent
+    private.chmod(0o777)
+    try:
+        with patch.object(embed_daemon, "embed_via_daemon") as via:
+            provider._from_daemon(["x"])
+        assert len(str(via.call_args.args[0])) > embed_daemon.MAX_SOCKET_PATH  # refused, not the open dir
+    finally:
+        private.chmod(0o700)

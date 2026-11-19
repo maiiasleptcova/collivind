@@ -74,25 +74,21 @@ by not being published. Decide and implement:
 
 ## Deferred smaller items
 
-- **mypy burn-down**: the CI type-check step is `continue-on-error` — 57
-  pre-existing errors in 14 files (mostly Optional handling). Fix per-module,
-  then make the step blocking.
-
 - **Local daemon / loopback HTTP bridge**: the latency half shipped (#16).
   Embedded mode now keeps the model resident in `collivind.storage.embed_daemon`
-  (unix socket `~/.collivind/embed.sock`, 0600, idle exit after 30 min),
+  (unix socket `~/.collivind/embed.sock`, 0600, idle exit after 30 min; a
+  data dir too long for AF_UNIX falls back to a private per-user dir under
+  /tmp),
   started on demand by the first embed; a warm hook embeds in ~0.01s instead
   of a 6-9s model load. Still open: it serves embeddings only — the store is
   still opened per process (cheap, ~0.1s), and the first prompt after the
   daemon exits pays one in-process load. A full loopback API is not needed
   unless that changes.
-- **Codex extraction hooks**: only SessionStart is registered for Codex —
-  verify Codex's Stop-hook `decision: block` semantics, then enable
-  extraction there too.
-- **PreCompact limitation**: Claude Code does not inject PreCompact stdout
-  into the conversation; the current prompt likely never reaches the model.
-  Options: switch to transcript-export capture (claude-mem approach) or
-  verify current behavior against latest hooks docs.
+- **Pre-compaction capture**: since 0.11 Claude Code and Codex both get
+  Stop (periodic checkpoints) and PreCompact + SessionStart(`compact`)
+  capture, but no host lets PreCompact speak to the model, so the save runs
+  *after* compaction from the summary. Anything the summary drops is lost;
+  transcript-export capture (claude-mem approach) would close that.
 - **Graph expansion is N+1** (`find_related_memories` per entity per seed):
   batch it before the 10k-memory performance target is tested.
 - **Perf/scale test suite**: the design spec's 500ms @ 10k memories target

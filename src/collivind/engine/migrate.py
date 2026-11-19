@@ -7,7 +7,7 @@ memory<->memory edges and version chains survive, and re-running is a no-op
 """
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from collivind.engine.enrichment import build_enriched_text
 from collivind.engine.memory_manager import MemoryManager
@@ -55,6 +55,10 @@ def _target_ids(dst: Stores) -> Dict[str, Set[str]]:
     }
 
 
+def _retired(memories: Iterable[MemoryNode]) -> Set[str]:
+    return {m.id for m in memories if m.valid_to or m.superseded_by}
+
+
 def migrate(src: Stores, dst: Stores, *, reembed: bool, dry_run: bool) -> MigrationReport:
     return restore(
         list(src.graph.iter_memories()),
@@ -93,7 +97,11 @@ def restore(
     have = _target_ids(dst)
     # A memory the target already holds without a vector was retired from
     # search there (superseded); restoring the stale vector would resurrect it.
+    # Likewise a memory invalidated on either side — on the target since the
+    # last run, or in a source written before 0.11.1, whose invalidate() kept
+    # the vector: the live index serves only current knowledge.
     retired = {vid for vid, _, _ in vectors if vid in have["memories"] and vid not in have["vectors"]}
+    retired |= _retired(memories) | _retired(dst.graph.iter_memories())
     if not dry_run:
         dst.graph.initialize()
         dst.vector.initialize()
@@ -112,6 +120,8 @@ def restore(
                 continue
             if reembed:
                 vector = dst.embedder.embed(texts.get(vid) or _payload_text(payload))
+            if vector is None:
+                raise ValueError(f"vector {vid} has no values; restore it with reembed")
             dst.vector.upsert(vid, vector, payload)
 
     source_ids = {
