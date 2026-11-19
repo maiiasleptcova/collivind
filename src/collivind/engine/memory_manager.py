@@ -5,7 +5,7 @@ from collivind.config import CollivindConfig
 from collivind.engine.dedup import Deduplicator
 from collivind.engine.enrichment import build_enriched_text
 from collivind.engine.search_engine import SearchEngine
-from collivind.exceptions import BatchPartiallyStoredError
+from collivind.exceptions import BatchPartiallyStoredError, GraphStoreUnavailableError
 from collivind.models import (
     EntityCreate,
     MemoryCreate,
@@ -20,6 +20,12 @@ from collivind.models.memory import MemoryCategory, MemorySource, validate_confi
 from collivind.storage.interfaces import EmbeddingProvider, GraphStore, VectorStore
 
 logger = logging.getLogger(__name__)
+
+DEGRADED_NOTE = (
+    "[DEGRADED] The graph store is unavailable: these are vector-only results with no "
+    "entity or relationship enrichment, and new memories cannot be saved until it is back. "
+    "Run `collivind status`."
+)
 
 
 class MemoryManager:
@@ -57,7 +63,7 @@ class MemoryManager:
         stale = None
         dup_match = self.deduplicator.find_duplicate_detailed(vector, memory_create.project_id)
         if dup_match:
-            existing = self.graph_store.get_memory(dup_match.memory_id)
+            existing = self._graph_write(self.graph_store.get_memory, dup_match.memory_id)
             if existing:
                 if dup_match.is_exact:
                     # identical content resubmitted — reject, keep existing as-is
@@ -67,7 +73,7 @@ class MemoryManager:
                 # instead of keeping old and new side by side
                 stale = existing
 
-        memory_node = self.graph_store.create_memory(memory_create)
+        memory_node = self._graph_write(self.graph_store.create_memory, memory_create)
 
         if stale:
             inherited = self._merge_tags(stale, memory_create.tags)
@@ -114,6 +120,18 @@ class MemoryManager:
             )
 
         return memory_node
+
+    @staticmethod
+    def _graph_write(fn, *args):
+        """Run a write-path graph call; a failure says the graph is down (#39).
+
+        Wraps only the calls before anything is written, so a dead store
+        stops the write cleanly with nothing half-stored in either index.
+        """
+        try:
+            return fn(*args)
+        except Exception as e:
+            raise GraphStoreUnavailableError(e) from e
 
     def invalidate(self, memory_id: str, superseded_by: str, reason: str) -> None:
         self.graph_store.invalidate_memory(memory_id, superseded_by, reason)
@@ -261,6 +279,10 @@ class MemoryManager:
         """Hybrid search via SearchEngine."""
         return self.search_engine.search(query)
 
+    def search_with_status(self, query: SearchQuery) -> tuple[List[SearchResult], bool]:
+        """Hybrid search plus whether it degraded to vector-only (graph down)."""
+        return self.search_engine.search_with_status(query)
+
     def get_context(
         self,
         query_str: str,
@@ -274,12 +296,12 @@ class MemoryManager:
         token estimate. Importance-aware budgeting lives in collivind-pro.
         """
         query = SearchQuery(query=query_str, project_id=project_id, limit=limit)
-        results = self.search(query)
+        results, degraded = self.search_with_status(query)
 
         if not results:
-            return "No relevant context found in Collivind."
+            return "No relevant context found in Collivind." + (f"\n{DEGRADED_NOTE}" if degraded else "")
 
-        header = "--- Collivind Context ---"
+        header = "--- Collivind Context ---" + (f"\n{DEGRADED_NOTE}" if degraded else "")
         context_parts = [header]
         budget = max_tokens - len(header) // 4 if max_tokens else None
         for res in results:

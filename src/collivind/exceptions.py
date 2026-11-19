@@ -33,6 +33,20 @@ class StorageUnavailableError(CollivindError):
     pass
 
 
+class GraphStoreUnavailableError(StorageUnavailableError):
+    """A write needed the graph store and it did not answer (#39).
+
+    Reads degrade to vector-only search; writes do not, because the graph is
+    the record of truth and a vector-only write would be invisible to it.
+    """
+
+    def __init__(self, cause: Exception):
+        super().__init__(
+            f"Graph store is unavailable, so the memory was NOT saved: {cause}. "
+            "Run `collivind status` to check it (docker mode: is the neo4j container restarting?)."
+        )
+
+
 class BatchPartiallyStoredError(CollivindError):
     """A batch failed in storage after some items were already written (#37).
 

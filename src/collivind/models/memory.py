@@ -77,6 +77,33 @@ class MemoryNode:
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
+    @classmethod
+    def from_dict(cls, data: dict) -> "MemoryNode":
+        """Inverse of to_dict. Raises KeyError/ValueError on a payload it cannot rebuild."""
+
+        def when(key):
+            return datetime.fromisoformat(data[key]) if data.get(key) else None
+
+        return cls(
+            id=data["id"],
+            content=data["content"],
+            summary=data.get("summary") or "",
+            category=MemoryCategory(data["category"]),
+            confidence=data.get("confidence", 1.0),
+            valid_from=when("valid_from"),
+            valid_to=when("valid_to"),
+            project_id=data.get("project_id", "default"),
+            session_id=data.get("session_id"),
+            user_id=data.get("user_id", "local"),
+            source=MemorySource(data.get("source") or "manual"),
+            superseded_by=data.get("superseded_by"),
+            tags=list(data.get("tags") or []),
+            version=data.get("version", 1),
+            previous_version_id=data.get("previous_version_id"),
+            created_at=when("created_at") or datetime.now(timezone.utc),
+            updated_at=when("updated_at") or datetime.now(timezone.utc),
+        )
+
 
 @dataclass
 class MemoryCreate:

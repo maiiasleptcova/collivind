@@ -1,7 +1,7 @@
 import click
 
 from collivind.config import load_config
-from collivind.engine.memory_manager import MemoryManager
+from collivind.engine.memory_manager import DEGRADED_NOTE, MemoryManager
 from collivind.models import SearchQuery
 from collivind.storage.factory import create_all_backends
 
@@ -16,7 +16,7 @@ def search(query, project, category, limit):
     config = load_config()
 
     try:
-        vector_store, graph_store, embedding_provider = create_all_backends(config)
+        vector_store, graph_store, embedding_provider = create_all_backends(config, allow_graph_down=True)
         manager = MemoryManager(vector_store, graph_store, embedding_provider, config)
 
         q = SearchQuery(
@@ -25,7 +25,9 @@ def search(query, project, category, limit):
             category=category,
             limit=limit,
         )
-        results = manager.search(q)
+        results, degraded = manager.search_with_status(q)
+        if degraded:
+            click.secho(DEGRADED_NOTE, fg="yellow", err=True)
 
         if not results:
             click.echo("No memories found.")

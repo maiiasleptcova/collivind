@@ -1,12 +1,15 @@
+import logging
 import math
 from datetime import datetime, timezone
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from collivind.config import SearchConfig
 from collivind.engine.enrichment import build_enriched_query
 from collivind.engine.graph_engine import GraphEngine
 from collivind.models import MemoryNode, SearchQuery, SearchResult
 from collivind.storage.interfaces import EmbeddingProvider, GraphStore, VectorStore
+
+logger = logging.getLogger(__name__)
 
 
 class SearchEngine:
@@ -48,6 +51,16 @@ class SearchEngine:
         return True
 
     def search(self, query: SearchQuery) -> List[SearchResult]:
+        return self.search_with_status(query)[0]
+
+    def search_with_status(self, query: SearchQuery) -> Tuple[List[SearchResult], bool]:
+        """Hybrid search, plus whether it had to degrade to vector-only.
+
+        The graph store is only enrichment for a search: every vector payload
+        is the full memory, so when the graph raises the hits are rebuilt from
+        the payloads instead of failing the whole read (#39). The vector store
+        and embedder stay load-bearing — their errors propagate.
+        """
         enriched = build_enriched_query(
             query.query,
             category=query.category,
@@ -64,8 +77,30 @@ class SearchEngine:
             vector=vector, limit=query.limit * 3, filters=vector_filters, threshold=self.config.similarity_threshold
         )
 
-        candidates: Dict[str, SearchResult] = {}
         now = datetime.now(timezone.utc)
+        try:
+            candidates = self._graph_candidates(raw_vector_results, query, now)
+            degraded = False
+        except Exception as e:
+            # The first failure is enough: get_memory retries for ~1.5s per
+            # call, so pressing on per-hit would turn one dead store into a
+            # 45-second search.
+            logger.warning("graph store failed during search, serving vector-only results: %s", e)
+            candidates = self._vector_only_candidates(raw_vector_results, query, now)
+            degraded = True
+
+        results = []
+        for res in candidates.values():
+            norm_graph_score = min(res.graph_score, 1.0)
+            base_score = (res.vector_score * self.config.vector_weight) + (norm_graph_score * self.config.graph_weight)
+            res.score = base_score * res.temporal_decay
+            results.append(res)
+
+        results.sort(key=lambda x: x.score, reverse=True)
+        return results[: query.limit], degraded
+
+    def _graph_candidates(self, raw_vector_results, query: SearchQuery, now: datetime) -> Dict[str, SearchResult]:
+        candidates: Dict[str, SearchResult] = {}
 
         for res in raw_vector_results:
             mem_id = res["id"]
@@ -124,15 +159,32 @@ class SearchEngine:
                         temporal_decay=decay,
                     )
 
-        results = []
-        for res in candidates.values():
-            norm_graph_score = min(res.graph_score, 1.0)
-            base_score = (res.vector_score * self.config.vector_weight) + (norm_graph_score * self.config.graph_weight)
-            res.score = base_score * res.temporal_decay
-            results.append(res)
+        return candidates
 
-        results.sort(key=lambda x: x.score, reverse=True)
-        return results[: query.limit]
+    def _vector_only_candidates(self, raw_vector_results, query: SearchQuery, now: datetime) -> Dict[str, SearchResult]:
+        """Hits rebuilt from vector payloads alone: no graph score, no entities.
+
+        ponytail: invalidate() updates only the graph, so a payload can still
+        claim valid_to=None for a memory invalidated by hand — it will surface
+        here until its vector is rewritten. Superseded-by-update memories are
+        already deleted from the vector index, so they cannot. Push validity
+        into the vector payload on invalidate if that ever matters.
+        """
+        candidates: Dict[str, SearchResult] = {}
+        for res in raw_vector_results:
+            try:
+                memory = MemoryNode.from_dict({"id": res["id"], **(res.get("payload") or {})})
+            except (KeyError, TypeError, ValueError):
+                continue
+            if memory.superseded_by or not self._passes_filters(memory, query, now):
+                continue
+            candidates[memory.id] = SearchResult(
+                memory=memory,
+                score=0.0,
+                vector_score=res["score"],
+                temporal_decay=self._compute_temporal_decay(memory, now),
+            )
+        return candidates
 
     def find_contradictions(self, memory: MemoryNode, threshold: float = 0.75) -> List[SearchResult]:
         vector = self.embedding_provider.embed(memory.content)

@@ -7,7 +7,7 @@ from collivind.models import MemoryCategory, MemoryNode, SearchResult
 
 def _make_tools_with_search_results(results):
     manager = MagicMock()
-    manager.search.return_value = results
+    manager.search_with_status.return_value = (results, False)
     return CollivindTools(manager, session_id="test-session")
 
 

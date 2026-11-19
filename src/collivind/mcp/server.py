@@ -38,7 +38,9 @@ class MCPServer:
         """
         try:
             self.config = load_config()
-            self.vector_store, self.graph_store, self.embedding_provider = create_all_backends(self.config)
+            self.vector_store, self.graph_store, self.embedding_provider = create_all_backends(
+                self.config, allow_graph_down=True
+            )
 
             self.manager = MemoryManager(
                 vector_store=self.vector_store,

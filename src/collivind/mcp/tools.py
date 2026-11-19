@@ -2,7 +2,7 @@ import json
 from typing import Any, Dict, List, Optional
 
 from collivind.engine.extractor import build_extraction_prompt, parse_extraction_response
-from collivind.engine.memory_manager import MemoryManager
+from collivind.engine.memory_manager import DEGRADED_NOTE, MemoryManager
 from collivind.exceptions import BatchPartiallyStoredError, CollivindError
 from collivind.models import (
     EntityCreate,
@@ -336,11 +336,13 @@ class CollivindTools:
                     date_from=date_from,
                     date_to=date_to,
                 )
-                results = self.memory_manager.search(q)
+                results, degraded = self.memory_manager.search_with_status(q)
                 limit = args.get("limit", 10)
                 page = results[offset : offset + limit]
+                response = {"degraded": degraded, **({"warning": DEGRADED_NOTE} if degraded else {})}
                 return json.dumps(
                     {
+                        **response,
                         "results": [
                             {
                                 "id": r.memory.id,
