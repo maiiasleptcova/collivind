@@ -151,20 +151,6 @@ def forget(memory_id):
     click.secho(f"Deleted {memory_id}", fg="green")
 
 
-@click.command(name="export")
-@click.option("--project", "-p", default="default")
-@click.option("--output", "-o", type=click.File("w"), default="-", help="File path or - for stdout")
-def export_cmd(project, output):
-    """Export a project's memories as JSONL."""
-    try:
-        records = _manager().export_memories(project_id=project)
-    except Exception as e:
-        _fail(f"Export failed: {e}")
-    for rec in records:
-        output.write(json.dumps(rec) + "\n")
-    click.secho(f"Exported {len(records)} memories from '{project}'", fg="green", err=True)
-
-
 @click.command()
 @click.argument("directory", type=click.Path(file_okay=False))
 @click.option("--project", "-p", default="default")
@@ -200,22 +186,3 @@ def sync(directory, project):
     except Exception as e:
         _fail(f"Sync failed: {e}")
     click.secho(f"Merged {imported} records from {path.name}; wrote {len(merged)} memories back", fg="green")
-
-
-@click.command(name="import")
-@click.argument("source", type=click.File("r"))
-def import_cmd(source):
-    """Import memories from a JSONL export (deduplication applies)."""
-    records = []
-    for n, line in enumerate(source, 1):
-        if not line.strip():
-            continue
-        try:
-            records.append(json.loads(line))
-        except json.JSONDecodeError as e:
-            _fail(f"Line {n} is not valid JSON: {e}")
-    try:
-        count = _manager().import_memories(records)
-    except Exception as e:
-        _fail(f"Import failed: {e}")
-    click.secho(f"Processed {count} memories (near-duplicates merged, exact ones skipped)", fg="green")
