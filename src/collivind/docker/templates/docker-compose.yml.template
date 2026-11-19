@@ -48,12 +48,18 @@ services:
       # down` without -v leaves it dangling, so every down/up cycle leaks
       # another one.
       #
-      # This does NOT stop #39 recurring: a named volume sits on the same
-      # filesystem as an anonymous one, so a full disk makes it equally
-      # unwritable and Neo4j still treats the failed append as fatal. The fix
-      # for that is ignoreExceptions="true" on the appender in
-      # conf/user-logs.xml, which is not done here. Rotation is already
-      # handled by log4j2 inside the image (20 MB x 7) either way.
+      # A full /logs is NOT fatal, and no log4j change is needed for it.
+      # Measured on neo4j:5.26-community with the stock conf/*-logs.xml:
+      # booted with /logs as a 100%-full tmpfs, and filled to 100% after
+      # boot then loaded with 100k node writes, Neo4j logged "Unable to
+      # write to stream /logs/..." and kept answering bolt and HTTP. log4j2
+      # appenders already default to ignoreExceptions="true". That error in
+      # #39 was a symptom of the full disk, not what stopped the database.
+      # The likelier killer is the same full disk under /data (store and
+      # transaction logs): Neo4j refused to start on a full /data in the
+      # same test (runtime exhaustion of /data not tested). A read-only /logs also
+      # exits, but in the image entrypoint's chown, before the JVM starts.
+      # Rotation is handled by log4j2 inside the image (20 MB x 7).
       - neo4j-logs:/logs
     deploy:
       resources:

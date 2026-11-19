@@ -1,3 +1,4 @@
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -48,3 +49,11 @@ class RelationshipCreate:
     properties: Dict[str, Any] = field(default_factory=dict)
     confidence: float = 1.0
     source: str = "manual"
+
+
+_EDGE_NAMESPACE = uuid.UUID("6f1c2a52-6a3e-4d1b-9a57-7c0f3b1e2d47")
+
+
+def stable_edge_id(source_id: str, rel_type: str, target_id: str) -> str:
+    """Deterministic id for an edge stored without one (Neo4j MERGEs on the triple)."""
+    return str(uuid.uuid5(_EDGE_NAMESPACE, f"{source_id}|{rel_type}|{target_id}"))

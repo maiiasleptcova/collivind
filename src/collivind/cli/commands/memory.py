@@ -18,7 +18,7 @@ CATEGORIES = [c.value for c in MemoryCategory]
 
 def _manager() -> MemoryManager:
     config = load_config()
-    vector_store, graph_store, embedding_provider = create_all_backends(config)
+    vector_store, graph_store, embedding_provider = create_all_backends(config, allow_graph_down=True)
     return MemoryManager(vector_store, graph_store, embedding_provider, config)
 
 

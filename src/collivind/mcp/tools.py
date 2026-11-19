@@ -1,8 +1,9 @@
 import json
 from typing import Any, Dict, List, Optional
 
+from collivind import capture
 from collivind.engine.extractor import build_extraction_prompt, parse_extraction_response
-from collivind.engine.memory_manager import MemoryManager
+from collivind.engine.memory_manager import DEGRADED_NOTE, MemoryManager
 from collivind.exceptions import BatchPartiallyStoredError, CollivindError
 from collivind.models import (
     EntityCreate,
@@ -38,6 +39,40 @@ class CollivindTools:
             except Exception as e:
                 status[name] = {"status": "error", "message": str(e)}
         return status
+
+    def _batch_add(self, args: Dict[str, Any]) -> str:
+        """Store a batch and record the outcome against its checkpoint (#35).
+
+        The hook that asked for the save never sees this call, so the
+        checkpoint history is the only place "a save actually landed" exists.
+        """
+        checkpoint_id = args.get("checkpoint_id") or None
+        memories = []
+        for mem in args.get("memories") or []:
+            normalized = dict(mem)
+            if self.session_id:
+                normalized.setdefault("session_id", self.session_id)
+            memories.append(normalized)
+        try:
+            ids = self.memory_manager.batch_add_memories(memories) if memories else []
+        except BatchPartiallyStoredError as e:
+            self._record(checkpoint_id, False, e.stored_ids, error=str(e), failed_index=e.failed_index)
+            raise
+        except Exception as e:
+            self._record(checkpoint_id, False, [], error=str(e))
+            raise
+        self._record(checkpoint_id, True, ids)
+        result: Dict[str, Any] = {"status": "success", "memory_ids": ids}
+        if checkpoint_id:
+            result["checkpoint_id"] = checkpoint_id
+            result["checkpoint"] = "confirmed" if ids else "checked, nothing new"
+        return json.dumps(result)
+
+    def _record(self, checkpoint_id, ok, ids, **kw) -> None:
+        try:
+            capture.record(checkpoint_id, ok, ids, agent_session=self.session_id or "", **kw)
+        except OSError:
+            pass  # history is diagnostics; never fail a write because of it
 
     @staticmethod
     def get_tool_list() -> List[Dict[str, Any]]:
@@ -180,7 +215,7 @@ class CollivindTools:
             },
             {
                 "name": "collivind_batch_add",
-                "description": "Add multiple memories in batch.",
+                "description": "Add multiple memories in batch (all-or-nothing validation).",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -228,7 +263,15 @@ class CollivindTools:
                                 },
                                 "required": ["content", "summary", "category"],
                             },
-                        }
+                        },
+                        "checkpoint_id": {
+                            "type": "string",
+                            "description": (
+                                "Pass the checkpoint id from a <collivind_extraction> request so the save "
+                                "is recorded as that checkpoint's confirmation. An empty memories list with "
+                                "a checkpoint_id records 'checked, nothing new'."
+                            ),
+                        },
                     },
                     "required": ["memories"],
                 },
@@ -336,11 +379,13 @@ class CollivindTools:
                     date_from=date_from,
                     date_to=date_to,
                 )
-                results = self.memory_manager.search(q)
+                results, degraded = self.memory_manager.search_with_status(q)
                 limit = args.get("limit", 10)
                 page = results[offset : offset + limit]
+                response = {"degraded": degraded, **({"warning": DEGRADED_NOTE} if degraded else {})}
                 return json.dumps(
                     {
+                        **response,
                         "results": [
                             {
                                 "id": r.memory.id,
@@ -375,9 +420,8 @@ class CollivindTools:
                 return json.dumps({"status": "success", "message": "Memory invalidated"})
 
             elif name == "collivind_forget":
-                mem_id = args["memory_id"]
-                self.memory_manager.graph_store.delete_memory(mem_id)
-                self.memory_manager.vector_store.delete(mem_id)
+                if not self.memory_manager.forget(args["memory_id"]):
+                    return json.dumps({"error": "Memory not found"})
                 return json.dumps({"status": "success", "message": "Memory forgotten"})
 
             elif name == "collivind_get_entity":
@@ -427,14 +471,7 @@ class CollivindTools:
                 )
 
             elif name == "collivind_batch_add":
-                memories = []
-                for mem in args["memories"]:
-                    normalized = dict(mem)
-                    if self.session_id:
-                        normalized.setdefault("session_id", self.session_id)
-                    memories.append(normalized)
-                ids = self.memory_manager.batch_add_memories(memories)
-                return json.dumps({"status": "success", "memory_ids": ids})
+                return self._batch_add(args)
 
             elif name == "collivind_get_version_chain":
                 chain = self.memory_manager.get_version_chain(args["memory_id"])
@@ -509,5 +546,10 @@ class CollivindTools:
             # Backend failures used to surface as a bare driver trace with no
             # pointer at the cause (#39).
             return json.dumps({"error": str(e), "hint": BACKEND_HINT})
+        except (KeyError, TypeError, ValueError) as e:
+            return json.dumps({"error": str(e)})  # bad arguments, not a backend
         except Exception as e:
-            return json.dumps({"error": str(e)})
+            # Store drivers raise their own types (a dead Neo4j surfaces as
+            # neo4j.exceptions.ServiceUnavailable from most graph reads), so
+            # anything that is not an argument error gets the pointer too.
+            return json.dumps({"error": str(e), "hint": BACKEND_HINT})

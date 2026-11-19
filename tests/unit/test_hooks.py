@@ -8,39 +8,37 @@ COLLIVIND = collivind_bin()
 
 
 def test_hook_stop(tmp_path, monkeypatch):
-    # Mock home directory to tmp_path
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
     runner = CliRunner()
 
-    # Run 14 times
     for _ in range(14):
         result = runner.invoke(hook, ["stop", "--threshold", "15"])
         assert result.exit_code == 0
         assert "collivind_extraction" not in result.output
 
-    # 15th time should trigger with a Stop-hook block decision (plain stdout
-    # is discarded by Claude Code)
+    # 15th response: a Stop-hook block decision (plain stdout is discarded
+    # by Claude Code and invalid for Codex) carrying a checkpoint id.
     result = runner.invoke(hook, ["stop", "--threshold", "15"])
     assert result.exit_code == 0
     payload = json.loads(result.output)
     assert payload["decision"] == "block"
-    assert "collivind_extraction" in payload["reason"]
+    assert "collivind_extraction" in payload["reason"] and "checkpoint_id" in payload["reason"]
 
-    # State should reset
-    state_file = get_state_file()
-    assert state_file.exists()
-    with open(state_file) as f:
-        state = json.load(f)
-    assert state["message_count"] == 0
+    state = json.loads(get_state_file().read_text())
+    assert state["sessions"]["default"]["count"] == 0
+    assert state["sessions"]["default"]["pending"]["trigger"] == "interval"
 
 
-def test_hook_precompact(tmp_path, monkeypatch):
+def test_hook_precompact_marks_a_checkpoint_without_claiming_a_save(tmp_path, monkeypatch):
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
-    runner = CliRunner()
-
-    result = runner.invoke(hook, ["precompact"])
+    result = CliRunner().invoke(
+        hook, ["precompact", "--agent", "codex"], input=json.dumps({"session_id": "s1", "trigger": "auto"})
+    )
     assert result.exit_code == 0
-    assert "collivind_urgent_extraction" in result.output
+    assert result.output.strip() == ""  # PreCompact cannot reach the model
+    state = json.loads(get_state_file().read_text())
+    assert state["sessions"]["s1"]["pending"]["trigger"] == "compaction:auto"
+    assert "codex:PreCompact" in state["heartbeats"]
 
 
 def _read_settings(tmp_path):
@@ -55,19 +53,20 @@ def test_install_hooks_creates_settings(tmp_path, monkeypatch):
 
     settings = _read_settings(tmp_path)
     stop_cmds = [h["command"] for e in settings["hooks"]["Stop"] for h in e["hooks"]]
-    assert stop_cmds == [f"{COLLIVIND} hook stop --threshold 10"]
+    # No tunables in the command: Codex re-asks for review whenever it changes.
+    assert stop_cmds == [f"{COLLIVIND} hook stop"]
     pc_cmds = [h["command"] for e in settings["hooks"]["PreCompact"] for h in e["hooks"]]
     assert pc_cmds == [f"{COLLIVIND} hook precompact"]
 
 
-def test_install_hooks_idempotent_and_updates_threshold(tmp_path, monkeypatch):
+def test_install_hooks_idempotent(tmp_path, monkeypatch):
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
     install_hooks(save_interval=15)
     install_hooks(save_interval=20)
 
     settings = _read_settings(tmp_path)
     stop_cmds = [h["command"] for e in settings["hooks"]["Stop"] for h in e["hooks"]]
-    assert stop_cmds == [f"{COLLIVIND} hook stop --threshold 20"]
+    assert stop_cmds == [f"{COLLIVIND} hook stop"]
 
 
 def test_install_hooks_preserves_existing_settings(tmp_path, monkeypatch):
@@ -164,16 +163,27 @@ def test_install_hooks_registers_session_start(tmp_path, monkeypatch):
     assert cmds == [f"{COLLIVIND} hook session-start"]
 
 
-def test_install_hooks_codex_session_start_only(tmp_path, monkeypatch):
+def test_install_hooks_codex_gets_capture_and_recall(tmp_path, monkeypatch):
+    """#35: Codex was recall-only, so nothing was ever saved automatically."""
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
     events = install_hooks(tool="codex")
-    assert set(events) == {"SessionStart", "UserPromptSubmit"}
+    assert set(events) == {"Stop", "PreCompact", "SessionStart", "UserPromptSubmit"}
 
-    with open(tmp_path / ".codex" / "hooks.json") as f:
-        settings = json.load(f)
-    assert set(settings["hooks"].keys()) == {"SessionStart", "UserPromptSubmit"}
-    cmds = [h["command"] for e in settings["hooks"]["SessionStart"] for h in e["hooks"]]
-    assert cmds == [f"{COLLIVIND} hook session-start"]
+    settings = json.loads((tmp_path / ".codex" / "hooks.json").read_text())
+    cmds = {ev: [h["command"] for e in entries for h in e["hooks"]] for ev, entries in settings["hooks"].items()}
+    assert cmds["SessionStart"] == [f"{COLLIVIND} hook session-start --agent codex"]
+    assert cmds["Stop"] == [f"{COLLIVIND} hook stop --agent codex"]
+
+
+def test_install_replaces_a_hand_added_stop_adapter(tmp_path, monkeypatch):
+    """A local `collivind hook stop --threshold 15` adapter must be replaced, not doubled."""
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    _write_hooks(tmp_path / ".codex" / "hooks.json", "collivind hook stop --threshold 15", event="Stop")
+    install_hooks(tool="codex")
+    settings = json.loads((tmp_path / ".codex" / "hooks.json").read_text())
+    assert [h["command"] for e in settings["hooks"]["Stop"] for h in e["hooks"]] == [
+        f"{COLLIVIND} hook stop --agent codex"
+    ]
 
 
 def test_install_all_hooks_detects_codex(tmp_path, monkeypatch):
@@ -186,7 +196,7 @@ def test_install_all_hooks_detects_codex(tmp_path, monkeypatch):
 
     (tmp_path / ".codex").mkdir()
     results = install_all_hooks(HooksConfig())
-    assert set(results["codex"]) == {"SessionStart", "UserPromptSubmit"}
+    assert set(results["codex"]) == {"Stop", "PreCompact", "SessionStart", "UserPromptSubmit"}
     assert set(results["claude"]) == {"Stop", "PreCompact", "SessionStart", "UserPromptSubmit"}
 
 
@@ -283,7 +293,7 @@ def test_install_replaces_stale_bare_command(tmp_path, monkeypatch):
 
     settings = json.loads(hooks_path.read_text())
     cmds = [h["command"] for e in settings["hooks"]["UserPromptSubmit"] for h in e["hooks"]]
-    assert cmds == [f"{fake_bin} hook user-prompt"]
+    assert cmds == [f"{fake_bin} hook user-prompt --agent codex"]
 
 
 def _write_hooks(path, command, event="UserPromptSubmit"):
@@ -412,3 +422,17 @@ def test_status_does_not_advise_install_when_plugin_provides_hooks(tmp_path, mon
     claude_line = next(line for line in out.splitlines() if "claude:" in line)
     assert "via plugin" in claude_line
     assert "hook install" not in claude_line, "advising install here creates duplicate hooks"
+
+
+def test_user_prompt_recalls_vector_only_when_graph_is_down(monkeypatch):
+    """#39: a dead graph must not stop recall when the vector store can answer."""
+    from unittest.mock import MagicMock
+
+    manager = MagicMock()
+    manager.get_timeline.side_effect = RuntimeError("Couldn't connect to localhost:7687")
+    manager.get_context.return_value = "[DEGRADED] graph store unavailable\\n[FACT] Postgres chosen"
+    monkeypatch.setattr("collivind.cli.commands.hook._load_manager", lambda: manager)
+
+    result = CliRunner().invoke(hook, ["user-prompt"], input=_prompt_payload("which database did we choose"))
+    context = json.loads(result.output)["hookSpecificOutput"]["additionalContext"]
+    assert "Postgres chosen" in context and "DEGRADED" in context

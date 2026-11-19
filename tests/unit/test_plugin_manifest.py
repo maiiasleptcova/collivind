@@ -128,3 +128,17 @@ class TestMcpInterpreterResolution:
         r = subprocess.run([str(RUNNER), "--mcp"], capture_output=True, text=True, env=env)
         assert r.returncode == 127
         assert "no interpreter beside" in r.stderr
+
+
+def test_codex_plugin_manifest_matches_and_points_at_codex_hooks():
+    """#35: Codex lists plugin hooks under From Plugins → Collivind."""
+    from collivind.version import __version__
+
+    manifest = json.loads((PLUGIN / ".codex-plugin" / "plugin.json").read_text())
+    assert manifest["name"] == "collivind" and manifest["version"] == __version__
+    hooks = json.loads((PLUGIN / manifest["hooks"]).read_text())["hooks"]
+    assert set(hooks) == {"SessionStart", "UserPromptSubmit", "Stop", "PreCompact"}
+    for entries in hooks.values():
+        for h in (h for e in entries for h in e["hooks"]):
+            assert h["command"].startswith('"${PLUGIN_ROOT}"/bin/collivind-run hook ')
+            assert h["command"].endswith("--agent codex") and h["statusMessage"].startswith("Collivind:")

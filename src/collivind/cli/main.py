@@ -2,6 +2,7 @@ import click
 
 from collivind.cli.commands.agent_commands import commands
 from collivind.cli.commands.docker import docker
+from collivind.cli.commands.embed_daemon import embed_daemon
 from collivind.cli.commands.hook import hook
 from collivind.cli.commands.init import init
 from collivind.cli.commands.memory import (
@@ -15,6 +16,7 @@ from collivind.cli.commands.memory import (
     sync,
     update,
 )
+from collivind.cli.commands.migrate import migrate_cmd
 from collivind.cli.commands.reset import reset
 from collivind.cli.commands.search import search
 from collivind.cli.commands.status import status
@@ -58,4 +60,10 @@ cli.add_command(forget)
 cli.add_command(export_cmd)
 cli.add_command(import_cmd)
 cli.add_command(sync)
+cli.add_command(migrate_cmd)
 cli.add_command(commands)
+cli.add_command(embed_daemon)
+
+
+if __name__ == "__main__":
+    cli()

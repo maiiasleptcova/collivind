@@ -167,9 +167,10 @@ class TestResetCommand:
 
 
 class TestDockerCommand:
+    @patch("collivind.cli.commands.docker.copy_templates")
     @patch("collivind.cli.commands.docker.docker_compose_up")
     @patch("collivind.cli.commands.docker.load_config")
-    def test_docker_up(self, mock_config, mock_up):
+    def test_docker_up(self, mock_config, mock_up, mock_templates):
         mock_config.return_value = _mock_config("docker")
         runner = CliRunner()
         result = runner.invoke(docker, ["up"])

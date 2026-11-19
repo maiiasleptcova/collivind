@@ -46,7 +46,22 @@ This uses SQLite for both vectors and the graph, and loads the embedding model d
 
 > **Concurrent sessions:** embedded mode is multi-process safe — any number of agent sessions, CLI commands, and hooks can share the store, and a write from one session is immediately visible to the others.
 >
+> **Resident model:** hooks are short-lived processes, so the first embed starts a small background process that keeps the model loaded (`~/.collivind/embed.sock`, owner-only); later hooks embed in milliseconds instead of reloading the model every prompt. It exits after 30 idle minutes (`daemon_idle_timeout` under `[embeddings]`). Manage it with `collivind embed-daemon start|stop|status`; turn it off with `daemon = false` or `COLLIVIND_EMBED_DAEMON=0`.
+>
 > **Upgrading from ≤ 0.1.x:** older versions kept vectors in a single-process Qdrant store (`~/.collivind/qdrant_data`). It is migrated automatically on first use and left in place as a backup; restart any agent sessions still running the old version once after upgrading. If you later downgrade, memories written after the upgrade live only in the new store — carry them over with `collivind export` / `import`.
+
+### Switching modes
+
+Each mode has its own store, so changing `mode` shows an empty graph until you copy your data across:
+
+```bash
+collivind docker up                                       # target must be up and healthy
+collivind migrate --from embedded --to docker --dry-run   # counts only, writes no records
+collivind migrate --from embedded --to docker
+# then set mode = "docker" in ~/.collivind/config.toml
+```
+
+`migrate` copies every memory in every project — superseded versions included — plus entities, memory↔entity and memory↔memory edges (supersedes, contradicts, …) and vectors, **with ids preserved**, so entity links and version chains survive. It reads both sides from your one `config.toml` (per-backend `provider` overrides are ignored so `--from`/`--to` pick each mode's own stores). The source is never modified, re-running upserts by id instead of duplicating, and it ends by printing source/target counts per kind and exiting 1 if any source record is missing from the target. Stored vectors are copied as-is when both sides use the same embedding model and dimension (embedded's in-process model and the docker embeddings service are both `BAAI/bge-small-en-v1.5`); otherwise every vector is re-embedded with the target's provider and it says so. Edges pointing at a node that no longer exists are listed and skipped. Modes are `embedded` and `docker`; `remote` is not offered because it shares the `[qdrant]`/`[neo4j]` sections with docker. `--dry-run` writes no records, though opening the target may create its empty schema or Qdrant collection.
 
 ### npm (alternative)
 
@@ -97,17 +112,66 @@ that can reach the port.
 
 ### Agent support
 
-| Agent | Memory tools (MCP) | Automatic recall |
-|---|---|---|
-| Claude Code | yes | yes — 4 hooks, via the plugin |
-| Codex | yes | yes — SessionStart + UserPromptSubmit |
-| opencode | yes | **no** — opencode has no hook system |
-| GitHub Copilot | yes | **no** — Copilot has no hook system |
+| Agent | Memory tools (MCP) | Automatic recall | Periodic capture | Compaction capture |
+|---|---|---|---|---|
+| Claude Code | yes | yes — SessionStart + UserPromptSubmit | yes — Stop hook | yes — PreCompact marks it, SessionStart (`compact`) asks |
+| Codex | yes | yes — after you trust the hooks | yes — Stop hook, after you trust it | yes — PreCompact marks it, SessionStart (`compact`) asks |
+| opencode | yes | **no** — no prompt hook to inject into | yes — plugin on `session.idle` | yes — plugin on `session.compacted` |
+| GitHub Copilot | yes | **no** — Copilot has no hook system | **no** | **no** |
 
-`collivind init` registers the MCP server for every agent it finds installed.
-opencode and Copilot get the memory tools, so you can search and save
-explicitly, but nothing is injected into your prompts automatically — neither
-exposes a hook comparable to `UserPromptSubmit`.
+`collivind init` registers the MCP server for every agent it finds installed,
+plus the hooks (Claude Code, Codex) or the capture plugin (opencode,
+`~/.config/opencode/plugins/collivind-capture.js`). Copilot gets the memory
+tools only, so you search and save explicitly.
+
+**What "capture" means, precisely.** A hook cannot write memories itself —
+extraction needs the agent's model. So a checkpoint *asks* the agent to call
+`collivind_batch_add` with a checkpoint id, and only a successful call carrying
+that id confirms it. Until then the checkpoint stays pending and is re-asked a
+few responses later; it is never counted as saved because a reminder was shown.
+`collivind status` shows the last confirmed save, any pending checkpoint, and the
+last failed one.
+
+**Compaction.** Neither Claude Code nor Codex lets a PreCompact hook talk to
+the model (Codex ignores its output), so collivind cannot make the save happen
+*before* compaction. PreCompact marks a checkpoint due, and the SessionStart hook
+that runs right after compaction (`source: "compact"`) asks the agent to save
+from the compaction summary plus anything since. Knowledge the summary dropped is
+not recoverable; periodic checkpoints keep that window small.
+
+**Quiet capture** (default, `quiet_capture = true` in `[hooks]`) tells the agent
+to save without announcing or confirming routine checkpoints, and to speak up only
+on an error. It changes the agent's instructions, not the host UI: a Stop-hook
+checkpoint is still a continuation turn, and the host may show the tool call.
+Set `quiet_capture = false` for a one-line confirmation after each save.
+
+#### Codex: trust the hooks after installing or upgrading
+
+Codex skips hooks until you review and trust them — installing them is not
+enough, and restarting Codex does not trust them. After `collivind init` or
+`collivind hook install`:
+
+- **Desktop app:** Settings → Hooks (or **Review hooks** in the composer), then trust the collivind entries.
+- **CLI:** run `/hooks` and trust them.
+
+**Or install the Codex plugin**, which lists the hooks under Settings → Hooks →
+**From Plugins → Collivind** instead of anonymous User config entries:
+
+```bash
+codex plugin marketplace add maiiasleptcova/collivind
+codex plugin add collivind@collivind
+```
+
+With the plugin enabled, `collivind init` / `hook install` stop writing
+`~/.codex/hooks.json`; if both exist `collivind status` flags the double
+registration. Plugin hooks still need the same trust review.
+
+Codex records trust against a hash of each hook definition, so an upgrade that
+changes the hook commands asks for review again (the commands carry no tunables
+for exactly this reason: change the interval in `config.toml`, not the hook).
+Collivind cannot read Codex's trust store, so `collivind status` reports each hook
+as *configured but never ran — trust unknown* until it has actually executed, and
+the last time it ran once it has.
 
 `collivind status` reports what is registered where — including Claude Code's MCP server, flagging a dead or duplicated entry — and, in docker mode, each container's state, so a crash-looping container is named rather than showing up only as "connection refused". It exits 1 when anything is broken, so it can run from cron or a script.
 
@@ -139,14 +203,12 @@ collivind init
 
 ### Hooks
 
-Collivind uses Claude Code hooks for automatic memory capture and recall:
+- **SessionStart** — injects a compact index (~100 tokens) of your project's stored knowledge at the start of every session; after a compaction it also asks for the compaction checkpoint
+- **UserPromptSubmit** — searches memory with every prompt you type and injects the relevant context (budgeted, silent when nothing matches)
+- **Stop** — every `save_interval` responses (default 15, per session), asks the agent to checkpoint
+- **PreCompact** — marks a compaction checkpoint due (see *Compaction* above)
 
-- **SessionStart hook** — injects a compact index (~100 tokens) of your project's stored knowledge at the start of every session
-- **UserPromptSubmit hook** — searches memory with every prompt you type and injects the relevant context (budgeted, silent when nothing matches), so the agent starts building with what it already learned
-- **Stop hook** — every 15 responses, prompts Claude to extract and store knowledge
-- **PreCompact hook** — saves all session knowledge before context compression
-
-The recall hooks (SessionStart, UserPromptSubmit) are also registered for Codex CLI when `~/.codex` exists.
+Registered for Claude Code (via the plugin, or `~/.claude/settings.json`) and for Codex in `~/.codex/hooks.json` when `~/.codex` exists. If any hook finds the store down it says so in the session instead of recalling nothing.
 
 ### In-session commands
 
@@ -155,7 +217,7 @@ The recall hooks (SessionStart, UserPromptSubmit) are also registered for Codex 
 - `/mem-save <text>` — store knowledge (or, with no text, extract it from the current conversation)
 - `/mem-recall <topic>` — pull relevant stored knowledge into the session
 
-Installed for Claude Code (`~/.claude/commands`) and Codex (`~/.codex/prompts`) automatically; for VS Code Copilot run `collivind commands install --tool copilot` inside a repo (writes `.github/prompts/`).
+Installed for Claude Code (`~/.claude/commands`), Codex (`~/.codex/prompts`) and opencode (`~/.config/opencode/commands`) automatically; for VS Code Copilot run `collivind commands install --tool copilot` inside a repo (writes `.github/prompts/`).
 
 `collivind init` registers both hooks in `~/.claude/settings.json` automatically. To (re)register manually:
 
@@ -201,6 +263,7 @@ collivind invalidate <id> -r outdated  # Mark outdated, keep history
 collivind forget <id>       # Delete permanently (with confirmation)
 collivind export -p proj -o mem.jsonl  # Backup / portability
 collivind import mem.jsonl  # Re-import (deduplication applies)
+collivind migrate --from embedded --to docker  # Copy everything between modes, ids kept
 collivind sync ./shared-memory  # Two-way team sync via a git-tracked dir
 collivind reset             # Wipe all data (with confirmation)
 collivind docker up|down|logs  # Container management (docker mode)
@@ -274,9 +337,10 @@ graph_weight = 0.3
 similarity_threshold = 0.3
 
 [hooks]
-save_interval = 15
+save_interval = 15        # responses between capture checkpoints, per session
 enable_precompact = true
 enable_stop = true
+quiet_capture = true      # save without announcing routine checkpoints
 ```
 
 See the [design spec](docs/superpowers/specs/2026-04-29-collivind-design.md) for the full configuration reference.

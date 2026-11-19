@@ -257,7 +257,7 @@ def test_get_context_respects_max_tokens():
         SearchResult(memory=small, score=0.9, vector_score=0.9, graph_score=0.0),
         SearchResult(memory=big, score=0.8, vector_score=0.8, graph_score=0.0),
     ]
-    with patch.object(manager, "search", return_value=results):
+    with patch.object(manager, "search_with_status", return_value=(results, False)):
         unbudgeted = manager.get_context("q")
         budgeted = manager.get_context("q", max_tokens=100)
 

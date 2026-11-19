@@ -86,7 +86,7 @@ def create_embedding_provider(config: CollivindConfig) -> EmbeddingProvider:
     if provider == "local":
         from collivind.storage.embedding_local import LocalEmbeddingProvider
 
-        return LocalEmbeddingProvider(config.embeddings)
+        return LocalEmbeddingProvider(config.embeddings, data_dir=config.data_dir)
     elif provider == "openai":
         from collivind.storage.embedding_openai import OpenAIEmbeddingProvider
 
@@ -108,12 +108,19 @@ MODE_HINTS = {
 }
 
 
-def create_all_backends(config: CollivindConfig) -> tuple[VectorStore, GraphStore, EmbeddingProvider]:
+def create_all_backends(
+    config: CollivindConfig, allow_graph_down: bool = False
+) -> tuple[VectorStore, GraphStore, EmbeddingProvider]:
     """Build the three backends for the configured mode and prove they answer.
 
     Clients for the networked backends construct lazily, so without this an
     unavailable mode surfaces later as puzzling behaviour rather than an
     error — you think you are on docker while reading somewhere else (#7).
+
+    allow_graph_down: return anyway when the graph store is the only one
+    down. Search then degrades to vector-only and writes fail with a
+    pointer at `collivind status` (#39). A healthy vector store and embedder
+    already prove the mode is the intended one, so #7 does not reopen.
     """
     logger.info(f"Creating backends (mode={config.mode})")
     vector_store = create_vector_store(config)
@@ -132,6 +139,11 @@ def create_all_backends(config: CollivindConfig) -> tuple[VectorStore, GraphStor
                 unavailable.append(f"{name}: {health.get('message', 'unhealthy')}")
         except Exception as e:  # an exploding probe is still an unusable backend
             unavailable.append(f"{name}: {e}")
+
+    if allow_graph_down and [u for u in unavailable if not u.startswith("graph_store:")] == []:
+        if unavailable:
+            logger.warning("graph store unavailable, continuing degraded: %s", unavailable[0])
+        return vector_store, graph_store, embedding_provider
 
     if unavailable:
         raise ModeUnavailableError(

@@ -1,0 +1,49 @@
+{
+  "description": "Collivind memory hooks for Codex",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${PLUGIN_ROOT}\"/bin/collivind-run hook session-start --agent codex",
+            "statusMessage": "Collivind: load the project's memory index (and ask for a save after compaction)"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${PLUGIN_ROOT}\"/bin/collivind-run hook user-prompt --agent codex",
+            "statusMessage": "Collivind: recall memories relevant to this prompt"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${PLUGIN_ROOT}\"/bin/collivind-run hook stop --agent codex",
+            "statusMessage": "Collivind: periodic memory checkpoint"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${PLUGIN_ROOT}\"/bin/collivind-run hook precompact --agent codex",
+            "statusMessage": "Collivind: mark a memory checkpoint before compaction"
+          }
+        ]
+      }
+    ]
+  }
+}

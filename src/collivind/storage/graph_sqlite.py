@@ -5,11 +5,11 @@ import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
 from collivind.models.entity import EntityCreate, EntityNode, EntityType
 from collivind.models.memory import MemoryCategory, MemoryCreate, MemoryNode, MemorySource
-from collivind.models.relationship import RelationshipCreate, RelationshipEdge
+from collivind.models.relationship import RelationshipCreate, RelationshipEdge, RelType
 from collivind.storage.interfaces import GraphStore
 
 logger = logging.getLogger(__name__)
@@ -297,6 +297,71 @@ class SqliteGraphStore(GraphStore):
             chain.append(nxt)
             current = nxt
         return chain
+
+    def iter_memories(self) -> Iterator[MemoryNode]:
+        for row in self.conn.execute("SELECT * FROM memories ORDER BY created_at, id").fetchall():
+            yield self._row_to_memory(row)
+
+    def iter_entities(self) -> Iterator[EntityNode]:
+        for row in self.conn.execute("SELECT * FROM entities ORDER BY id").fetchall():
+            yield self._row_to_entity(row)
+
+    def iter_relationships(self) -> Iterator[RelationshipEdge]:
+        for row in self.conn.execute("SELECT * FROM relationships ORDER BY created_at, id").fetchall():
+            yield RelationshipEdge(
+                id=row["id"],
+                source_id=row["source_id"],
+                target_id=row["target_id"],
+                type=RelType(row["type"]),
+                confidence=row["confidence"],
+                source=row["source"],
+                properties=json.loads(row["properties"]) if row["properties"] else {},
+                created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
+            )
+
+    def restore_memory(self, node: MemoryNode) -> None:
+        d = node.to_dict()
+        d["tags"] = json.dumps(d["tags"] or [])
+        cols = list(d)  # fixed MemoryNode field names, never user data
+        self.conn.execute(
+            f"INSERT OR REPLACE INTO memories ({', '.join(cols)}) VALUES ({', '.join('?' for _ in cols)})",
+            [d[c] for c in cols],
+        )
+        self.conn.commit()
+
+    def restore_entity(self, node: EntityNode) -> None:
+        etype = node.type.value if hasattr(node.type, "value") else node.type
+        self.conn.execute(
+            """INSERT OR REPLACE INTO entities (id, name, type, properties, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (
+                node.id,
+                node.name,
+                etype,
+                json.dumps(node.properties or {}),
+                node.created_at.isoformat() if node.created_at else None,
+                node.updated_at.isoformat() if node.updated_at else None,
+            ),
+        )
+        self.conn.commit()
+
+    def restore_relationship(self, edge: RelationshipEdge) -> None:
+        self.conn.execute(
+            """INSERT OR REPLACE INTO relationships
+               (id, source_id, target_id, type, confidence, source, properties, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                edge.id,
+                edge.source_id,
+                edge.target_id,
+                RelType(edge.type).value,
+                edge.confidence,
+                edge.source,
+                json.dumps(edge.properties or {}),
+                edge.created_at.isoformat() if edge.created_at else None,
+            ),
+        )
+        self.conn.commit()
 
     def clear_all(self) -> None:
         self.conn.execute("DELETE FROM relationships")
