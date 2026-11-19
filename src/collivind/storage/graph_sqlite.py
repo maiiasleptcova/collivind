@@ -116,7 +116,7 @@ class SqliteGraphStore(GraphStore):
                 node.summary,
                 node.category.value,
                 node.confidence,
-                node.valid_from.isoformat(),
+                node.valid_from.isoformat() if node.valid_from else None,
                 None,
                 node.project_id,
                 node.session_id,
@@ -315,7 +315,7 @@ class SqliteGraphStore(GraphStore):
                 confidence=row["confidence"],
                 source=row["source"],
                 properties=json.loads(row["properties"]) if row["properties"] else {},
-                created_at=stored_timestamp(row["created_at"]),
+                created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
             )
 
     def restore_memory(self, node: MemoryNode) -> None:
@@ -387,7 +387,7 @@ class SqliteGraphStore(GraphStore):
             summary=row["summary"],
             category=MemoryCategory(row["category"]),
             confidence=row["confidence"],
-            valid_from=stored_timestamp(row["valid_from"]),
+            valid_from=datetime.fromisoformat(row["valid_from"]) if row["valid_from"] else None,
             valid_to=datetime.fromisoformat(row["valid_to"]) if row["valid_to"] else None,
             project_id=row["project_id"],
             session_id=row["session_id"],
@@ -407,8 +407,8 @@ class SqliteGraphStore(GraphStore):
             name=row["name"],
             type=EntityType(row["type"]),
             properties=json.loads(row["properties"]) if row["properties"] else {},
-            created_at=stored_timestamp(row["created_at"]),
-            updated_at=stored_timestamp(row["updated_at"]),
+            created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
+            updated_at=datetime.fromisoformat(row["updated_at"]) if row["updated_at"] else None,
         )
 
     def _serialize_update_value(self, key: str, value: Any) -> Any:

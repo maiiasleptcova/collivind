@@ -2,7 +2,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 
 class RelType(str, Enum):
@@ -38,7 +38,9 @@ class RelationshipEdge:
     confidence: float = 1.0
     source: str = "manual"
     properties: Dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: Optional[datetime] = field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )  # may be absent in old rows
 
 
 @dataclass

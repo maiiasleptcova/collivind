@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 
 class EntityType(str, Enum):
@@ -20,8 +20,10 @@ class EntityNode:
     type: EntityType
     id: str = ""  # typically lowercased, underscored name
     properties: Dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    # Optional: a store row or backup line may lack them, and import/migrate
+    # keep that absence rather than inventing a time
+    created_at: Optional[datetime] = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: Optional[datetime] = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def __post_init__(self):
         if not self.id:

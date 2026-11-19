@@ -49,7 +49,7 @@ class MemoryNode:
     category: MemoryCategory
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     confidence: float = 1.0
-    valid_from: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    valid_from: Optional[datetime] = field(default_factory=lambda: datetime.now(timezone.utc))
     valid_to: Optional[datetime] = None
     project_id: str = "default"
     session_id: Optional[str] = None

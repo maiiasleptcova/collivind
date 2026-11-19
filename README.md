@@ -264,8 +264,8 @@ collivind update <id> -c decision      # Reclassify (also re-embeds)
 collivind update <id> -t ""            # Clear every tag
 collivind invalidate <id> -r outdated  # Mark outdated, keep history
 collivind forget <id>       # Delete permanently (with confirmation)
-collivind export -p proj -o mem.jsonl  # Backup / portability
-collivind import mem.jsonl  # Re-import (deduplication applies)
+collivind export -o backup.jsonl  # Lossless backup: every project, ids kept
+collivind import backup.jsonl  # Restore by id; only adds what is missing
 collivind migrate --from embedded --to docker  # Copy everything between modes, ids kept
 collivind sync ./shared-memory  # Two-way team sync via a git-tracked dir
 collivind reset             # Wipe all data (with confirmation)
@@ -274,6 +274,12 @@ collivind hook install      # Register Claude Code hooks
 ```
 
 Memory verbs take `--json` for scripting and agent use.
+
+### Backup and restore
+
+`collivind export` writes a versioned JSONL bundle: a header line (format version, collivind version, embedding model and dimension, per-kind counts), then every memory — superseded versions and their chain fields included — every entity, every memory↔entity and memory↔memory edge, and which memories are searchable, **all with their ids**. `-p/--project` limits it to one project's memories, the entities they link to and the edges between them (edges into other projects are left out and counted). Vectors are large and can be rebuilt, so they are only written with `--vectors`; without them, or when the bundle came from a different embedding model, `import` re-embeds with this install's model. The bundle holds no configuration or credentials, and export is never limited.
+
+`collivind import` validates the whole file first — a truncated, damaged or newer-format bundle is rejected before anything is written — then restores by id, adding only records the target lacks, so re-importing is safe and never reverts edits made since. It prints bundle/target/missing counts per kind and exits 1 if anything is still missing; `--dry-run` writes nothing. Files from older versions (one memory per line) are detected automatically and re-added through the normal pipeline as before. `collivind sync` keeps using that older per-project format.
 
 ## Team Sharing
 

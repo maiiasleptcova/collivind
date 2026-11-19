@@ -93,15 +93,14 @@ by not being published. Decide and implement:
   batch it before the 10k-memory performance target is tested.
 - **Perf/scale test suite**: the design spec's 500ms @ 10k memories target
   has no test. Add a seeded benchmark.
-- **Import fidelity**: `collivind import` drops entity links (memory nodes
-  only) and rewrites ids. Fine for v1 backup; fix alongside sync-server id
-  stability. Moving between modes no longer depends on it: `collivind migrate`
-  (#7) restores memories, entities, edges and vectors by id through
-  `GraphStore.iter_*`/`restore_*` and `VectorStore.iter_all`. Neo4j edges have
-  no native id, so edges written by `create_relationship`/`invalidate_memory`
-  get a deterministic uuid5 of (source, type, target) on the way out; restored
-  edges carry `r.id`. The JSONL export could reuse the same iterators.
-- **`get_entity` / relationships export**: entities and edges deserve
-  export/import too once ids are stable.
+- **Import fidelity** — done: `collivind export` writes a v2 bundle (header +
+  memories, entities, edges, vector ids/payloads, vectors optional) through
+  `GraphStore.iter_*` / `VectorStore.iter_all`, and `import` restores it by id
+  via the same `restore` path as `collivind migrate`, adding only what the
+  target lacks. v1 files still import through the pipeline. `collivind sync`
+  still uses v1 (content-level merge, new ids); id-stable sync belongs to the
+  sync server.
+- **`get_entity` / relationships export** — done: entities and edges are in the
+  v2 bundle with every field.
 - **Benchmark honesty**: when publishing numbers (LoCoMo/LongMemEval), report
   the full picture — the mempalace launch collapse is the cautionary tale.

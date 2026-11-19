@@ -147,8 +147,8 @@ class Neo4jGraphStore(GraphStore):
                 name=entity.name,
                 type=entity.type.value,
                 props=json.dumps(entity.properties),
-                created_at=entity.created_at.isoformat(),
-                updated_at=entity.updated_at.isoformat(),
+                created_at=entity.created_at.isoformat() if entity.created_at else None,
+                updated_at=entity.updated_at.isoformat() if entity.updated_at else None,
             )
         return entity
 
@@ -345,7 +345,7 @@ class Neo4jGraphStore(GraphStore):
                 confidence=props.pop("confidence", 1.0),
                 source=props.pop("source", "manual"),
                 properties={**props, **extra},  # leftovers such as SUPERSEDES.reason
-                created_at=stored_timestamp(created_at),
+                created_at=datetime.fromisoformat(created_at) if created_at else None,
             )
 
     def restore_memory(self, node: MemoryNode) -> None:
@@ -425,7 +425,7 @@ class Neo4jGraphStore(GraphStore):
             summary=node["summary"],
             category=node["category"],
             confidence=node.get("confidence", 1.0),
-            valid_from=stored_timestamp(node.get("valid_from")),
+            valid_from=datetime.fromisoformat(node["valid_from"]) if node.get("valid_from") else None,
             valid_to=datetime.fromisoformat(node["valid_to"]) if node.get("valid_to") else None,
             project_id=node.get("project_id", "default"),
             session_id=node.get("session_id"),
@@ -450,8 +450,8 @@ class Neo4jGraphStore(GraphStore):
             name=node.get("name", fallback_name),
             type=entity_type,
             properties=self._parse_properties(node.get("properties", {})),
-            created_at=stored_timestamp(node.get("created_at")),
-            updated_at=stored_timestamp(node.get("updated_at")),
+            created_at=datetime.fromisoformat(node["created_at"]) if node.get("created_at") else None,
+            updated_at=datetime.fromisoformat(node["updated_at"]) if node.get("updated_at") else None,
         )
 
     def _normalize_update_value(self, key: str, value: Any) -> Any:

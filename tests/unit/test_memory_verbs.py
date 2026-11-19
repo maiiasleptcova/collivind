@@ -4,13 +4,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
+from collivind.cli.commands.backup import import_cmd
 from collivind.cli.commands.memory import (
     add,
     context,
-    export_cmd,
     forget,
     get,
-    import_cmd,
     invalidate,
     update,
 )
@@ -221,28 +220,44 @@ def test_cli_forget_confirmed():
     manager.forget.assert_called_once_with("m-1")
 
 
-def test_cli_export_import_files(tmp_path):
-    node = _node()
-    manager = MagicMock()
-    manager.export_memories.return_value = [node.to_dict()]
+def test_cli_import_v1_file_uses_the_pipeline(tmp_path):
     out = tmp_path / "mem.jsonl"
-
-    with patch("collivind.cli.commands.memory._manager", return_value=manager):
-        result = CliRunner().invoke(export_cmd, ["-o", str(out)])
-    assert result.exit_code == 0
-    assert json.loads(out.read_text().strip())["id"] == "m-1"
-
+    out.write_text(json.dumps(_node().to_dict()) + "\n")
+    manager = MagicMock()
     manager.import_memories.return_value = 1
-    with patch("collivind.cli.commands.memory._manager", return_value=manager):
+    with patch("collivind.cli.commands.backup._manager", return_value=manager):
         result = CliRunner().invoke(import_cmd, [str(out)])
     assert result.exit_code == 0
     assert manager.import_memories.call_args.args[0][0]["id"] == "m-1"
 
 
+def test_cli_import_v1_dry_run_adds_nothing(tmp_path):
+    out = tmp_path / "mem.jsonl"
+    out.write_text(json.dumps(_node().to_dict()) + "\n")
+    manager = MagicMock()
+    with patch("collivind.cli.commands.backup._manager", return_value=manager):
+        result = CliRunner().invoke(import_cmd, [str(out), "--dry-run"])
+    assert result.exit_code == 0
+    assert "1 v1 memories would be re-added" in result.output
+    manager.import_memories.assert_not_called()
+
+
+@pytest.mark.parametrize("flags", [[], ["--dry-run"]])
+def test_cli_import_v1_rejects_a_bad_record_before_any_write(tmp_path, flags):
+    out = tmp_path / "mem.jsonl"
+    out.write_text(json.dumps(_node().to_dict()) + "\n" + json.dumps({"category": "fact"}) + "\n")
+    manager = MagicMock()
+    with patch("collivind.cli.commands.backup._manager", return_value=manager):
+        result = CliRunner().invoke(import_cmd, [str(out), *flags])
+    assert result.exit_code == 1
+    assert "record 2 has no content" in result.output
+    manager.import_memories.assert_not_called()
+
+
 def test_cli_import_rejects_bad_json(tmp_path):
     bad = tmp_path / "bad.jsonl"
     bad.write_text("{not json}\n")
-    with patch("collivind.cli.commands.memory._manager", return_value=MagicMock()):
+    with patch("collivind.cli.commands.backup._manager", return_value=MagicMock()):
         result = CliRunner().invoke(import_cmd, [str(bad)])
     assert result.exit_code == 1
 
