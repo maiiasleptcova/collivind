@@ -15,6 +15,7 @@ from collivind.cli.commands.memory import (
     sync,
     update,
 )
+from collivind.cli.commands.migrate import migrate_cmd
 from collivind.cli.commands.reset import reset
 from collivind.cli.commands.search import search
 from collivind.cli.commands.status import status
@@ -58,4 +59,5 @@ cli.add_command(forget)
 cli.add_command(export_cmd)
 cli.add_command(import_cmd)
 cli.add_command(sync)
+cli.add_command(migrate_cmd)
 cli.add_command(commands)

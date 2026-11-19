@@ -1,0 +1,124 @@
+"""Copy every memory, entity, edge and vector from one store set to another.
+
+Unlike `collivind import`, which re-adds content through the dedup pipeline
+and mints new ids, this restores records verbatim by id: entity links,
+memory<->memory edges and version chains survive, and re-running is a no-op
+(every write is an upsert). The source is only ever read.
+"""
+
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Set, Tuple
+
+from collivind.engine.enrichment import build_enriched_text
+from collivind.engine.memory_manager import MemoryManager
+from collivind.models.relationship import RelationshipEdge, RelType
+from collivind.storage.interfaces import EmbeddingProvider, GraphStore, VectorStore
+
+_ENTITY_LINKS = (RelType.ABOUT, RelType.MENTIONS)
+
+
+@dataclass(frozen=True)
+class Stores:
+    vector: VectorStore
+    graph: GraphStore
+    embedder: EmbeddingProvider
+
+
+@dataclass(frozen=True)
+class KindCount:
+    kind: str
+    source: int
+    target: int
+    missing: int  # source ids absent from the target
+
+
+@dataclass(frozen=True)
+class MigrationReport:
+    counts: Tuple[KindCount, ...]
+    dangling: Tuple[RelationshipEdge, ...]  # edges whose endpoint is in neither node set
+    reembedded: bool
+    dry_run: bool
+
+    @property
+    def ok(self) -> bool:
+        return all(c.missing == 0 for c in self.counts)
+
+
+def _target_ids(dst: Stores) -> Dict[str, Set[str]]:
+    return {
+        "memories": {m.id for m in dst.graph.iter_memories()},
+        "entities": {e.id for e in dst.graph.iter_entities()},
+        "relationships": {r.id for r in dst.graph.iter_relationships()},
+        "vectors": {vid for vid, _, _ in dst.vector.iter_all()},
+    }
+
+
+def migrate(src: Stores, dst: Stores, *, reembed: bool, dry_run: bool) -> MigrationReport:
+    memories = list(src.graph.iter_memories())
+    entities = list(src.graph.iter_entities())
+    edges = list(src.graph.iter_relationships())
+    vectors = list(src.vector.iter_all())
+
+    node_ids = {m.id for m in memories} | {e.id for e in entities}
+
+    def attached(edge: RelationshipEdge) -> bool:
+        return edge.source_id in node_ids and edge.target_id in node_ids
+
+    live_edges = [e for e in edges if attached(e)]
+    dangling = tuple(e for e in edges if not attached(e))
+
+    if not dry_run:
+        dst.graph.initialize()
+        dst.vector.initialize()
+        for mem in memories:
+            dst.graph.restore_memory(mem)
+        for ent in entities:
+            dst.graph.restore_entity(ent)
+        for edge in live_edges:
+            dst.graph.restore_relationship(edge)
+        texts = _embedding_texts(memories, entities, live_edges) if reembed else {}
+        for vid, vector, payload in vectors:
+            if reembed:
+                vector = dst.embedder.embed(texts.get(vid) or _payload_text(payload))
+            dst.vector.upsert(vid, vector, payload)
+
+    source_ids = {
+        "memories": {m.id for m in memories},
+        "entities": {e.id for e in entities},
+        "relationships": {e.id for e in live_edges},
+        "vectors": {vid for vid, _, _ in vectors},
+    }
+    target_ids = _target_ids(dst)
+    counts = tuple(
+        KindCount(kind, len(ids), len(target_ids[kind]), len(ids - target_ids[kind]))
+        for kind, ids in source_ids.items()
+    )
+    return MigrationReport(counts=counts, dangling=dangling, reembedded=reembed, dry_run=dry_run)
+
+
+def _embedding_texts(memories, entities, edges: List[RelationshipEdge]) -> Dict[str, str]:
+    """The enriched text add_memory embedded: content + summary + category + entity names + tags."""
+    names = {e.id: e.name for e in entities}
+    linked: Dict[str, List[str]] = {}
+    for edge in edges:
+        if edge.type in _ENTITY_LINKS and edge.target_id in names:
+            linked.setdefault(edge.source_id, []).append(names[edge.target_id])
+    return {
+        m.id: build_enriched_text(MemoryManager._as_create(m), entity_names=linked.get(m.id) or None) for m in memories
+    }
+
+
+def _payload_text(payload: dict) -> str:
+    """Fallback for a vector with no graph node: its payload is the memory snapshot."""
+    return " | ".join(str(payload[k]) for k in ("content", "summary") if payload.get(k)) or ""
+
+
+def embedding_space(provider: str, model: str, dimension: int) -> Tuple[str, Optional[str], int]:
+    """Identity of the vector space a provider writes into.
+
+    `local` and the docker `http` service both run sentence-transformers on the
+    configured model (the bundled service image hard-codes the default,
+    BAAI/bge-small-en-v1.5), so their vectors are interchangeable.
+    """
+    family = "sentence-transformers" if provider in ("local", "http") else provider
+    return family, model, dimension

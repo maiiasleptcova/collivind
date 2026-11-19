@@ -48,6 +48,19 @@ This uses SQLite for both vectors and the graph, and loads the embedding model d
 >
 > **Upgrading from ≤ 0.1.x:** older versions kept vectors in a single-process Qdrant store (`~/.collivind/qdrant_data`). It is migrated automatically on first use and left in place as a backup; restart any agent sessions still running the old version once after upgrading. If you later downgrade, memories written after the upgrade live only in the new store — carry them over with `collivind export` / `import`.
 
+### Switching modes
+
+Each mode has its own store, so changing `mode` shows an empty graph until you copy your data across:
+
+```bash
+collivind docker up                                       # target must be up and healthy
+collivind migrate --from embedded --to docker --dry-run   # counts only, writes no records
+collivind migrate --from embedded --to docker
+# then set mode = "docker" in ~/.collivind/config.toml
+```
+
+`migrate` copies every memory in every project — superseded versions included — plus entities, memory↔entity and memory↔memory edges (supersedes, contradicts, …) and vectors, **with ids preserved**, so entity links and version chains survive. It reads both sides from your one `config.toml` (per-backend `provider` overrides are ignored so `--from`/`--to` pick each mode's own stores). The source is never modified, re-running upserts by id instead of duplicating, and it ends by printing source/target counts per kind and exiting 1 if any source record is missing from the target. Stored vectors are copied as-is when both sides use the same embedding model and dimension (embedded's in-process model and the docker embeddings service are both `BAAI/bge-small-en-v1.5`); otherwise every vector is re-embedded with the target's provider and it says so. Edges pointing at a node that no longer exists are listed and skipped.
+
 ### npm (alternative)
 
 ```bash
@@ -201,6 +214,7 @@ collivind invalidate <id> -r outdated  # Mark outdated, keep history
 collivind forget <id>       # Delete permanently (with confirmation)
 collivind export -p proj -o mem.jsonl  # Backup / portability
 collivind import mem.jsonl  # Re-import (deduplication applies)
+collivind migrate --from embedded --to docker  # Copy everything between modes, ids kept
 collivind sync ./shared-memory  # Two-way team sync via a git-tracked dir
 collivind reset             # Wipe all data (with confirmation)
 collivind docker up|down|logs  # Container management (docker mode)
