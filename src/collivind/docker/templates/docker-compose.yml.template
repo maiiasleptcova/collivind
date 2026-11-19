@@ -12,6 +12,18 @@ services:
         limits:
           memory: 512M
     restart: unless-stopped
+    # The image carries no curl or wget, so probe the port with bash's
+    # /dev/tcp builtin. bash must be invoked explicitly: CMD-SHELL means
+    # `/bin/sh -c`, /bin/sh is dash here, and /dev/tcp is a bash builtin
+    # dash does not implement — under CMD-SHELL every probe fails with
+    # "cannot create /dev/tcp/...: Directory nonexistent" and the service
+    # reports unhealthy forever while serving perfectly.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/6333"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   neo4j:
     image: neo4j:5.26-community
@@ -24,13 +36,39 @@ services:
       - NEO4J_server_memory_heap_initial__size=256m
       - NEO4J_server_memory_heap_max__size=512m
       - NEO4J_server_memory_pagecache_size=128m
+      # Do NOT add NEO4J_server_logs_user_stdout__enabled here. No such
+      # setting exists in 5.26 — logging is configured by conf/user-logs.xml
+      # (log4j2) — and strict validation rejects the unknown key, so Neo4j
+      # refuses to boot and crash-loops on every install. Verified against
+      # neo4j:5.26-community; see #39.
     volumes:
       - neo4j-data:/data
+      # Declared explicitly so the logs land somewhere findable and prunable.
+      # Undeclared, Docker mints a fresh anonymous volume, and `docker-compose
+      # down` without -v leaves it dangling, so every down/up cycle leaks
+      # another one.
+      #
+      # This does NOT stop #39 recurring: a named volume sits on the same
+      # filesystem as an anonymous one, so a full disk makes it equally
+      # unwritable and Neo4j still treats the failed append as fatal. The fix
+      # for that is ignoreExceptions="true" on the appender in
+      # conf/user-logs.xml, which is not done here. Rotation is already
+      # handled by log4j2 inside the image (20 MB x 7) either way.
+      - neo4j-logs:/logs
     deploy:
       resources:
         limits:
           memory: 768M
     restart: unless-stopped
+    # wget is present in this image. Probing the HTTP connector keeps the
+    # check cheap; cypher-shell would prove query readiness but spawns a JVM
+    # on every run, which does not fit the 768M limit.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:7474/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
 
   embeddings:
     build:
@@ -46,8 +84,22 @@ services:
         limits:
           memory: 512M
     restart: unless-stopped
+    # python:3.11-slim has no curl or wget either; the interpreter is the
+    # one thing guaranteed to be present. The long start_period covers the
+    # first-run model download.
+    healthcheck:
+      test:
+        - "CMD"
+        - "python3"
+        - "-c"
+        - "import socket; socket.create_connection(('127.0.0.1', 8090), 2).close()"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 180s
 
 volumes:
   qdrant-data:
   neo4j-data:
+  neo4j-logs:
   model-cache:
