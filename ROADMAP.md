@@ -99,7 +99,12 @@ by not being published. Decide and implement:
   has no test. Add a seeded benchmark.
 - **Import fidelity**: `collivind import` drops entity links (memory nodes
   only) and rewrites ids. Fine for v1 backup; fix alongside sync-server id
-  stability.
+  stability. Moving between modes no longer depends on it: `collivind migrate`
+  (#7) restores memories, entities, edges and vectors by id through
+  `GraphStore.iter_*`/`restore_*` and `VectorStore.iter_all`. Neo4j edges have
+  no native id, so edges written by `create_relationship`/`invalidate_memory`
+  get a deterministic uuid5 of (source, type, target) on the way out; restored
+  edges carry `r.id`. The JSONL export could reuse the same iterators.
 - **`get_entity` / relationships export**: entities and edges deserve
   export/import too once ids are stable.
 - **Benchmark honesty**: when publishing numbers (LoCoMo/LongMemEval), report

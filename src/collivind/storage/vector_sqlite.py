@@ -25,7 +25,7 @@ import logging
 import sqlite3
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import numpy as np
 
@@ -171,6 +171,13 @@ class SqliteVectorStore(VectorStore):
             self._cache = None
         except Exception as e:
             raise self._wrap("delete", e)
+
+    def iter_all(self) -> Iterator[Tuple[str, List[float], Dict[str, Any]]]:
+        rows = self.conn.execute(
+            "SELECT id, vector, payload FROM vectors WHERE collection = ? ORDER BY id", (self.config.collection_name,)
+        ).fetchall()
+        for vid, blob, payload in rows:
+            yield vid, np.frombuffer(blob, dtype=np.float32).tolist(), json.loads(payload)
 
     def delete_collection(self) -> None:
         try:

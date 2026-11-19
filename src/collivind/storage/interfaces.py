@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from collivind.models.entity import EntityCreate, EntityNode
 from collivind.models.memory import MemoryCreate, MemoryNode
@@ -31,6 +31,12 @@ class VectorStore(ABC):
     @abstractmethod
     def delete(self, id: str) -> None:
         """Delete a vector by id."""
+        pass
+
+    @abstractmethod
+    def iter_all(self) -> Iterator[Tuple[str, List[float], Dict[str, Any]]]:
+        """Yield every (id, vector, payload) in the configured collection.
+        `upsert` is the id-preserving restore."""
         pass
 
     @abstractmethod
@@ -114,6 +120,36 @@ class GraphStore(ABC):
     @abstractmethod
     def invalidate_memory(self, id: str, superseded_by: str, reason: str) -> None:
         """Invalidate a memory node."""
+        pass
+
+    @abstractmethod
+    def iter_memories(self) -> Iterator[MemoryNode]:
+        """Yield every memory node, all projects, superseded versions included."""
+        pass
+
+    @abstractmethod
+    def iter_entities(self) -> Iterator[EntityNode]:
+        """Yield every entity node."""
+        pass
+
+    @abstractmethod
+    def iter_relationships(self) -> Iterator[RelationshipEdge]:
+        """Yield every edge between memory/entity nodes, with a stable id."""
+        pass
+
+    @abstractmethod
+    def restore_memory(self, node: MemoryNode) -> None:
+        """Upsert a memory by its id, every field verbatim (no restamping)."""
+        pass
+
+    @abstractmethod
+    def restore_entity(self, node: EntityNode) -> None:
+        """Upsert an entity by its id, every field verbatim."""
+        pass
+
+    @abstractmethod
+    def restore_relationship(self, edge: RelationshipEdge) -> None:
+        """Upsert an edge by its id. Both endpoints must already exist."""
         pass
 
     @abstractmethod

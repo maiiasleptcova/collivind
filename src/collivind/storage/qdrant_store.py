@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
@@ -118,6 +118,21 @@ class QdrantVectorStore(VectorStore):
             )
         except UnexpectedResponse as e:
             raise CollivindError(f"Qdrant delete failed: {e}")
+
+    def iter_all(self) -> Iterator[Tuple[str, List[float], Dict[str, Any]]]:
+        offset = None
+        while True:
+            points, offset = self.client.scroll(
+                collection_name=self.config.collection_name,
+                limit=256,
+                offset=offset,
+                with_payload=True,
+                with_vectors=True,
+            )
+            for point in points:
+                yield str(point.id), list(point.vector), dict(point.payload or {})
+            if offset is None:
+                return
 
     def health_check(self) -> Dict[str, Any]:
         """Report unusable when OUR collection is missing, not merely when the
