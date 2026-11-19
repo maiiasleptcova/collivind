@@ -3,7 +3,7 @@ import json
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
 from neo4j import GraphDatabase
 from neo4j import exceptions as neo4j_exceptions
@@ -12,6 +12,8 @@ from collivind.config import Neo4jConfig
 from collivind.exceptions import CollivindError
 from collivind.models import EntityCreate, EntityNode, MemoryCreate, MemoryNode, RelationshipCreate, RelationshipEdge
 from collivind.models.entity import EntityType
+from collivind.models.memory import MemoryCategory, MemorySource
+from collivind.models.relationship import RelType, stable_edge_id
 from collivind.storage.interfaces import GraphStore
 
 logger = logging.getLogger(__name__)
@@ -100,28 +102,7 @@ class Neo4jGraphStore(GraphStore):
                 record = result.single()
                 if not record:
                     return None
-                node = record["m"]
-
-                # Reconstruct MemoryNode
-                return MemoryNode(
-                    id=node["id"],
-                    content=node["content"],
-                    summary=node["summary"],
-                    category=node["category"],
-                    confidence=node.get("confidence", 1.0),
-                    valid_from=datetime.fromisoformat(node["valid_from"]) if node.get("valid_from") else None,
-                    valid_to=datetime.fromisoformat(node["valid_to"]) if node.get("valid_to") else None,
-                    project_id=node.get("project_id", "default"),
-                    session_id=node.get("session_id"),
-                    user_id=node.get("user_id", "local"),
-                    source=node.get("source", "manual"),
-                    superseded_by=node.get("superseded_by"),
-                    tags=node.get("tags", []),
-                    version=node.get("version", 1),
-                    previous_version_id=node.get("previous_version_id"),
-                    created_at=datetime.fromisoformat(node["created_at"]) if node.get("created_at") else None,
-                    updated_at=datetime.fromisoformat(node["updated_at"]) if node.get("updated_at") else None,
-                )
+                return self._node_to_memory(record["m"])
 
         try:
             return _retry(_do_get)
@@ -180,20 +161,7 @@ class Neo4jGraphStore(GraphStore):
                 return None
             node = record["e"]
 
-        entity_type = node.get("type", EntityType.CONCEPT.value)
-        try:
-            entity_type = EntityType(entity_type)
-        except (TypeError, ValueError):
-            entity_type = EntityType.CONCEPT
-
-        return EntityNode(
-            id=node["id"],
-            name=node.get("name", name),
-            type=entity_type,
-            properties=self._parse_properties(node.get("properties", {})),
-            created_at=datetime.fromisoformat(node["created_at"]) if node.get("created_at") else None,
-            updated_at=datetime.fromisoformat(node["updated_at"]) if node.get("updated_at") else None,
-        )
+        return self._node_to_entity(node, fallback_name=name)
 
     def create_relationship(self, data: RelationshipCreate) -> RelationshipEdge:
         query = f"""
@@ -332,6 +300,100 @@ class Neo4jGraphStore(GraphStore):
             current = nxt
         return chain
 
+    # --- enumerate / id-preserving restore (collivind migrate) ---
+    # ponytail: unbatched, one transaction per row; batch with UNWIND if
+    # migrations of 100k+ nodes get slow.
+
+    def iter_memories(self) -> Iterator[MemoryNode]:
+        with self.driver.session(database=self.config.database) as session:
+            nodes = [r["m"] for r in session.run("MATCH (m:Memory) RETURN m ORDER BY m.created_at, m.id")]
+        for node in nodes:
+            mem = self._node_to_memory(node)
+            yield MemoryNode(
+                **{**mem.__dict__, "category": MemoryCategory(mem.category), "source": MemorySource(mem.source)}
+            )
+
+    def iter_entities(self) -> Iterator[EntityNode]:
+        with self.driver.session(database=self.config.database) as session:
+            nodes = [r["e"] for r in session.run("MATCH (e:Entity) RETURN e ORDER BY e.id")]
+        for node in nodes:
+            yield self._node_to_entity(node, fallback_name=node["id"])
+
+    def iter_relationships(self) -> Iterator[RelationshipEdge]:
+        query = """
+        MATCH (s)-[r]->(t)
+        WHERE (s:Memory OR s:Entity) AND (t:Memory OR t:Entity)
+        RETURN s.id AS source_id, t.id AS target_id, type(r) AS type, properties(r) AS props
+        """
+        with self.driver.session(database=self.config.database) as session:
+            rows = [r.data() for r in session.run(query)]
+        for row in rows:
+            props = dict(row["props"])
+            rel_type = RelType(row["type"])
+            # edges written by create_relationship/invalidate_memory carry no
+            # id; derive one from the triple, which those writers MERGE on, so
+            # re-runs map to the same target row instead of duplicating it
+            edge_id = props.pop("id", None) or stable_edge_id(row["source_id"], rel_type.value, row["target_id"])
+            created_at = props.pop("created_at", None)
+            extra = self._parse_properties(props.pop("properties", None))
+            yield RelationshipEdge(
+                id=edge_id,
+                source_id=row["source_id"],
+                target_id=row["target_id"],
+                type=rel_type,
+                confidence=props.pop("confidence", 1.0),
+                source=props.pop("source", "manual"),
+                properties={**props, **extra},  # leftovers such as SUPERSEDES.reason
+                created_at=datetime.fromisoformat(created_at) if created_at else None,
+            )
+
+    def restore_memory(self, node: MemoryNode) -> None:
+        with self.driver.session(database=self.config.database) as session:
+            session.run("MERGE (m:Memory {id: $id}) SET m = $props", id=node.id, props=node.to_dict())
+
+    def restore_entity(self, node: EntityNode) -> None:
+        query = """
+        MERGE (e:Entity {id: $id})
+        SET e.name = $name, e.type = $type, e.properties = $props,
+            e.created_at = $created_at, e.updated_at = $updated_at
+        """
+        with self.driver.session(database=self.config.database) as session:
+            session.run(
+                query,
+                id=node.id,
+                name=node.name,
+                type=EntityType(node.type).value,
+                props=json.dumps(node.properties or {}),
+                created_at=node.created_at.isoformat() if node.created_at else None,
+                updated_at=node.updated_at.isoformat() if node.updated_at else None,
+            )
+
+    def restore_relationship(self, edge: RelationshipEdge) -> None:
+        rel_type = RelType(edge.type).value  # enum-checked: the only interpolated token
+        query = f"""
+        MATCH (s {{id: $source_id}})
+        MATCH (t {{id: $target_id}})
+        MERGE (s)-[r:{rel_type} {{id: $id}}]->(t)
+        SET r.confidence = $confidence, r.source = $source,
+            r.properties = $props, r.created_at = $created_at
+        RETURN r.id AS id
+        """
+        with self.driver.session(database=self.config.database) as session:
+            record = session.run(
+                query,
+                id=edge.id,
+                source_id=edge.source_id,
+                target_id=edge.target_id,
+                confidence=edge.confidence,
+                source=edge.source,
+                props=json.dumps(edge.properties or {}),
+                created_at=edge.created_at.isoformat() if edge.created_at else None,
+            ).single()
+        if record is None:
+            raise CollivindError(
+                f"Cannot restore edge {edge.id}: endpoint {edge.source_id} or {edge.target_id} missing"
+            )
+
     def health_check(self) -> Dict[str, Any]:
         try:
             with self.driver.session(database=self.config.database) as session:
@@ -344,6 +406,42 @@ class Neo4jGraphStore(GraphStore):
 
     def close(self) -> None:
         self.driver.close()
+
+    def _node_to_memory(self, node) -> MemoryNode:
+        return MemoryNode(
+            id=node["id"],
+            content=node["content"],
+            summary=node["summary"],
+            category=node["category"],
+            confidence=node.get("confidence", 1.0),
+            valid_from=datetime.fromisoformat(node["valid_from"]) if node.get("valid_from") else None,
+            valid_to=datetime.fromisoformat(node["valid_to"]) if node.get("valid_to") else None,
+            project_id=node.get("project_id", "default"),
+            session_id=node.get("session_id"),
+            user_id=node.get("user_id", "local"),
+            source=node.get("source", "manual"),
+            superseded_by=node.get("superseded_by"),
+            tags=node.get("tags", []),
+            version=node.get("version", 1),
+            previous_version_id=node.get("previous_version_id"),
+            created_at=datetime.fromisoformat(node["created_at"]) if node.get("created_at") else None,
+            updated_at=datetime.fromisoformat(node["updated_at"]) if node.get("updated_at") else None,
+        )
+
+    def _node_to_entity(self, node, fallback_name: str) -> EntityNode:
+        entity_type = node.get("type", EntityType.CONCEPT.value)
+        try:
+            entity_type = EntityType(entity_type)
+        except (TypeError, ValueError):
+            entity_type = EntityType.CONCEPT
+        return EntityNode(
+            id=node["id"],
+            name=node.get("name", fallback_name),
+            type=entity_type,
+            properties=self._parse_properties(node.get("properties", {})),
+            created_at=datetime.fromisoformat(node["created_at"]) if node.get("created_at") else None,
+            updated_at=datetime.fromisoformat(node["updated_at"]) if node.get("updated_at") else None,
+        )
 
     def _normalize_update_value(self, key: str, value: Any) -> Any:
         if hasattr(value, "value"):
