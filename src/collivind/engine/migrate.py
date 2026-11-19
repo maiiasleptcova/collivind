@@ -11,6 +11,8 @@ from typing import Dict, List, Optional, Set, Tuple
 
 from collivind.engine.enrichment import build_enriched_text
 from collivind.engine.memory_manager import MemoryManager
+from collivind.models.entity import EntityNode
+from collivind.models.memory import MemoryNode
 from collivind.models.relationship import RelationshipEdge, RelType
 from collivind.storage.interfaces import EmbeddingProvider, GraphStore, VectorStore
 
@@ -54,11 +56,28 @@ def _target_ids(dst: Stores) -> Dict[str, Set[str]]:
 
 
 def migrate(src: Stores, dst: Stores, *, reembed: bool, dry_run: bool) -> MigrationReport:
-    memories = list(src.graph.iter_memories())
-    entities = list(src.graph.iter_entities())
-    edges = list(src.graph.iter_relationships())
-    vectors = list(src.vector.iter_all())
+    return restore(
+        list(src.graph.iter_memories()),
+        list(src.graph.iter_entities()),
+        list(src.graph.iter_relationships()),
+        list(src.vector.iter_all()),
+        dst,
+        reembed=reembed,
+        dry_run=dry_run,
+    )
 
+
+def restore(
+    memories: List[MemoryNode],
+    entities: List[EntityNode],
+    edges: List[RelationshipEdge],
+    vectors: List[Tuple[str, Optional[List[float]], dict]],
+    dst: Stores,
+    *,
+    reembed: bool,
+    dry_run: bool,
+) -> MigrationReport:
+    """Add every record `dst` lacks, by id. A vector of None needs `reembed`."""
     node_ids = {m.id for m in memories} | {e.id for e in entities}
 
     def attached(edge: RelationshipEdge) -> bool:
