@@ -422,3 +422,17 @@ def test_status_does_not_advise_install_when_plugin_provides_hooks(tmp_path, mon
     claude_line = next(line for line in out.splitlines() if "claude:" in line)
     assert "via plugin" in claude_line
     assert "hook install" not in claude_line, "advising install here creates duplicate hooks"
+
+
+def test_user_prompt_recalls_vector_only_when_graph_is_down(monkeypatch):
+    """#39: a dead graph must not stop recall when the vector store can answer."""
+    from unittest.mock import MagicMock
+
+    manager = MagicMock()
+    manager.get_timeline.side_effect = RuntimeError("Couldn't connect to localhost:7687")
+    manager.get_context.return_value = "[DEGRADED] graph store unavailable\\n[FACT] Postgres chosen"
+    monkeypatch.setattr("collivind.cli.commands.hook._load_manager", lambda: manager)
+
+    result = CliRunner().invoke(hook, ["user-prompt"], input=_prompt_payload("which database did we choose"))
+    context = json.loads(result.output)["hookSpecificOutput"]["additionalContext"]
+    assert "Postgres chosen" in context and "DEGRADED" in context

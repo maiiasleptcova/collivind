@@ -439,16 +439,19 @@ def user_prompt(project, max_tokens, agent):
         # Nothing stored for this project means nothing to recall: skip the
         # embedding, which in embedded mode is a cold model load that can blow
         # the hook timeout on a first run (#16). A timeline read is plain SQL.
-        if not manager.get_timeline(project, limit=1):
-            return
-        # ponytail: embedded mode still loads the model per invocation on a
-        # populated store; a resident daemon is the real fix (ROADMAP.md, #16)
+        # If the graph cannot answer, carry on: search degrades to the vector
+        # store alone (#39) and says so.
+        try:
+            if not manager.get_timeline(project, limit=1):
+                return
+        except Exception:
+            pass
         context = manager.get_context(prompt, project_id=project, limit=5, max_tokens=max_tokens)
     except Exception as e:
         # Recall must never break prompt submission — but say it failed.
         _emit_context("UserPromptSubmit", _unavailable_warning(e))
         return
-    if "No relevant context found" in context:
+    if "No relevant context found" in context and "[DEGRADED]" not in context:
         return
     _emit_context("UserPromptSubmit", f"<collivind_recall>\n{context}\n</collivind_recall>")
 
