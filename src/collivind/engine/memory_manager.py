@@ -122,7 +122,7 @@ class MemoryManager:
         return memory_node
 
     @staticmethod
-    def _graph_write(fn, *args):
+    def _graph_write(fn, *args, outcome: str = "the memory was NOT saved"):
         """Run a write-path graph call; a failure says the graph is down (#39).
 
         Wraps only the calls before anything is written, so a dead store
@@ -131,10 +131,12 @@ class MemoryManager:
         try:
             return fn(*args)
         except Exception as e:
-            raise GraphStoreUnavailableError(e) from e
+            raise GraphStoreUnavailableError(e, outcome) from e
 
     def invalidate(self, memory_id: str, superseded_by: str, reason: str) -> None:
-        self.graph_store.invalidate_memory(memory_id, superseded_by, reason)
+        self._graph_write(
+            self.graph_store.invalidate_memory, memory_id, superseded_by, reason, outcome="nothing was invalidated"
+        )
 
     def update_memory(
         self,
@@ -163,7 +165,7 @@ class MemoryManager:
         if content is not None and not str(content).strip():
             raise ValueError("content cannot be blank; forget the memory instead")
 
-        existing = self.graph_store.get_memory(memory_id)
+        existing = self._graph_write(self.graph_store.get_memory, memory_id, outcome="nothing was updated")
         if not existing:
             return None
 
@@ -237,7 +239,7 @@ class MemoryManager:
 
     def forget(self, memory_id: str) -> bool:
         """Permanently delete a memory from graph and vector stores."""
-        if not self.graph_store.get_memory(memory_id):
+        if not self._graph_write(self.graph_store.get_memory, memory_id, outcome="nothing was deleted"):
             return False
         self.graph_store.delete_memory(memory_id)
         self.vector_store.delete(memory_id)

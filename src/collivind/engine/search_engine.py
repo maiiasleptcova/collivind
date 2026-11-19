@@ -88,6 +88,11 @@ class SearchEngine:
             logger.warning("graph store failed during search, serving vector-only results: %s", e)
             candidates = self._vector_only_candidates(raw_vector_results, query, now)
             degraded = True
+        if not raw_vector_results and not query.entity_names:
+            # Nothing above touched the graph, so it is unknown whether it is
+            # up; ask, or an empty answer from a dead store reads as "nothing
+            # relevant" — the silent recall #39 was about.
+            degraded = not self._graph_healthy()
 
         results = []
         for res in candidates.values():
@@ -98,6 +103,12 @@ class SearchEngine:
 
         results.sort(key=lambda x: x.score, reverse=True)
         return results[: query.limit], degraded
+
+    def _graph_healthy(self) -> bool:
+        try:
+            return self.graph_store.health_check().get("status") == "ok"
+        except Exception:
+            return False
 
     def _graph_candidates(self, raw_vector_results, query: SearchQuery, now: datetime) -> Dict[str, SearchResult]:
         candidates: Dict[str, SearchResult] = {}

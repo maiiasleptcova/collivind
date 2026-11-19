@@ -10,7 +10,7 @@ from collivind.exceptions import DockerExecutionError
 _NEO4J_AUTH = re.compile(r"NEO4J_AUTH=neo4j/(\S+)")
 
 
-def copy_templates(data_dir: Path, config: CollivindConfig):
+def copy_templates(data_dir: Path, config: CollivindConfig) -> bool:
     """Write the Docker templates into the data directory, substituting variables.
 
     Safe to re-run on an existing install, which is how template fixes reach
@@ -18,6 +18,8 @@ def copy_templates(data_dir: Path, config: CollivindConfig):
     NEO4J_AUTH only takes effect on a fresh volume and the database still
     expects the original one, and a compose file that changes is first saved
     as docker-compose.yml.bak so hand edits are recoverable.
+
+    Returns whether an existing compose file was replaced (and backed up).
     """
     data_dir.mkdir(parents=True, exist_ok=True)
     compose_path = data_dir / "docker-compose.yml"
@@ -36,7 +38,8 @@ def copy_templates(data_dir: Path, config: CollivindConfig):
         NEO4J_PASSWORD=kept.group(1) if kept else config.neo4j.password,
     )
 
-    if existing is not None and existing != compose_content:
+    replaced = existing is not None and existing != compose_content
+    if replaced:
         (data_dir / "docker-compose.yml.bak").write_text(existing)
     compose_path.write_text(compose_content)
 
@@ -47,6 +50,7 @@ def copy_templates(data_dir: Path, config: CollivindConfig):
     # Copy embedding_server.py
     server_content = resources.files(pkg).joinpath("embedding_server.py").read_text()
     (data_dir / "embedding_server.py").write_text(server_content)
+    return replaced
 
 
 def check_docker_running():

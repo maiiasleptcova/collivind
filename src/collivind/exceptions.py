@@ -40,9 +40,9 @@ class GraphStoreUnavailableError(StorageUnavailableError):
     the record of truth and a vector-only write would be invisible to it.
     """
 
-    def __init__(self, cause: Exception):
+    def __init__(self, cause: Exception, outcome: str = "the memory was NOT saved"):
         super().__init__(
-            f"Graph store is unavailable, so the memory was NOT saved: {cause}. "
+            f"Graph store is unavailable, so {outcome}: {cause}. "
             "Run `collivind status` to check it (docker mode: is the neo4j container restarting?)."
         )
 

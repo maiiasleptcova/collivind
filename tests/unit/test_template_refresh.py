@@ -79,5 +79,6 @@ def test_docker_up_refreshes_templates_before_starting(tmp_path):
         result = CliRunner().invoke(docker, ["up"])
 
     assert result.exit_code == 0, result.output
+    assert "docker-compose.yml.bak" in result.output
     assert len(order) == 1 and "healthcheck" in order[0][1]
     assert "s3cret-generated" in order[0][1]

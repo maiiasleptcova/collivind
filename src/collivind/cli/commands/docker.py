@@ -23,7 +23,8 @@ def up():
     data_dir = config.expanded_data_dir
     click.echo("Starting Collivind containers...")
     try:
-        copy_templates(data_dir, config)
+        if copy_templates(data_dir, config):
+            click.echo(f"Updated docker-compose.yml; previous kept as {data_dir / 'docker-compose.yml.bak'}")
         docker_compose_up(data_dir)
         click.secho("Containers started.", fg="green")
     except Exception as e:

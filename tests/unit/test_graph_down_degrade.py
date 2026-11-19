@@ -30,8 +30,15 @@ def _hits(*payloads, score=0.9):
 
 def _dead_graph():
     graph = MagicMock()
-    for method in ("get_memory", "find_related_memories", "get_neighbors", "create_memory"):
+    for method in ("get_memory", "find_related_memories", "get_neighbors", "create_memory", "invalidate_memory"):
         getattr(graph, method).side_effect = CollivindError("Couldn't connect to localhost:7687")
+    graph.health_check.return_value = {"status": "error", "message": "Connection refused"}
+    return graph
+
+
+def _live_graph():
+    graph = MagicMock()
+    graph.health_check.return_value = {"status": "ok"}
     return graph
 
 
@@ -126,11 +133,20 @@ class TestDegradedOutput:
         assert "use uv not pip" in context
         assert "degraded" in context.lower() and "collivind status" in context
 
-    def test_zero_hits_never_claim_degraded(self):
-        """No hits means the graph was never asked, so nothing is known to be down."""
+    def test_zero_hits_from_a_dead_graph_still_say_degraded(self):
+        """No hit means the graph was never asked; an empty answer must not
+        read as "nothing relevant" when the store is in fact down."""
         vector = MagicMock()
         vector.search.return_value = []
-        assert "degraded" not in _manager(vector, _dead_graph()).get_context("x").lower()
+
+        context = _manager(vector, _dead_graph()).get_context("x")
+
+        assert "No relevant context" in context and "degraded" in context.lower()
+
+    def test_zero_hits_from_a_live_graph_are_not_degraded(self):
+        vector = MagicMock()
+        vector.search.return_value = []
+        assert "degraded" not in _manager(vector, _live_graph()).get_context("x").lower()
 
     def test_mcp_search_flags_degraded_with_empty_results(self):
         """The flag must not ride on results alone: an entity lookup that hits
@@ -157,7 +173,9 @@ class TestDegradedOutput:
     def test_mcp_search_healthy_reports_not_degraded(self):
         vector = MagicMock()
         vector.search.return_value = []
-        out = json.loads(CollivindTools(_manager(vector, MagicMock())).handle_call("collivind_search", {"query": "x"}))
+        out = json.loads(
+            CollivindTools(_manager(vector, _live_graph())).handle_call("collivind_search", {"query": "x"})
+        )
         assert out["degraded"] is False and "warning" not in out
 
 
@@ -186,6 +204,41 @@ class TestWritesFailLoudly:
         )
 
         assert "graph store" in out["error"].lower() and "collivind status" in out["error"]
+
+    @pytest.mark.parametrize(
+        "call, outcome",
+        [
+            (lambda m: m.invalidate("m1", "m2", "r"), "nothing was invalidated"),
+            (lambda m: m.forget("m1"), "nothing was deleted"),
+            (lambda m: m.update_memory("m1", tags=["a"]), "nothing was updated"),
+        ],
+    )
+    def test_other_writes_name_the_graph_store_too(self, call, outcome):
+        with pytest.raises(GraphStoreUnavailableError, match=outcome) as exc:
+            call(_manager(MagicMock(), _dead_graph()))
+        assert "collivind status" in str(exc.value)
+
+    def test_mcp_forget_goes_through_the_guard(self):
+        out = json.loads(
+            CollivindTools(_manager(MagicMock(), _dead_graph())).handle_call("collivind_forget", {"memory_id": "m1"})
+        )
+        assert "nothing was deleted" in out["error"]
+
+    def test_raw_driver_errors_get_the_status_hint(self):
+        """Most Neo4j reads raise the driver's own ServiceUnavailable, not a
+        CollivindError, and used to come back with no pointer at all."""
+
+        class ServiceUnavailable(Exception):
+            pass
+
+        graph = _dead_graph()
+        graph.get_timeline.side_effect = ServiceUnavailable("Couldn't connect to localhost:7687")
+        out = json.loads(CollivindTools(_manager(MagicMock(), graph)).handle_call("collivind_get_timeline", {}))
+        assert "collivind status" in out["hint"]
+
+    def test_argument_errors_do_not_blame_the_backend(self):
+        out = json.loads(CollivindTools(_manager(MagicMock(), _live_graph())).handle_call("collivind_forget", {}))
+        assert "hint" not in out
 
 
 class TestFactoryToleratesADeadGraph:
