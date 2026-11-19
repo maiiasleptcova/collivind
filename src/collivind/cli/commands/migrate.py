@@ -7,9 +7,11 @@ import click
 
 from collivind.config import CollivindConfig, load_config
 from collivind.engine.migrate import Stores, embedding_space, migrate
-from collivind.storage.factory import MODE_DEFAULTS, _resolve_provider, create_all_backends
+from collivind.storage.factory import _resolve_provider, create_all_backends
 
-MODES = click.Choice(sorted(MODE_DEFAULTS))
+# Not "remote": it shares the [qdrant]/[neo4j] sections with docker, so with
+# one config.toml docker<->remote would migrate a store onto itself.
+MODES = click.Choice(["docker", "embedded"])
 
 
 def mode_config(base: CollivindConfig, mode: str) -> CollivindConfig:

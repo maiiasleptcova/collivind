@@ -378,7 +378,17 @@ class Neo4jGraphStore(GraphStore):
             r.properties = $props, r.created_at = $created_at
         RETURN r.id AS id
         """
+        # an id derived from the triple means the edge left a Neo4j without an
+        # id; claim that original rather than MERGE a parallel twin beside it
+        adopt = f"""
+        MATCH (s {{id: $source_id}})-[r:{rel_type}]->(t {{id: $target_id}})
+        WHERE r.id IS NULL
+        WITH r LIMIT 1
+        SET r.id = $id
+        """
         with self.driver.session(database=self.config.database) as session:
+            if edge.id == stable_edge_id(edge.source_id, rel_type, edge.target_id):
+                session.run(adopt, id=edge.id, source_id=edge.source_id, target_id=edge.target_id)
             record = session.run(
                 query,
                 id=edge.id,

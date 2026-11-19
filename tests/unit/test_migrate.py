@@ -212,6 +212,12 @@ def test_cli_refuses_same_mode():
     assert "nothing to migrate" in result.output
 
 
+def test_cli_rejects_remote_which_shares_dockers_stores():
+    result = CliRunner().invoke(migrate_cmd, ["--from", "docker", "--to", "remote"])
+    assert result.exit_code == 2
+    assert "remote" in result.output
+
+
 def test_cli_unreachable_target_writes_nothing(populated):
     src, _ = populated
 

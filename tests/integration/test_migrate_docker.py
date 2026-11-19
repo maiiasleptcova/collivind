@@ -102,3 +102,31 @@ def test_docker_native_edges_without_ids_migrate_idempotently(docker_stores, tmp
     supersedes = [r for r in dst.graph.iter_relationships() if r.type.value == "SUPERSEDES"]
     assert [(r.source_id, r.target_id, r.properties.get("reason")) for r in supersedes] == [(new.id, old.id, "moved")]
     assert [m.id for m in dst.graph.get_version_chain(new.id)] == [old.id, new.id]
+
+
+def test_docker_round_trip_through_embedded_adds_no_parallel_edges(docker_stores, tmp_path):
+    """docker -> embedded -> same docker: id-less native edges are adopted, not twinned."""
+    mgr = MemoryManager(docker_stores.vector, docker_stores.graph, HashEmbedder(), CollivindConfig())
+    mgr.search_engine.find_contradictions = lambda memory: []
+    old = mgr.add_memory(
+        MemoryCreate(content="cache is redis", summary="cache", category=MemoryCategory.FACT),
+        entities=[EntityCreate(name="Redis", type=EntityType.SERVICE)],
+    )
+    new = mgr.add_memory(
+        MemoryCreate(content="cache is valkey", summary="cache", category=MemoryCategory.FACT),
+        entities=[EntityCreate(name="Redis", type=EntityType.SERVICE)],
+    )
+    mgr.invalidate(old.id, new.id, "fork")
+
+    def raw_edges():
+        with docker_stores.graph.driver.session() as session:
+            return session.run("MATCH ()-[r]->() RETURN count(r) AS n").single()["n"]
+
+    before = raw_edges()
+    mid = _stores(tmp_path / "mid")
+    assert migrate(docker_stores, mid, reembed=False, dry_run=False).ok
+    assert migrate(mid, docker_stores, reembed=False, dry_run=False).ok
+    assert migrate(mid, docker_stores, reembed=False, dry_run=False).ok
+
+    assert raw_edges() == before == 3
+    assert [m.id for m in docker_stores.graph.find_related_memories("Redis")].count(new.id) == 1
