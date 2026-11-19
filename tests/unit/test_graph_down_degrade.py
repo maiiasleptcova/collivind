@@ -30,7 +30,15 @@ def _hits(*payloads, score=0.9):
 
 def _dead_graph():
     graph = MagicMock()
-    for method in ("get_memory", "find_related_memories", "get_neighbors", "create_memory", "invalidate_memory"):
+    for method in (
+        "get_memory",
+        "find_related_memories",
+        "find_related_memories_batch",
+        "get_neighbors",
+        "get_neighbors_batch",
+        "create_memory",
+        "invalidate_memory",
+    ):
         getattr(graph, method).side_effect = CollivindError("Couldn't connect to localhost:7687")
     graph.health_check.return_value = {"status": "error", "message": "Connection refused"}
     return graph
@@ -79,6 +87,7 @@ class TestVectorOnlySearch:
 
         assert graph.get_memory.call_count == 1
         graph.find_related_memories.assert_not_called()
+        graph.find_related_memories_batch.assert_not_called()
 
     def test_drops_invalidated_superseded_and_other_project_payloads(self):
         past = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()

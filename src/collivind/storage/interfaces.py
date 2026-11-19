@@ -112,6 +112,22 @@ class GraphStore(ABC):
         """Find memories related to an entity."""
         pass
 
+    def get_neighbors_batch(
+        self, node_ids: List[str], rel_types: List[str], direction: str = "OUT"
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """get_neighbors (depth 1) for many nodes: {node_id: the same list, same order}.
+
+        This default is the per-node loop; stores override it with one query.
+        """
+        return {nid: self.get_neighbors(nid, rel_types, direction=direction) for nid in dict.fromkeys(node_ids)}
+
+    def find_related_memories_batch(self, entity_names: List[str], limit: int = 10) -> Dict[str, List[MemoryNode]]:
+        """find_related_memories for many entities: {name: the same list, same order}.
+
+        This default is the per-entity loop; stores override it with one query.
+        """
+        return {name: self.find_related_memories(name, limit=limit) for name in dict.fromkeys(entity_names)}
+
     @abstractmethod
     def get_timeline(self, project_id: str, entity: Optional[str] = None, limit: int = 50) -> List[MemoryNode]:
         """Get timeline of memories."""
