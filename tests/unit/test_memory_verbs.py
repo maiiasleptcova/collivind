@@ -242,6 +242,18 @@ def test_cli_import_v1_dry_run_adds_nothing(tmp_path):
     manager.import_memories.assert_not_called()
 
 
+@pytest.mark.parametrize("flags", [[], ["--dry-run"]])
+def test_cli_import_v1_rejects_a_bad_record_before_any_write(tmp_path, flags):
+    out = tmp_path / "mem.jsonl"
+    out.write_text(json.dumps(_node().to_dict()) + "\n" + json.dumps({"category": "fact"}) + "\n")
+    manager = MagicMock()
+    with patch("collivind.cli.commands.backup._manager", return_value=manager):
+        result = CliRunner().invoke(import_cmd, [str(out), *flags])
+    assert result.exit_code == 1
+    assert "record 2 has no content" in result.output
+    manager.import_memories.assert_not_called()
+
+
 def test_cli_import_rejects_bad_json(tmp_path):
     bad = tmp_path / "bad.jsonl"
     bad.write_text("{not json}\n")

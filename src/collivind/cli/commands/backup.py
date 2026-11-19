@@ -12,6 +12,9 @@ from collivind.cli.commands.memory import _manager
 from collivind.cli.commands.migrate import _open, _space
 from collivind.config import load_config
 from collivind.engine.bundle import BundleError, export_bundle, import_bundle, is_bundle_header, read_bundle
+from collivind.models.memory import MemoryCategory, validate_confidence
+
+_PLURAL = {"memory": "memories", "entity": "entities", "relationship": "relationships", "vector": "vectors"}
 
 
 def _fail(message: str):
@@ -39,8 +42,10 @@ def export_cmd(project, output, vectors):
     finally:
         _close(stores)
     scope = f"project '{project}'" if project else "all projects"
-    summary = ", ".join(f"{n} {kind}{'s' if n != 1 else ''}" for kind, n in counts.items())
+    summary = ", ".join(f"{n} {_PLURAL[kind] if n != 1 else kind}" for kind, n in counts.items())
     click.secho(f"Exported {scope}: {summary}", fg="green", err=True)
+    if project and not counts["memory"]:
+        click.secho(f"Project '{project}' has no memories; the backup is empty. Typo?", fg="yellow", err=True)
     if skipped:
         click.secho(
             f"Left out {skipped} edge(s) whose other end is outside the export (another project or deleted).",
@@ -110,6 +115,10 @@ def _import_v1(lines, dry_run: bool) -> None:
             records.append(json.loads(line))
         except json.JSONDecodeError as e:
             _fail(f"Line {n} is not valid JSON: {e}")
+    for n, rec in enumerate(records, 1):
+        problem = _v1_problem(rec)
+        if problem:
+            _fail(f"Import aborted, nothing written: record {n} {problem}")
     if dry_run:
         click.secho(f"Dry run: {len(records)} v1 memories would be re-added (deduplication applies).", fg="green")
         return
@@ -118,3 +127,18 @@ def _import_v1(lines, dry_run: bool) -> None:
     except Exception as e:
         _fail(f"Import failed: {e}")
     click.secho(f"Processed {count} memories (near-duplicates merged, exact ones skipped)", fg="green")
+
+
+def _v1_problem(rec) -> str:
+    """Why `import_memories` would reject this v1 record, checked before any write."""
+    if not isinstance(rec, dict):
+        return "is not a JSON object"
+    if not isinstance(rec.get("content"), str) or not rec["content"]:
+        return "has no content"
+    try:
+        MemoryCategory(rec.get("category", "fact"))
+        if rec.get("confidence") is not None:
+            validate_confidence(rec["confidence"])
+    except ValueError as e:
+        return f"is invalid: {e}"
+    return ""

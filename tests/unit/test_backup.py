@@ -13,7 +13,7 @@ from test_migrate import _stores, _vectors, populated  # noqa: F401 - fixture
 
 from collivind.cli.commands.backup import export_cmd, import_cmd
 from collivind.engine.bundle import _edge_dict, _entity_dict
-from collivind.models import MemoryCategory, MemoryNode
+from collivind.models import MemoryCategory, MemoryCreate, MemoryNode, RelationshipEdge, RelType
 
 SPACE = ("sentence-transformers", "model-a", 8)
 
@@ -193,3 +193,49 @@ def test_missing_record_after_import_exits_nonzero(exported, tmp_path):
         result = _cli(import_cmd, [path], dst)
     assert result.exit_code == 1
     assert "Verification failed" in result.output
+
+
+def test_reimport_does_not_resurrect_a_vector_retired_since(exported, tmp_path):
+    *_, ids, path = exported
+    assert _cli(import_cmd, [path], _stores(tmp_path / "dst")).exit_code == 0
+    dst = _stores(tmp_path / "dst")
+    dst.graph.invalidate_memory(ids["other"], ids["new"], "superseded_by_update")
+    dst.vector.delete(ids["other"])  # what add_memory does on supersession
+
+    result = _cli(import_cmd, [path], dst)
+
+    assert result.exit_code == 0, result.output
+    after = _stores(tmp_path / "dst")
+    assert set(_vectors(after)) == {ids["new"]}
+    assert after.graph.get_memory(ids["other"]).superseded_by == ids["new"]
+
+
+def test_missing_edge_timestamp_stays_missing(tmp_path):
+    src = _stores(tmp_path / "src")
+    src.graph.initialize()
+    a = src.graph.create_memory(MemoryCreate(content="a", summary="a", category=MemoryCategory.FACT))
+    src.graph.restore_relationship(
+        RelationshipEdge(id="e1", source_id=a.id, target_id=a.id, type=RelType.RELATES_TO, created_at=None)
+    )
+    path = tmp_path / "b.jsonl"
+    assert _cli(export_cmd, ["-o", path], src).exit_code == 0
+    assert _cli(import_cmd, [path], _stores(tmp_path / "dst")).exit_code == 0
+    assert [r.created_at for r in _stores(tmp_path / "dst").graph.iter_relationships()] == [None]
+
+
+def test_export_fails_when_the_store_changes_between_passes(populated, tmp_path):  # noqa: F811
+    src, _ = populated
+    first = list(src.vector.iter_all())
+    with patch.object(src.vector, "iter_all", side_effect=[iter(first), iter(first[:1])]):
+        result = _cli(export_cmd, ["-o", tmp_path / "b.jsonl"], src)
+    assert result.exit_code == 1
+    assert "store changed during export" in result.output
+
+
+def test_export_summary_wording_and_empty_project_warning(populated, tmp_path):  # noqa: F811
+    src, _ = populated
+    result = _cli(export_cmd, ["-o", tmp_path / "all.jsonl"], src)
+    assert "3 memories, 4 entities, 5 relationships, 2 vectors" in result.output
+    result = _cli(export_cmd, ["-o", tmp_path / "none.jsonl", "-p", "typo"], _stores(tmp_path / "src"))
+    assert result.exit_code == 0
+    assert "has no memories" in result.output

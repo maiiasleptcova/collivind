@@ -61,8 +61,8 @@ def _iso(when: Optional[datetime]) -> Optional[str]:
     return when.isoformat() if when else None
 
 
-def _when(value: Optional[str]) -> datetime:
-    return datetime.fromisoformat(value) if value else datetime.now(timezone.utc)
+def _when(value: Optional[str]) -> Optional[datetime]:
+    return datetime.fromisoformat(value) if value else None  # absent stays absent, not "now"
 
 
 def _entity_dict(e: EntityNode) -> dict:
@@ -157,8 +157,11 @@ def export_bundle(
     }
     out.write(json.dumps(header) + "\n")
 
+    written = {kind: 0 for kind in KINDS}
+
     def emit(kind: str, record: dict) -> None:
         out.write(json.dumps({"kind": kind, **record}) + "\n")
+        written[kind] += 1
 
     for m in src.graph.iter_memories():
         if m.id in ids["memory"]:
@@ -172,6 +175,10 @@ def export_bundle(
     for vid, vec, payload in src.vector.iter_all():
         if vid in ids["vector"]:
             emit("vector", {"id": vid, "payload": payload, "vector": [float(x) for x in vec] if vectors else None})
+    if written != counts:
+        # Something wrote to the store between the two passes; the header now
+        # lies and import would (rightly) reject the file.
+        raise RuntimeError(f"store changed during export (header {counts}, wrote {written}); run export again")
     return counts, skipped
 
 
