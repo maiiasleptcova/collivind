@@ -3,7 +3,7 @@ import subprocess
 import click
 
 from collivind.config import load_config
-from collivind.docker.compose import docker_compose_down, docker_compose_up
+from collivind.docker.compose import copy_templates, docker_compose_down, docker_compose_up
 
 
 @click.group()
@@ -14,11 +14,16 @@ def docker():
 
 @docker.command()
 def up():
-    """Start Collivind Docker containers."""
+    """Start Collivind Docker containers, refreshing the templates first.
+
+    init writes the templates only once, so without the refresh an existing
+    install never received fixes like the 0.10.0 healthchecks (#39).
+    """
     config = load_config()
     data_dir = config.expanded_data_dir
     click.echo("Starting Collivind containers...")
     try:
+        copy_templates(data_dir, config)
         docker_compose_up(data_dir)
         click.secho("Containers started.", fg="green")
     except Exception as e:
