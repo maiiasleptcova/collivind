@@ -61,6 +61,6 @@ def status():
     _, path = _socket()
     info = _info(path)
     if not info:
-        click.echo("Not running.")
+        click.echo(f"Not running (socket {path}).")
         return
     click.echo(f"Running: pid {info['pid']}, collivind {info['version']}, model {info['model']}, socket {path}")

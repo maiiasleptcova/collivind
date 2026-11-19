@@ -3,7 +3,8 @@
 Every hook run is a fresh process, so without this each prompt pays the
 sentence-transformers import and model load (~9s warm, worse cold). The daemon
 loads the model once and answers JSON-line requests over a unix socket in the
-data dir (mode 0600). It exits after an idle timeout.
+data dir (mode 0600), or in a private per-user dir under the system temp dir
+when that path is over the AF_UNIX limit. It exits after an idle timeout.
 
 Protocol, one request per connection:
   -> {"op": "embed", "texts": [...], "version": "...", "model": "..."}
@@ -22,13 +23,16 @@ This module must stay cheap to import: hooks import it on every prompt.
 """
 
 import argparse
+import hashlib
 import json
 import logging
 import os
 import socket
 import socketserver
+import stat
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -61,7 +65,29 @@ def daemon_enabled(config_flag: bool) -> bool:
 
 
 def socket_path_for(data_dir: Path) -> Path:
-    return Path(data_dir).expanduser() / SOCKET_NAME
+    """The socket for a data dir: inside it, or, when that path is over the
+    AF_UNIX limit, in a private per-user dir under the system temp dir keyed by
+    a hash of the data dir. Lock and log live next to the socket either way.
+
+    If the short dir cannot be made safe (someone else owns it, or it is open
+    to others) the long path is returned and the daemon stays off for it.
+    """
+    data_dir = Path(data_dir).expanduser()
+    path = data_dir / SOCKET_NAME
+    if len(str(path)) <= MAX_SOCKET_PATH or not hasattr(os, "getuid"):
+        return path
+    key = hashlib.sha256(str(data_dir.resolve()).encode()).hexdigest()[:16]
+    short = Path(tempfile.gettempdir()) / f"collivind-{os.getuid()}-{key}"
+    try:
+        short.mkdir(mode=0o700, exist_ok=True)
+        st = short.lstat()  # lstat: a planted symlink is not a directory we own
+    except OSError:
+        return path
+    if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid() or st.st_mode & 0o077:
+        logger.warning(f"refusing embed daemon dir {short}: not a private directory owned by this user")
+        return path
+    fallback = short / SOCKET_NAME
+    return fallback if len(str(fallback)) <= MAX_SOCKET_PATH else path
 
 
 # --- server ---------------------------------------------------------------
