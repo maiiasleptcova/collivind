@@ -15,6 +15,23 @@ from collivind.storage.interfaces import GraphStore
 logger = logging.getLogger(__name__)
 
 
+# far under SQLITE_MAX_VARIABLE_NUMBER even on builds that cap it at 999
+_IN_CHUNK = 500
+
+
+def _chunks(items: List[str]) -> Iterator[List[str]]:
+    for i in range(0, len(items), _IN_CHUNK):
+        yield items[i : i + _IN_CHUNK]
+
+
+def _placeholders(items: List[str]) -> str:
+    return ", ".join("?" for _ in items)
+
+
+def _entity_slug(name: str) -> str:
+    return name.lower().replace(" ", "_").replace("-", "_")
+
+
 class SqliteGraphStore(GraphStore):
     """Graph storage using SQLite with adjacency tables. No Docker needed."""
 
@@ -243,6 +260,49 @@ class SqliteGraphStore(GraphStore):
             (entity_id, limit),
         ).fetchall()
         return [self._row_to_memory(r) for r in rows]
+
+    def get_neighbors_batch(
+        self, node_ids: List[str], rel_types: List[str], direction: str = "OUT"
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        ids = list(dict.fromkeys(node_ids))
+        results: Dict[str, List[Dict[str, Any]]] = {nid: [] for nid in ids}
+        for side, node_col, other_col in (("OUT", "source_id", "target_id"), ("IN", "target_id", "source_id")):
+            if direction not in (side, "BOTH"):
+                continue
+            for chunk in _chunks(ids):
+                # rowid order per node = the source_id/target_id index order get_neighbors walks
+                rows = self.conn.execute(
+                    f"SELECT {node_col} AS node, {other_col} AS other, type FROM relationships"
+                    f" WHERE {node_col} IN ({_placeholders(chunk)}) ORDER BY rowid",
+                    chunk,
+                ).fetchall()
+                for row in rows:
+                    if not rel_types or row["type"] in rel_types:
+                        results[row["node"]].append({"id": row["other"], "rel_type": row["type"], "direction": side})
+        return results
+
+    def find_related_memories_batch(self, entity_names: List[str], limit: int = 10) -> Dict[str, List[MemoryNode]]:
+        names = list(dict.fromkeys(entity_names))
+        slugs = list(dict.fromkeys(_entity_slug(n) for n in names))
+        by_slug: Dict[str, List[MemoryNode]] = {s: [] for s in slugs}
+        for chunk in _chunks(slugs):
+            # per-entity top `limit` in find_related_memories' order: same join
+            # (a memory linked twice to one entity takes two slots there too),
+            # same ORDER BY, the LIMIT applied per entity by ROW_NUMBER
+            rows = self.conn.execute(
+                f"""WITH ranked AS (
+                       SELECT r.target_id AS eid, r.source_id AS mid,
+                              ROW_NUMBER() OVER (PARTITION BY r.target_id ORDER BY m.created_at DESC) AS rn
+                       FROM relationships r JOIN memories m ON m.id = r.source_id
+                       WHERE r.target_id IN ({_placeholders(chunk)})
+                   )
+                   SELECT ranked.eid AS _eid, m.* FROM ranked JOIN memories m ON m.id = ranked.mid
+                   WHERE ranked.rn <= ? ORDER BY ranked.eid, ranked.rn""",
+                [*chunk, limit],
+            ).fetchall()
+            for row in rows:
+                by_slug[row["_eid"]].append(self._row_to_memory(row))
+        return {name: list(by_slug[_entity_slug(name)]) for name in names}
 
     def get_timeline(self, project_id: str, entity: Optional[str] = None, limit: int = 50) -> List[MemoryNode]:
         if entity:

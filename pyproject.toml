@@ -63,4 +63,5 @@ check_untyped_defs = true
 testpaths = ["tests"]
 markers = [
     "integration: requires running Docker services",
+    "perf: timing-based check with a generous bound (deselect with -m \"not perf\")",
 ]

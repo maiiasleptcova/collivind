@@ -89,10 +89,18 @@ by not being published. Decide and implement:
   capture, but no host lets PreCompact speak to the model, so the save runs
   *after* compaction from the summary. Anything the summary drops is lost;
   transcript-export capture (claude-mem approach) would close that.
-- **Graph expansion is N+1** (`find_related_memories` per entity per seed):
-  batch it before the 10k-memory performance target is tested.
-- **Perf/scale test suite**: the design spec's 500ms @ 10k memories target
-  has no test. Add a seeded benchmark.
+- **Graph expansion batching shipped**: `GraphStore.get_neighbors_batch` /
+  `find_related_memories_batch` (per-item defaults on the ABC, one query each
+  in SQLite and Neo4j) replace the per-seed, per-entity calls; Neo4j id
+  lookups now go through the Memory/Entity/Session id indexes instead of an
+  AllNodesScan. Still one `get_memory` per vector hit (`limit * 3`); batch
+  that too if a remote graph makes those round trips show.
+- **Perf/scale test suite shipped**: `benchmarks/search_bench.py` seeds 10k
+  memories (Zipf-skewed entities, token-hash embedder, no model). Search
+  p50/p95 at 10k: embedded 117/148 ms → 32/41 ms; Neo4j+Qdrant 1804/2120 ms
+  → 65/81 ms (M-series laptop, 2026-11-19). `tests/unit/test_search_perf.py`
+  pins equivalence and the graph statement count per search. Not covered:
+  real embedding-model latency, 100k+ memories, concurrent searches.
 - **Import fidelity** — done: `collivind export` writes a v2 bundle (header +
   memories, entities, edges, vector ids/payloads, vectors optional) through
   `GraphStore.iter_*` / `VectorStore.iter_all`, and `import` restores it by id

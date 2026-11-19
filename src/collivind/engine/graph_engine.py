@@ -20,42 +20,37 @@ class GraphEngine:
         """
         Find memories connected to the seed memories via shared entities.
         Returns a dictionary mapping memory_id to {"memory": MemoryNode, "shared_entities": [entity names]}
+
+        Two batched store calls (seed -> entities, entities -> memories) rather
+        than one per seed and one per entity per seed. The walk order (seeds,
+        then each seed's entities, then each entity's memories) is the old
+        per-item order, so dict insertion order, and with it the stable sort's
+        tie-breaking in SearchEngine, is unchanged.
         """
-        expanded: Dict[str, Dict[str, Any]] = {}
         if not seed_memory_ids:
-            return expanded
+            return {}
+        seeds = set(seed_memory_ids)
 
-        # We'll use the Neo4j GraphStore to execute a specific query for this expansion.
-        # However, to keep it modular, we assume Neo4jGraphStore has a way to run custom queries
-        # or we use the existing methods.
-        # For pure interface-based implementation, we can use `get_neighbors` on each seed.
-
+        neighbors = self.graph_store.get_neighbors_batch(seed_memory_ids, rel_types=["ABOUT", "MENTIONS"])
+        entity_names: List[str] = []
         for mem_id in seed_memory_ids:
-            # 1. Get entities for this memory
-            neighbors = self.graph_store.get_neighbors(
-                mem_id,
-                rel_types=["ABOUT", "MENTIONS"],
-                direction="OUT",
-                depth=1,
-            )
-
-            for n in neighbors:
+            for n in neighbors.get(mem_id, []):
                 ent_id, ent_name = self._neighbor_identity(n)
-                if not ent_id:
+                if ent_id:
+                    entity_names.append(ent_name or ent_id.replace("_", " "))
+        # a later seed repeating an entity added nothing new on the per-item path
+        entity_names = list(dict.fromkeys(entity_names))
+
+        related = self.graph_store.find_related_memories_batch(entity_names, limit=20)
+        expanded: Dict[str, Dict[str, Any]] = {}
+        for ent_name in entity_names:
+            for r_mem in related.get(ent_name, []):
+                if r_mem.id in seeds:
                     continue
-                ent_name = ent_name or ent_id.replace("_", " ")
+                entry = expanded.setdefault(r_mem.id, {"memory": r_mem, "shared_entities": {}})
+                entry["shared_entities"][ent_name] = None  # ordered set
 
-                related_mems = self.graph_store.find_related_memories(ent_name, limit=20)
-                for r_mem in related_mems:
-                    if r_mem.id in seed_memory_ids:
-                        continue
-
-                    if r_mem.id not in expanded:
-                        expanded[r_mem.id] = {"memory": r_mem, "shared_entities": set()}
-                    expanded[r_mem.id]["shared_entities"].add(ent_name)
-
-        # Convert sets to lists for output
-        for mem_id in expanded:
-            expanded[mem_id]["shared_entities"] = list(expanded[mem_id]["shared_entities"])
-
-        return expanded
+        return {
+            mem_id: {"memory": entry["memory"], "shared_entities": list(entry["shared_entities"])}
+            for mem_id, entry in expanded.items()
+        }

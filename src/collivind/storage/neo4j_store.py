@@ -34,6 +34,18 @@ def _retry(fn, max_retries=3, base_delay=0.5):
     raise last_error
 
 
+def _node_by_id(var: str, id_expr: str) -> str:
+    """`MATCH` for a node by id that the unique id constraints can serve.
+
+    Every node this store writes is a Memory, Entity or Session, each with a
+    unique constraint on id (initialize). A bare `MATCH (n {id: $id})` cannot
+    use those indexes and scans every node; the label OR plans as a union of
+    NodeUniqueIndexSeeks (EXPLAIN on 5.26). Spelled as WHERE rather than
+    `:Memory|Entity` so it still parses on Neo4j 4.4 for remote mode.
+    """
+    return f"MATCH ({var}) WHERE ({var}:Memory OR {var}:Entity OR {var}:Session) AND {var}.id = {id_expr}"
+
+
 class Neo4jGraphStore(GraphStore):
     def __init__(self, config: Neo4jConfig):
         self.config = config
@@ -165,8 +177,8 @@ class Neo4jGraphStore(GraphStore):
 
     def create_relationship(self, data: RelationshipCreate) -> RelationshipEdge:
         query = f"""
-        MATCH (source {{id: $source_id}})
-        MATCH (target {{id: $target_id}})
+        {_node_by_id("source", "$source_id")}
+        {_node_by_id("target", "$target_id")}
         MERGE (source)-[r:{data.type.value}]->(target)
         ON CREATE SET r.confidence = $confidence, r.source = $source
         RETURN r
@@ -203,7 +215,8 @@ class Neo4jGraphStore(GraphStore):
             rel_pattern = f"<-[r:{type_filter}*1..{depth}]-"
 
         query = f"""
-        MATCH (n {{id: $node_id}}){rel_pattern}(m)
+        {_node_by_id("n", "$node_id")}
+        MATCH (n){rel_pattern}(m)
         RETURN m, r
         """
         results = []
@@ -227,13 +240,47 @@ class Neo4jGraphStore(GraphStore):
         MATCH (m:Memory)-[:ABOUT|MENTIONS]->(e:Entity {id: $entity_id})
         RETURN m LIMIT $limit
         """
-        memories = []
         with self.driver.session(database=self.config.database) as session:
-            res = session.run(query, entity_id=entity_id, limit=limit)
-            for record in res:
-                node = record["m"]
-                memories.append(self.get_memory(node["id"]))  # Simplification: refetch to construct node
-        return [m for m in memories if m is not None]
+            return [self._node_to_memory(r["m"]) for r in session.run(query, entity_id=entity_id, limit=limit)]
+
+    def get_neighbors_batch(
+        self, node_ids: List[str], rel_types: List[str], direction: str = "OUT"
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        type_filter = ":" + "|".join(RelType(t).value for t in rel_types) if rel_types else ""
+        rel = f"[r{type_filter}]"
+        rel_pattern = {"OUT": f"-{rel}->", "IN": f"<-{rel}-"}.get(direction, f"-{rel}-")
+        query = f"""
+        UNWIND $ids AS nid
+        {_node_by_id("n", "nid")}
+        MATCH (n){rel_pattern}(m)
+        RETURN nid, m, r
+        """
+        ids = list(dict.fromkeys(node_ids))
+        results: Dict[str, List[Dict[str, Any]]] = {nid: [] for nid in ids}
+        with self.driver.session(database=self.config.database) as session:
+            for record in session.run(query, ids=ids):
+                node = dict(record["m"])
+                results[record["nid"]].append(
+                    {"id": node.get("id"), "name": node.get("name"), "node": node, "relationships": [dict(record["r"])]}
+                )
+        return results
+
+    def find_related_memories_batch(self, entity_names: List[str], limit: int = 10) -> Dict[str, List[MemoryNode]]:
+        names = list(dict.fromkeys(entity_names))
+        slugs = list(dict.fromkeys(n.lower().replace(" ", "_").replace("-", "_") for n in names))
+        # same pattern and per-entity LIMIT as find_related_memories (which has
+        # no ORDER BY either, so which `limit` memories come back past the limit
+        # is Neo4j's choice on both paths)
+        query = """
+        UNWIND $ids AS eid
+        MATCH (m:Memory)-[:ABOUT|MENTIONS]->(:Entity {id: eid})
+        RETURN eid, collect(m)[..$limit] AS ms
+        """
+        by_slug: Dict[str, List[MemoryNode]] = {slug: [] for slug in slugs}
+        with self.driver.session(database=self.config.database) as session:
+            for record in session.run(query, ids=slugs, limit=limit):
+                by_slug[record["eid"]] = [self._node_to_memory(m) for m in record["ms"]]
+        return {name: list(by_slug[name.lower().replace(" ", "_").replace("-", "_")]) for name in names}
 
     def get_timeline(self, project_id: str, entity: Optional[str] = None, limit: int = 50) -> List[MemoryNode]:
         if entity:
@@ -372,8 +419,8 @@ class Neo4jGraphStore(GraphStore):
     def restore_relationship(self, edge: RelationshipEdge) -> None:
         rel_type = RelType(edge.type).value  # enum-checked: the only interpolated token
         query = f"""
-        MATCH (s {{id: $source_id}})
-        MATCH (t {{id: $target_id}})
+        {_node_by_id("s", "$source_id")}
+        {_node_by_id("t", "$target_id")}
         MERGE (s)-[r:{rel_type} {{id: $id}}]->(t)
         SET r.confidence = $confidence, r.source = $source,
             r.properties = $props, r.created_at = $created_at
@@ -382,7 +429,9 @@ class Neo4jGraphStore(GraphStore):
         # an id derived from the triple means the edge left a Neo4j without an
         # id; claim that original rather than MERGE a parallel twin beside it
         adopt = f"""
-        MATCH (s {{id: $source_id}})-[r:{rel_type}]->(t {{id: $target_id}})
+        {_node_by_id("s", "$source_id")}
+        {_node_by_id("t", "$target_id")}
+        MATCH (s)-[r:{rel_type}]->(t)
         WHERE r.id IS NULL
         WITH r LIMIT 1
         SET r.id = $id
