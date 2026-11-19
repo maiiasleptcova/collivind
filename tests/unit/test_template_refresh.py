@@ -82,3 +82,25 @@ def test_docker_up_refreshes_templates_before_starting(tmp_path):
     assert "docker-compose.yml.bak" in result.output
     assert len(order) == 1 and "healthcheck" in order[0][1]
     assert "s3cret-generated" in order[0][1]
+
+
+def test_hand_edited_compose_is_kept(tmp_path):
+    """Review r1 #6: `docker up` must not silently undo a remapped port."""
+    copy_templates(tmp_path, _config(tmp_path))
+    compose = tmp_path / "docker-compose.yml"
+    compose.write_text(compose.read_text().replace('"6333:6333"', '"16333:6333"'))
+    (tmp_path / ".docker-compose.sha256").write_text("hash-of-an-older-template-render")
+    assert copy_templates(tmp_path, _config(tmp_path)) == "kept-edits"
+    assert '"16333:6333"' in compose.read_text()
+
+
+def test_unedited_compose_from_an_older_template_is_refreshed(tmp_path):
+    import hashlib
+
+    copy_templates(tmp_path, _config(tmp_path))
+    compose = tmp_path / "docker-compose.yml"
+    old = compose.read_text() + "\n# older template\n"
+    compose.write_text(old)
+    (tmp_path / ".docker-compose.sha256").write_text(hashlib.sha256(old.encode()).hexdigest())
+    assert copy_templates(tmp_path, _config(tmp_path)) == "replaced"
+    assert "# older template" not in compose.read_text()

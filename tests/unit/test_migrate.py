@@ -246,3 +246,23 @@ def test_cli_prints_counts_and_exits_zero(populated, tmp_path):
     assert "Vectors copied as stored" in result.output
     assert "skipped dangling edge" in result.output
     assert "memories             3       3        0" in result.output
+
+
+def test_rerun_does_not_revert_a_target_edit(populated, tmp_path):
+    """Review r1 #4: a re-run used to overwrite target records, undoing edits made there."""
+    src, ids = populated
+    dst = _stores(tmp_path / "dst")
+    migrate(src, dst, reembed=False, dry_run=False)
+    edited = next(m for m in dst.graph.iter_memories() if m.id == ids["other"])
+    dst.graph.restore_memory(type(edited).from_dict({**edited.to_dict(), "content": "edited on the target"}))
+
+    report = migrate(src, dst, reembed=False, dry_run=False)
+    assert report.ok
+    after = next(m for m in dst.graph.iter_memories() if m.id == ids["other"])
+    assert after.content == "edited on the target"
+
+
+def test_docker_service_model_is_not_taken_from_config():
+    """Review r1 #5: MiniLM (384d) on embedded is not the space the bge docker service writes."""
+    assert embedding_space("local", "all-MiniLM-L6-v2", 384) != embedding_space("http", "all-MiniLM-L6-v2", 384)
+    assert embedding_space("local", "BAAI/bge-small-en-v1.5", 384) == embedding_space("http", "anything", 384)

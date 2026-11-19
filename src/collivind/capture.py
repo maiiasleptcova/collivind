@@ -11,13 +11,17 @@ Everything lives in two small files in the data dir:
 - checkpoints.jsonl — append-only history of confirmed saves and failures
 """
 
-import fcntl
 import json
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator, Optional
+
+try:
+    import fcntl
+except ImportError:  # Windows: no flock; state updates are then unlocked
+    fcntl = None
 
 # Re-ask after this many further responses if a requested save never landed.
 RETRY_AFTER = 3
@@ -52,7 +56,8 @@ def locked_state() -> Iterator[dict]:
     path = state_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path.with_suffix(".lock"), "w") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+        if fcntl:
+            fcntl.flock(lock, fcntl.LOCK_EX)
         try:
             state = json.loads(path.read_text()) if path.exists() else {}
         except (OSError, json.JSONDecodeError):
@@ -167,7 +172,8 @@ def record(
     path = history_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "a") as f:
-        fcntl.flock(f, fcntl.LOCK_EX)
+        if fcntl:
+            fcntl.flock(f, fcntl.LOCK_EX)
         f.write(json.dumps(entry) + "\n")
 
 

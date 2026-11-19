@@ -1,3 +1,4 @@
+import hashlib
 import re
 import string
 import subprocess
@@ -19,7 +20,8 @@ def copy_templates(data_dir: Path, config: CollivindConfig) -> bool:
     expects the original one, and a compose file that changes is first saved
     as docker-compose.yml.bak so hand edits are recoverable.
 
-    Returns whether an existing compose file was replaced (and backed up).
+    Returns "replaced" (backed up), "kept-edits" (hand-edited file left
+    alone), or "" (new or unchanged).
     """
     data_dir.mkdir(parents=True, exist_ok=True)
     compose_path = data_dir / "docker-compose.yml"
@@ -38,10 +40,18 @@ def copy_templates(data_dir: Path, config: CollivindConfig) -> bool:
         NEO4J_PASSWORD=kept.group(1) if kept else config.neo4j.password,
     )
 
+    # A hash of what we last wrote tells an untouched file (safe to refresh)
+    # from one the user edited (kept, with a note). Installs older than the
+    # marker have no hash and are refreshed with a backup.
+    marker = data_dir / ".docker-compose.sha256"
+    if existing is not None and existing != compose_content and marker.exists():
+        if hashlib.sha256(existing.encode()).hexdigest() != marker.read_text().strip():
+            return "kept-edits"
     replaced = existing is not None and existing != compose_content
     if replaced:
         (data_dir / "docker-compose.yml.bak").write_text(existing)
     compose_path.write_text(compose_content)
+    marker.write_text(hashlib.sha256(compose_content.encode()).hexdigest())
 
     # Copy Dockerfile.embeddings
     dockerfile_content = resources.files(pkg).joinpath("Dockerfile.embeddings").read_text()
@@ -50,7 +60,7 @@ def copy_templates(data_dir: Path, config: CollivindConfig) -> bool:
     # Copy embedding_server.py
     server_content = resources.files(pkg).joinpath("embedding_server.py").read_text()
     (data_dir / "embedding_server.py").write_text(server_content)
-    return replaced
+    return "replaced" if replaced else ""
 
 
 def check_docker_running():

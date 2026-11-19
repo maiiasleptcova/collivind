@@ -70,14 +70,24 @@ def migrate(src: Stores, dst: Stores, *, reembed: bool, dry_run: bool) -> Migrat
     if not dry_run:
         dst.graph.initialize()
         dst.vector.initialize()
+        # Copy only what the target lacks: a record already there may have been
+        # edited or invalidated since the last run, and the source must not
+        # silently revert it. (A record *deleted* from the target since then
+        # cannot be told apart from a new one and is copied again.)
+        have = _target_ids(dst)
         for mem in memories:
-            dst.graph.restore_memory(mem)
+            if mem.id not in have["memories"]:
+                dst.graph.restore_memory(mem)
         for ent in entities:
-            dst.graph.restore_entity(ent)
+            if ent.id not in have["entities"]:
+                dst.graph.restore_entity(ent)
         for edge in live_edges:
-            dst.graph.restore_relationship(edge)
+            if edge.id not in have["relationships"]:
+                dst.graph.restore_relationship(edge)
         texts = _embedding_texts(memories, entities, live_edges) if reembed else {}
         for vid, vector, payload in vectors:
+            if vid in have["vectors"]:
+                continue
             if reembed:
                 vector = dst.embedder.embed(texts.get(vid) or _payload_text(payload))
             dst.vector.upsert(vid, vector, payload)
@@ -113,6 +123,9 @@ def _payload_text(payload: dict) -> str:
     return " | ".join(str(payload[k]) for k in ("content", "summary") if payload.get(k)) or ""
 
 
+DOCKER_SERVICE_MODEL = "BAAI/bge-small-en-v1.5"  # hard-coded in docker/templates/embedding_server.py
+
+
 def embedding_space(provider: str, model: str, dimension: int) -> Tuple[str, Optional[str], int]:
     """Identity of the vector space a provider writes into.
 
@@ -121,4 +134,8 @@ def embedding_space(provider: str, model: str, dimension: int) -> Tuple[str, Opt
     BAAI/bge-small-en-v1.5), so their vectors are interchangeable.
     """
     family = "sentence-transformers" if provider in ("local", "http") else provider
+    if provider == "http":
+        # The bundled service ignores config.embeddings.model; comparing the
+        # configured name would call MiniLM vectors "the same space" as bge.
+        model = DOCKER_SERVICE_MODEL
     return family, model, dimension

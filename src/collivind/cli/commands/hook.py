@@ -312,7 +312,9 @@ def stop(threshold, session_id, agent):
     """Periodic capture checkpoint. Asks the agent to save; never assumes it did."""
     payload = _hook_input()
     cfg = _hooks_config()
-    threshold = threshold or cfg.save_interval
+    # >= 2: opencode has no stop_hook_active, so at 1 the reply to a save
+    # request would itself trigger the next request, forever.
+    threshold = max(2, threshold or cfg.save_interval)
     sid = session_id or payload.get("session_id") or "default"
     with capture.locked_state() as state:
         capture.heartbeat(state, agent, "Stop")
@@ -359,7 +361,8 @@ def session_start(project, limit, agent):
     except Exception as e:
         # Never break session start, but never go silent either: an empty
         # recall looked identical to a dead store for 46 hours in #39.
-        _emit_context("SessionStart", _unavailable_warning(e))
+        warning = _unavailable_warning(e)
+        _emit_context("SessionStart", f"{warning}\n{save_request}" if save_request else warning)
         return
     if not memories:
         if save_request:

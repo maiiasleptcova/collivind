@@ -201,10 +201,20 @@ def spawn(socket_path: Path, model_name: str, idle_timeout: float) -> None:
     """Start a detached daemon. All stdio is detached from the caller: a hook
     whose stdout pipe is inherited would hang until the daemon exits."""
     socket_path.parent.mkdir(parents=True, exist_ok=True)
-    cmd = [sys.executable, "-m", "collivind.storage.embed_daemon", "--socket", str(socket_path)]
+    # -I and a neutral cwd: hooks run inside the user's project, and `-m` would
+    # otherwise put that directory first on sys.path, so a repo's own json.py
+    # or argparse.py would be imported (and executed) by the daemon.
+    cmd = [sys.executable, "-I", "-m", "collivind.storage.embed_daemon", "--socket", str(socket_path)]
     cmd += ["--model", model_name, "--idle-timeout", str(idle_timeout)]
     with open(socket_path.with_name(LOG_NAME), "ab") as log:
-        subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=log, start_new_session=True)
+        subprocess.Popen(
+            cmd,
+            cwd=str(socket_path.parent),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=log,
+            start_new_session=True,
+        )
 
 
 def embed_via_daemon(socket_path: Path, model_name: str, texts: List[str], idle_timeout: float):

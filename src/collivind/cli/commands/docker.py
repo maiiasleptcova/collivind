@@ -23,8 +23,15 @@ def up():
     data_dir = config.expanded_data_dir
     click.echo("Starting Collivind containers...")
     try:
-        if copy_templates(data_dir, config):
+        refreshed = copy_templates(data_dir, config)
+        if refreshed == "replaced":
             click.echo(f"Updated docker-compose.yml; previous kept as {data_dir / 'docker-compose.yml.bak'}")
+        elif refreshed == "kept-edits":
+            click.secho(
+                f"{data_dir / 'docker-compose.yml'} has local edits, so it was not updated to the current "
+                "template. Delete it and re-run `collivind docker up` to take the new one.",
+                fg="yellow",
+            )
         docker_compose_up(data_dir)
         click.secho("Containers started.", fg="green")
     except Exception as e:
