@@ -68,3 +68,33 @@ def test_plugin_drives_real_hooks(tmp_path, monkeypatch):
     assert "checkpoint_id" in texts[0] and "just compacted" in texts[1]
     assert all(r["body"]["parts"][0]["synthetic"] for r in result["prompts"])
     assert result["context"] and "summary" in result["context"][0]
+
+
+@pytest.mark.skipif(NODE is None, reason="node not installed")
+def test_reply_to_a_save_prompt_does_not_count(tmp_path, monkeypatch):
+    """The synthetic save prompt makes opencode reply and go idle again; that
+    idle is our own continuation (Claude Code's stop_hook_active) and must not
+    advance the interval or the re-ask counter."""
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    (tmp_path / ".config" / "opencode").mkdir(parents=True)
+    shim = tmp_path / "collivind"
+    shim.write_text(f'#!/bin/sh\nexec {sys.executable} -m collivind.cli.main "$@"\n')
+    shim.chmod(0o755)
+    monkeypatch.setattr(hook_mod, "collivind_bin", lambda: str(shim))
+    hook_mod.install_hooks(tool="opencode")
+    harness = tmp_path / "harness.mjs"
+    harness.write_text(HARNESS)
+    env = {**os.environ, "HOME": str(tmp_path)}
+    # 15 idles reach the default interval and send the save prompt; the 16th
+    # is opencode going idle after answering it.
+    subprocess.run(
+        [NODE, str(harness), hook_mod.get_opencode_plugin_path().as_uri(), "16"],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=120,
+        check=True,
+    )
+
+    session = json.loads((tmp_path / ".collivind" / "hook_state.json").read_text())["sessions"]["oc1"]
+    assert session["pending"]["since"] == 0
