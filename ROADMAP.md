@@ -93,10 +93,18 @@ by not being published. Decide and implement:
   into the conversation; the current prompt likely never reaches the model.
   Options: switch to transcript-export capture (claude-mem approach) or
   verify current behavior against latest hooks docs.
-- **Graph expansion is N+1** (`find_related_memories` per entity per seed):
-  batch it before the 10k-memory performance target is tested.
-- **Perf/scale test suite**: the design spec's 500ms @ 10k memories target
-  has no test. Add a seeded benchmark.
+- **Graph expansion batching shipped**: `GraphStore.get_neighbors_batch` /
+  `find_related_memories_batch` (per-item defaults on the ABC, one query each
+  in SQLite and Neo4j) replace the per-seed, per-entity calls; Neo4j id
+  lookups now go through the `Memory|Entity|Session` id indexes instead of an
+  AllNodesScan. Still one `get_memory` per vector hit (`limit * 3`); batch
+  that too if a remote graph makes those round trips show.
+- **Perf/scale test suite shipped**: `benchmarks/search_bench.py` seeds 10k
+  memories (Zipf-skewed entities, token-hash embedder, no model). Search
+  p50/p95 at 10k: embedded 117/148 ms → 40/48 ms; Neo4j+Qdrant 1709/2071 ms
+  → 59/69 ms (M-series laptop, 2026-11-19). `tests/unit/test_search_perf.py`
+  pins equivalence and the graph statement count per search. Not covered:
+  real embedding-model latency, 100k+ memories, concurrent searches.
 - **Import fidelity**: `collivind import` drops entity links (memory nodes
   only) and rewrites ids. Fine for v1 backup; fix alongside sync-server id
   stability. Moving between modes no longer depends on it: `collivind migrate`

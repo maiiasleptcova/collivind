@@ -67,3 +67,28 @@ uv run python benchmarks/longmemeval_bench.py benchmarks/data/longmemeval_s.json
 Runtime is roughly 8 minutes on an Apple-silicon laptop (local embeddings,
 no network). Per-question outcomes land in
 `benchmarks/results_longmemeval_r5.jsonl`.
+
+## Search latency at 10k memories
+
+Design target: search under 500 ms at 10k memories. Reproduce with:
+
+```bash
+uv run python benchmarks/search_bench.py
+```
+
+It seeds 10k memories, each linked to up to 3 entities drawn from a
+Zipf(s=1) distribution over 400 entities (the top entity sits on about 15% of
+memories, well past the 20-per-entity expansion limit), into the embedded
+SQLite stores in a temp dir. Embeddings come from a token-hash embedder, so
+**model latency is excluded**: this measures the store and engine only. It
+times 200 searches with `limit=10` and graph expansion on, and leaves the
+first (vector cache load) out.
+
+| Backend (10k memories) | p50 before | p95 before | p50 after | p95 after |
+|---|---|---|---|---|
+| embedded (SQLite) | 117 ms | 148 ms | 40 ms | 48 ms |
+| docker (Neo4j 5.26 + Qdrant 1.12) | 1709 ms | 2071 ms | 59 ms | 69 ms |
+
+"Before" is origin/main at v0.11.0; "after" is the batched graph expansion.
+Both were measured 2026-11-19 on an Apple-silicon laptop. The docker row uses
+the same data set, 30 queries per pass, against throwaway containers.
