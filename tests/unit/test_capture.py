@@ -203,3 +203,39 @@ def test_codex_plugin_plus_hooks_json_is_flagged_as_double(home):
     _enable_codex_plugin(home)
     codex = next(h for h in hook_health() if h["tool"] == "codex")
     assert codex["source"] == "both"
+
+
+def test_unanswered_checkpoint_backs_off_then_is_recorded_as_failed():
+    """An agent without the MCP tool must not be nagged for the whole session TTL."""
+    for _ in range(2):
+        assert _stop() is None
+    cid = _checkpoint_id(_stop())
+
+    asks = []
+    for _ in range(200):
+        block = _stop()
+        if block:
+            asks.append(_checkpoint_id(block))
+        if "pending" not in capture.read_state()["sessions"]["s1"]:
+            break
+    assert asks == [cid] * capture.MAX_RETRIES  # capped, not forever
+
+    failed = [e for e in capture.iter_history() if e["checkpoint_id"] == cid]
+    assert len(failed) == 1 and failed[0]["ok"] is False and "re-ask" in failed[0]["error"]
+    assert capture.summary()["pending"] == []
+
+    # a later interval starts a fresh checkpoint
+    later = [_stop() for _ in range(3)]
+    assert later[:2] == [None, None] and _checkpoint_id(later[2]) != cid
+
+
+def test_reasks_back_off():
+    for _ in range(3):
+        _stop()
+    gaps, since = [], 0
+    for _ in range(40):  # before the give-up, so only re-asks are seen
+        since += 1
+        if _stop():
+            gaps.append(since)
+            since = 0
+    assert gaps == [capture.RETRY_AFTER * 2**i for i in range(capture.MAX_RETRIES)], gaps

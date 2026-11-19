@@ -23,8 +23,11 @@ try:
 except ImportError:  # Windows: no flock; state updates are then unlocked
     fcntl = None
 
-# Re-ask after this many further responses if a requested save never landed.
+# Re-ask after this many further responses if a requested save never landed,
+# doubling the wait each time; after MAX_RETRIES re-asks (and one more wait)
+# the checkpoint is recorded as failed instead of nagging for the session TTL.
 RETRY_AFTER = 3
+MAX_RETRIES = 3
 # Keep the state file bounded: drop sessions idle longer than this.
 SESSION_TTL_DAYS = 14
 
@@ -123,7 +126,8 @@ def stop_decision(state: dict, session_id: str, agent: str, threshold: int) -> O
 
     The pending checkpoint is cleared only once the MCP server has recorded a
     successful write for it. A pending checkpoint is re-requested (same id, so
-    a late write still matches) after RETRY_AFTER more responses.
+    a late write still matches) with exponential backoff, at most MAX_RETRIES
+    times; then it is recorded as failed and normal interval counting resumes.
     """
     s = session(state, session_id, agent)
     pending = s.get("pending")
@@ -134,11 +138,17 @@ def stop_decision(state: dict, session_id: str, agent: str, threshold: int) -> O
 
     if pending:
         pending["since"] += 1
-        if pending["since"] >= RETRY_AFTER:
-            pending["since"] = 0
-            pending["retries"] = pending.get("retries", 0) + 1
-            return pending["id"]
-        return None
+        retries = pending.get("retries", 0)
+        if pending["since"] < RETRY_AFTER * 2**retries:
+            return None
+        if retries >= MAX_RETRIES:
+            s.pop("pending")
+            s["count"] = 0
+            record(pending["id"], False, [], error=f"no save after {retries} re-asks; gave up")
+            return None
+        pending["since"] = 0
+        pending["retries"] = retries + 1
+        return pending["id"]
 
     s["count"] = s.get("count", 0) + 1
     if s["count"] >= threshold:
