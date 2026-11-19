@@ -175,11 +175,8 @@ class SearchEngine:
     def _vector_only_candidates(self, raw_vector_results, query: SearchQuery, now: datetime) -> Dict[str, SearchResult]:
         """Hits rebuilt from vector payloads alone: no graph score, no entities.
 
-        ponytail: invalidate() updates only the graph, so a payload can still
-        claim valid_to=None for a memory invalidated by hand — it will surface
-        here until its vector is rewritten. Superseded-by-update memories are
-        already deleted from the vector index, so they cannot. Push validity
-        into the vector payload on invalidate if that ever matters.
+        Invalidated, superseded and forgotten memories have no vector (the
+        manager deletes it), so a stale payload cannot surface here.
         """
         candidates: Dict[str, SearchResult] = {}
         for res in raw_vector_results:

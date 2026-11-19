@@ -137,6 +137,11 @@ class MemoryManager:
         self._graph_write(
             self.graph_store.invalidate_memory, memory_id, superseded_by, reason, outcome="nothing was invalidated"
         )
+        # Same rule as a superseded-by-update memory in add_memory: history
+        # stays in the graph, the vector index serves only live knowledge.
+        # Otherwise its payload still claims valid_to=None and vector-only
+        # search (graph down) keeps returning it.
+        self.vector_store.delete(memory_id)
 
     def update_memory(
         self,
@@ -195,7 +200,10 @@ class MemoryManager:
         # at an unchanged memory and skip a re-embed that was in fact overdue.
         # Re-embedding an unchanged memory costs one round-trip; skipping one
         # that was needed leaves a permanently wrong index.
-        if updated and any(f is not None for f in (content, summary, category, tags)):
+        # An invalidated memory has no vector (see invalidate); editing its
+        # history must not put it back into the live index.
+        live = updated is not None and not updated.valid_to and not updated.superseded_by
+        if live and any(f is not None for f in (content, summary, category, tags)):
             entity_names, ok = self._entity_names(memory_id)
             if ok:
                 after = build_enriched_text(self._as_create(updated), entity_names=entity_names)
