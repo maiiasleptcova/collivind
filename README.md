@@ -116,10 +116,26 @@ exposes a hook comparable to `UserPromptSubmit`.
 Register Collivind as an MCP server:
 
 ```bash
-claude mcp add --global collivind -- python3 -m collivind.mcp.server
+claude mcp add -s user collivind -- /path/to/python -m collivind.mcp.server
 ```
 
-`collivind init` does this automatically.
+Use an interpreter that can import collivind — agents spawn the server with
+their own environment, where a bare `python3` usually resolves to the system
+one and the server dies at import. `collivind init` does this for you and
+fills in the right interpreter automatically.
+
+`collivind init` registers this only when Claude Code has no collivind server
+already — including the one the plugin provides — since `claude mcp add`
+cannot update an entry in place and would leave you with two.
+
+Already have an entry pointing at the wrong interpreter? Replace it yourself;
+`claude mcp remove` finds it in whichever scope it lives in, which matters
+because a `local`-scope entry outranks a `user`-scope one:
+
+```bash
+claude mcp remove collivind
+collivind init
+```
 
 ### Hooks
 

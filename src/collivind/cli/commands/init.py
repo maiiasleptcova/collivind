@@ -1,4 +1,5 @@
 import json
+import shlex
 import subprocess
 import sys
 import time
@@ -209,6 +210,70 @@ def _mcp_interpreter() -> str:
     return sys.executable or "python3"
 
 
+def claude_mcp_servers() -> tuple[dict[str, str] | None, str]:
+    """`{server name: health status}` Claude Code reports, plus a failure reason.
+
+    Returns `(None, reason)` when the listing could not be read at all. The
+    three ways that happens are not interchangeable — an absent CLI, a hung
+    one, and a broken config each need a different thing from the user — so
+    the reason is carried out rather than collapsed, which is the mistake
+    that let `--global` sit unnoticed for as long as it did.
+
+    `claude mcp get <name>` exits 0 even for a server that does not exist, so
+    the listing is the only usable signal. Its lines read
+    `<name>: <command> - <status>`; a name may contain colons
+    (`plugin:collivind:collivind`) but never a colon followed by a space, and
+    the status follows the last `" - "`.
+
+    Listing health-checks by connecting to every configured server, so this
+    can take seconds on a cold npx cache or a remote endpoint.
+    """
+    try:
+        proc = subprocess.run(
+            ["claude", "mcp", "list"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            stdin=subprocess.DEVNULL,
+        )
+    except FileNotFoundError:
+        return None, "claude CLI not found"
+    except subprocess.TimeoutExpired:
+        return None, "claude mcp list timed out after 60s"
+    except (OSError, subprocess.SubprocessError) as e:
+        return None, f"could not run claude mcp list: {e}"
+    if proc.returncode != 0:
+        detail = (proc.stderr or "").strip().splitlines()
+        return None, detail[0] if detail else "claude mcp list failed"
+
+    servers = {}
+    for line in proc.stdout.splitlines():
+        if not line or line[0].isspace() or line[0] in "├└│":
+            continue  # continuation lines of a multi-scope warning
+        name, sep, rest = line.partition(": ")
+        if sep:
+            _, _, status = rest.rpartition(" - ")
+            servers[name] = status.strip()
+    return servers, ""
+
+
+def _is_healthy(status: str) -> bool:
+    """Whether a listing row reports a server that actually answered."""
+    low = status.lower()
+    return "connected" in low and "failed" not in low
+
+
+def _collivind_already_registered(names: set[str]) -> str | None:
+    """The name Claude Code already serves collivind under, if any.
+
+    The plugin — the install this project recommends — registers its own
+    server as `plugin:collivind:collivind`, which does not collide with a
+    plain `collivind` add. Adding on top of it would give the user two
+    identical servers and two copies of every tool in context.
+    """
+    return next((n for n in sorted(names) if n == "collivind" or n.endswith(":collivind")), None)
+
+
 def register_codex_mcp() -> bool:
     """Add `[mcp_servers.collivind]` to ~/.codex/config.toml. Returns whether
     the file was changed.
@@ -306,18 +371,42 @@ def _register_mcp_server():
     """Register Collivind as an MCP server with Claude Code, plus Codex when
     ~/.codex exists."""
     click.echo("Registering MCP server with Claude Code... ", nl=False)
+    interpreter = _mcp_interpreter()
+    # `-s user` so it applies everywhere. The old `--global` is not a flag the
+    # CLI has ever accepted: it exited with "unknown option" and wrote nothing,
+    # so this registration had never once succeeded — and capture_output hid
+    # the reason behind a bare "registration failed".
+    add = ["claude", "mcp", "add", "-s", "user", "collivind", "--", interpreter, "-m", "collivind.mcp.server"]
+
+    known, problem = claude_mcp_servers()
+    if known is None:
+        click.secho(f"skipped ({problem})", fg="yellow")
+        click.echo(f"Run manually: {shlex.join(add)}")
+        return
+    # Registering on top of an existing server is never what the user wants:
+    # the plugin already provides one, `add` cannot update an entry in place,
+    # and its collision check is per-scope, so a same-named entry in another
+    # scope would silently keep winning. Leave whatever is there alone.
+    if existing := _collivind_already_registered(set(known)):
+        if _is_healthy(known[existing]):
+            click.secho(f"already registered as {existing}", fg="green")
+            return
+        # Calling a dead entry "already registered" tells the person who
+        # filed #33 — whose entry is exactly this — that nothing is wrong.
+        click.secho(f"already registered as {existing}, but it is not answering", fg="yellow")
+        click.echo(f"  {known[existing] or 'no status reported'}")
+        click.echo(f"  Replace it with: claude mcp remove {existing} && collivind init")
+        return
+
     try:
-        subprocess.run(
-            ["claude", "mcp", "add", "--global", "collivind", "--", "python3", "-m", "collivind.mcp.server"],
-            capture_output=True,
-            check=True,
-        )
+        subprocess.run(add, capture_output=True, check=True, text=True)
         click.secho("done", fg="green")
-    except FileNotFoundError:
+    except OSError:
         click.secho("skipped (claude CLI not found)", fg="yellow")
-    except subprocess.CalledProcessError:
-        click.secho("skipped (registration failed)", fg="yellow")
-        click.echo("Run manually: claude mcp add --global collivind -- python3 -m collivind.mcp.server")
+    except subprocess.CalledProcessError as e:
+        detail = (e.stderr or "").strip().splitlines()
+        click.secho(f"skipped ({detail[0] if detail else 'registration failed'})", fg="yellow")
+        click.echo(f"Run manually: {shlex.join(add)}")
 
     if (Path.home() / ".codex").exists():
         click.echo("Registering MCP server with Codex... ", nl=False)
