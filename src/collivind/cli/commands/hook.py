@@ -307,18 +307,21 @@ AGENT = click.option(
 @hook.command()
 @click.option("--threshold", default=None, type=int, help="Responses between checkpoints (default: config)")
 @click.option("--session", "session_id", default=None, help="Session id when the agent passes none on stdin")
+@click.option(
+    "--continuation", is_flag=True, help="This response answers our own save request (opencode's stop_hook_active)"
+)
 @AGENT
-def stop(threshold, session_id, agent):
+def stop(threshold, session_id, continuation, agent):
     """Periodic capture checkpoint. Asks the agent to save; never assumes it did."""
     payload = _hook_input()
     cfg = _hooks_config()
-    # >= 2: opencode has no stop_hook_active, so at 1 the reply to a save
-    # request would itself trigger the next request, forever.
+    # >= 2: a backstop should an agent ever report its own continuation
+    # neither as stop_hook_active nor as --continuation.
     threshold = max(2, threshold or cfg.save_interval)
     sid = session_id or payload.get("session_id") or "default"
     with capture.locked_state() as state:
         capture.heartbeat(state, agent, "Stop")
-        if payload.get("stop_hook_active"):
+        if continuation or payload.get("stop_hook_active"):
             return  # this response is our own continuation; never chain blocks
         checkpoint = capture.stop_decision(state, sid, agent, threshold)
     if checkpoint:

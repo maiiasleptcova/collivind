@@ -169,6 +169,11 @@ class GraphStore(ABC):
         pass
 
     @abstractmethod
+    def clear_all(self) -> None:
+        """Delete every memory, entity and edge (collivind reset)."""
+        pass
+
+    @abstractmethod
     def get_version_chain(self, memory_id: str) -> List[MemoryNode]:
         """Walk the supersession chain for a memory, returning all versions oldest-first."""
         pass

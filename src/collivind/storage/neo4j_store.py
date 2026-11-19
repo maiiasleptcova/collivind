@@ -12,7 +12,7 @@ from collivind.config import Neo4jConfig
 from collivind.exceptions import CollivindError
 from collivind.models import EntityCreate, EntityNode, MemoryCreate, MemoryNode, RelationshipCreate, RelationshipEdge
 from collivind.models.entity import EntityType
-from collivind.models.memory import MemoryCategory, MemorySource
+from collivind.models.memory import MemoryCategory, MemorySource, stored_timestamp
 from collivind.models.relationship import RelType, stable_edge_id
 from collivind.storage.interfaces import GraphStore
 
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 def _retry(fn, max_retries=3, base_delay=0.5):
     """Retry with exponential backoff."""
-    last_error = None
+    last_error: Exception = RuntimeError("_retry needs max_retries >= 1")
     for attempt in range(max_retries):
         try:
             return fn()
@@ -159,8 +159,8 @@ class Neo4jGraphStore(GraphStore):
                 name=entity.name,
                 type=entity.type.value,
                 props=json.dumps(entity.properties),
-                created_at=entity.created_at.isoformat(),
-                updated_at=entity.updated_at.isoformat(),
+                created_at=entity.created_at.isoformat() if entity.created_at else None,
+                updated_at=entity.updated_at.isoformat() if entity.updated_at else None,
             )
         return entity
 
@@ -289,7 +289,7 @@ class Neo4jGraphStore(GraphStore):
             MATCH (m:Memory {project_id: $project_id})-[:ABOUT|MENTIONS]->(e:Entity {id: $entity_id})
             RETURN m.id as id ORDER BY m.created_at DESC LIMIT $limit
             """
-            params = {"project_id": project_id, "entity_id": entity_id, "limit": limit}
+            params: Dict[str, Any] = {"project_id": project_id, "entity_id": entity_id, "limit": limit}
         else:
             query = """
             MATCH (m:Memory {project_id: $project_id})
@@ -326,10 +326,11 @@ class Neo4jGraphStore(GraphStore):
             session.run(query, id=id, superseded_by=superseded_by, reason=reason, now_str=now_str)
 
     def get_version_chain(self, memory_id: str) -> List[MemoryNode]:
-        chain = []
+        chain: List[MemoryNode] = []
         current = self.get_memory(memory_id)
         if not current:
             return chain
+        start = current
         while current.previous_version_id:
             prev = self.get_memory(current.previous_version_id)
             if not prev:
@@ -337,7 +338,7 @@ class Neo4jGraphStore(GraphStore):
             chain.append(prev)
             current = prev
         chain.reverse()
-        current = self.get_memory(memory_id)
+        current = start
         chain.append(current)
         while current.superseded_by:
             nxt = self.get_memory(current.superseded_by)
@@ -456,8 +457,8 @@ class Neo4jGraphStore(GraphStore):
     def health_check(self) -> Dict[str, Any]:
         try:
             with self.driver.session(database=self.config.database) as session:
-                res = session.run("RETURN 1 as ok")
-                if res.single()["ok"] == 1:
+                record = session.run("RETURN 1 as ok").single()
+                if record is not None and record["ok"] == 1:
                     return {"status": "ok"}
             return {"status": "error", "message": "Query failed"}
         except Exception as e:
@@ -483,8 +484,8 @@ class Neo4jGraphStore(GraphStore):
             tags=node.get("tags", []),
             version=node.get("version", 1),
             previous_version_id=node.get("previous_version_id"),
-            created_at=datetime.fromisoformat(node["created_at"]) if node.get("created_at") else None,
-            updated_at=datetime.fromisoformat(node["updated_at"]) if node.get("updated_at") else None,
+            created_at=stored_timestamp(node.get("created_at")),
+            updated_at=stored_timestamp(node.get("updated_at")),
         )
 
     def _node_to_entity(self, node, fallback_name: str) -> EntityNode:

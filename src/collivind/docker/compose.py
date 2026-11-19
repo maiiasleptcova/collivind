@@ -11,7 +11,7 @@ from collivind.exceptions import DockerExecutionError
 _NEO4J_AUTH = re.compile(r"NEO4J_AUTH=neo4j/(\S+)")
 
 
-def copy_templates(data_dir: Path, config: CollivindConfig) -> bool:
+def copy_templates(data_dir: Path, config: CollivindConfig) -> str:
     """Write the Docker templates into the data directory, substituting variables.
 
     Safe to re-run on an existing install, which is how template fixes reach
@@ -48,7 +48,7 @@ def copy_templates(data_dir: Path, config: CollivindConfig) -> bool:
         if hashlib.sha256(existing.encode()).hexdigest() != marker.read_text().strip():
             return "kept-edits"
     replaced = existing is not None and existing != compose_content
-    if replaced:
+    if existing is not None and replaced:
         (data_dir / "docker-compose.yml.bak").write_text(existing)
     compose_path.write_text(compose_content)
     marker.write_text(hashlib.sha256(compose_content.encode()).hexdigest())

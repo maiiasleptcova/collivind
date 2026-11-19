@@ -14,6 +14,7 @@ from collivind.models import (
     RelType,
     SearchQuery,
 )
+from collivind.storage.interfaces import EmbeddingProvider, GraphStore, VectorStore
 
 BACKEND_HINT = (
     "A storage backend is failing. Run `collivind status` (or the collivind_status tool) "
@@ -27,12 +28,12 @@ class CollivindTools:
         self.session_id = session_id
 
     def _backend_health(self) -> Dict[str, Any]:
-        backends = {
+        backends: Dict[str, VectorStore | GraphStore | EmbeddingProvider] = {
             "vector_store": self.memory_manager.vector_store,
             "graph_store": self.memory_manager.graph_store,
             "embedding_provider": self.memory_manager.embedding_provider,
         }
-        status = {"mode": self.memory_manager.config.mode}
+        status: Dict[str, Any] = {"mode": self.memory_manager.config.mode}
         for name, backend in backends.items():
             try:
                 status[name] = backend.health_check()
@@ -441,10 +442,10 @@ class CollivindTools:
                 sid = args.get("session_id")
                 if sid:
                     timeline = [m for m in timeline if m.session_id == sid]
-                page = timeline[offset : offset + limit]
+                timeline_page = timeline[offset : offset + limit]
                 return json.dumps(
                     {
-                        "results": [m.to_dict() for m in page],
+                        "results": [m.to_dict() for m in timeline_page],
                         "total": len(timeline),
                         "offset": offset,
                         "has_more": len(timeline) > offset + limit,
@@ -453,10 +454,10 @@ class CollivindTools:
                 )
 
             elif name == "collivind_find_contradictions":
-                memory = self.memory_manager.graph_store.get_memory(args["memory_id"])
-                if not memory:
+                subject = self.memory_manager.graph_store.get_memory(args["memory_id"])
+                if not subject:
                     return json.dumps({"error": "Memory not found"})
-                contradictions = self.memory_manager.search_engine.find_contradictions(memory)
+                contradictions = self.memory_manager.search_engine.find_contradictions(subject)
                 return json.dumps(
                     [
                         {
@@ -508,12 +509,12 @@ class CollivindTools:
                 )
 
             elif name == "collivind_extract_save":
-                results = parse_extraction_response(args["llm_response"])
-                if not results:
+                extracted = parse_extraction_response(args["llm_response"])
+                if not extracted:
                     return json.dumps({"status": "no_memories", "count": 0})
                 project_id = args.get("project_id", "default")
-                prepared = []
-                for r in results:
+                prepared: List[tuple] = []
+                for r in extracted:
                     entities = [EntityCreate(name=e["name"], type=EntityType(e["type"])) for e in r.entities]
                     mem_create = MemoryCreate(
                         content=r.content,

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 
 from collivind.models.entity import EntityCreate, EntityNode, EntityType
-from collivind.models.memory import MemoryCategory, MemoryCreate, MemoryNode, MemorySource
+from collivind.models.memory import MemoryCategory, MemoryCreate, MemoryNode, MemorySource, stored_timestamp
 from collivind.models.relationship import RelationshipCreate, RelationshipEdge, RelType
 from collivind.storage.interfaces import GraphStore
 
@@ -133,7 +133,7 @@ class SqliteGraphStore(GraphStore):
                 node.summary,
                 node.category.value,
                 node.confidence,
-                node.valid_from.isoformat(),
+                node.valid_from.isoformat() if node.valid_from else None,
                 None,
                 node.project_id,
                 node.session_id,
@@ -348,8 +348,7 @@ class SqliteGraphStore(GraphStore):
             chain.append(prev)
             current = prev
         chain.reverse()
-        start = self.get_memory(memory_id)
-        current = start
+        current = chain[-1]  # the starting memory, after reverse()
         while current.superseded_by:
             nxt = self.get_memory(current.superseded_by)
             if not nxt:
@@ -458,8 +457,8 @@ class SqliteGraphStore(GraphStore):
             tags=json.loads(row["tags"]) if row["tags"] else [],
             version=version,
             previous_version_id=prev_id,
-            created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
-            updated_at=datetime.fromisoformat(row["updated_at"]) if row["updated_at"] else None,
+            created_at=stored_timestamp(row["created_at"]),
+            updated_at=stored_timestamp(row["updated_at"]),
         )
 
     def _row_to_entity(self, row) -> EntityNode:

@@ -8,7 +8,8 @@ class GraphEngine:
         self.graph_store = graph_store
 
     def _neighbor_identity(self, neighbor: Dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
-        node = neighbor.get("node") if isinstance(neighbor.get("node"), dict) else {}
+        raw = neighbor.get("node")
+        node: Dict[str, Any] = raw if isinstance(raw, dict) else {}
         ent_id = neighbor.get("id") or node.get("id")
         ent_name = neighbor.get("name") or node.get("name")
         if not ent_name and ent_id:

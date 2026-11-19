@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 def _retry(fn, max_retries=3, base_delay=0.5):
     """Retry with exponential backoff."""
-    last_error = None
+    last_error: Exception = RuntimeError("_retry needs max_retries >= 1")
     for attempt in range(max_retries):
         try:
             return fn()

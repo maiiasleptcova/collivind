@@ -2,6 +2,7 @@
 
 import sys
 from dataclasses import replace
+from typing import NoReturn
 
 import click
 
@@ -29,7 +30,7 @@ def mode_config(base: CollivindConfig, mode: str) -> CollivindConfig:
     )
 
 
-def _fail(message: str):
+def _fail(message: str) -> NoReturn:
     click.secho(message, fg="red", err=True)
     sys.exit(1)
 

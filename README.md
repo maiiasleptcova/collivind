@@ -46,7 +46,7 @@ This uses SQLite for both vectors and the graph, and loads the embedding model d
 
 > **Concurrent sessions:** embedded mode is multi-process safe — any number of agent sessions, CLI commands, and hooks can share the store, and a write from one session is immediately visible to the others.
 >
-> **Resident model:** hooks are short-lived processes, so the first embed starts a small background process that keeps the model loaded (`~/.collivind/embed.sock`, owner-only); later hooks embed in milliseconds instead of reloading the model every prompt. It exits after 30 idle minutes (`daemon_idle_timeout` under `[embeddings]`). Manage it with `collivind embed-daemon start|stop|status`; turn it off with `daemon = false` or `COLLIVIND_EMBED_DAEMON=0`.
+> **Resident model:** hooks are short-lived processes, so the first embed starts a small background process that keeps the model loaded (`~/.collivind/embed.sock`, owner-only; if the data dir path is too long for a unix socket it uses a private per-user dir under `/tmp`, which `collivind embed-daemon status` names); later hooks embed in milliseconds instead of reloading the model every prompt. It exits after 30 idle minutes (`daemon_idle_timeout` under `[embeddings]`). Manage it with `collivind embed-daemon start|stop|status`; turn it off with `daemon = false` or `COLLIVIND_EMBED_DAEMON=0`.
 >
 > **Upgrading from ≤ 0.1.x:** older versions kept vectors in a single-process Qdrant store (`~/.collivind/qdrant_data`). It is migrated automatically on first use and left in place as a backup; restart any agent sessions still running the old version once after upgrading. If you later downgrade, memories written after the upgrade live only in the new store — carry them over with `collivind export` / `import`.
 
@@ -127,8 +127,11 @@ tools only, so you search and save explicitly.
 **What "capture" means, precisely.** A hook cannot write memories itself —
 extraction needs the agent's model. So a checkpoint *asks* the agent to call
 `collivind_batch_add` with a checkpoint id, and only a successful call carrying
-that id confirms it. Until then the checkpoint stays pending and is re-asked a
-few responses later; it is never counted as saved because a reminder was shown.
+that id confirms it. Until then the checkpoint stays pending and is re-asked
+with backoff (after 3, 6, then 12 more responses); it is never counted as saved
+because a reminder was shown. If it is still unconfirmed after the third re-ask
+and one more wait, it is recorded as failed and the next interval starts a new
+checkpoint, so an agent without the collivind tool is not nagged indefinitely.
 `collivind status` shows the last confirmed save, any pending checkpoint, and the
 last failed one.
 
@@ -261,8 +264,8 @@ collivind update <id> -c decision      # Reclassify (also re-embeds)
 collivind update <id> -t ""            # Clear every tag
 collivind invalidate <id> -r outdated  # Mark outdated, keep history
 collivind forget <id>       # Delete permanently (with confirmation)
-collivind export -p proj -o mem.jsonl  # Backup / portability
-collivind import mem.jsonl  # Re-import (deduplication applies)
+collivind export -o backup.jsonl  # Lossless backup: every project, ids kept
+collivind import backup.jsonl  # Restore by id; only adds what is missing
 collivind migrate --from embedded --to docker  # Copy everything between modes, ids kept
 collivind sync ./shared-memory  # Two-way team sync via a git-tracked dir
 collivind reset             # Wipe all data (with confirmation)
@@ -271,6 +274,12 @@ collivind hook install      # Register Claude Code hooks
 ```
 
 Memory verbs take `--json` for scripting and agent use.
+
+### Backup and restore
+
+`collivind export` writes a versioned JSONL bundle: a header line (format version, collivind version, embedding model and dimension, per-kind counts), then every memory — superseded versions and their chain fields included — every entity, every memory↔entity and memory↔memory edge, and which memories are searchable, **all with their ids**. `-p/--project` limits it to one project's memories, the entities they link to and the edges between them (edges into other projects are left out and counted). Vectors are large and can be rebuilt, so they are only written with `--vectors`; without them, or when the bundle came from a different embedding model, `import` re-embeds with this install's model. The bundle holds no configuration or credentials, and export is never limited.
+
+`collivind import` validates the whole file first — a truncated, damaged or newer-format bundle is rejected before anything is written — then restores by id, adding only records the target lacks, so re-importing is safe and never reverts edits made since. It prints bundle/target/missing counts per kind and exits 1 if anything is still missing; `--dry-run` writes nothing. Files from older versions (one memory per line) are detected automatically and re-added through the normal pipeline as before. `collivind sync` keeps using that older per-project format.
 
 ## Team Sharing
 

@@ -74,25 +74,21 @@ by not being published. Decide and implement:
 
 ## Deferred smaller items
 
-- **mypy burn-down**: the CI type-check step is `continue-on-error` — 57
-  pre-existing errors in 14 files (mostly Optional handling). Fix per-module,
-  then make the step blocking.
-
 - **Local daemon / loopback HTTP bridge**: the latency half shipped (#16).
   Embedded mode now keeps the model resident in `collivind.storage.embed_daemon`
-  (unix socket `~/.collivind/embed.sock`, 0600, idle exit after 30 min),
+  (unix socket `~/.collivind/embed.sock`, 0600, idle exit after 30 min; a
+  data dir too long for AF_UNIX falls back to a private per-user dir under
+  /tmp),
   started on demand by the first embed; a warm hook embeds in ~0.01s instead
   of a 6-9s model load. Still open: it serves embeddings only — the store is
   still opened per process (cheap, ~0.1s), and the first prompt after the
   daemon exits pays one in-process load. A full loopback API is not needed
   unless that changes.
-- **Codex extraction hooks**: only SessionStart is registered for Codex —
-  verify Codex's Stop-hook `decision: block` semantics, then enable
-  extraction there too.
-- **PreCompact limitation**: Claude Code does not inject PreCompact stdout
-  into the conversation; the current prompt likely never reaches the model.
-  Options: switch to transcript-export capture (claude-mem approach) or
-  verify current behavior against latest hooks docs.
+- **Pre-compaction capture**: since 0.11 Claude Code and Codex both get
+  Stop (periodic checkpoints) and PreCompact + SessionStart(`compact`)
+  capture, but no host lets PreCompact speak to the model, so the save runs
+  *after* compaction from the summary. Anything the summary drops is lost;
+  transcript-export capture (claude-mem approach) would close that.
 - **Graph expansion batching shipped**: `GraphStore.get_neighbors_batch` /
   `find_related_memories_batch` (per-item defaults on the ABC, one query each
   in SQLite and Neo4j) replace the per-seed, per-entity calls; Neo4j id
@@ -105,15 +101,14 @@ by not being published. Decide and implement:
   → 59/69 ms (M-series laptop, 2026-11-19). `tests/unit/test_search_perf.py`
   pins equivalence and the graph statement count per search. Not covered:
   real embedding-model latency, 100k+ memories, concurrent searches.
-- **Import fidelity**: `collivind import` drops entity links (memory nodes
-  only) and rewrites ids. Fine for v1 backup; fix alongside sync-server id
-  stability. Moving between modes no longer depends on it: `collivind migrate`
-  (#7) restores memories, entities, edges and vectors by id through
-  `GraphStore.iter_*`/`restore_*` and `VectorStore.iter_all`. Neo4j edges have
-  no native id, so edges written by `create_relationship`/`invalidate_memory`
-  get a deterministic uuid5 of (source, type, target) on the way out; restored
-  edges carry `r.id`. The JSONL export could reuse the same iterators.
-- **`get_entity` / relationships export**: entities and edges deserve
-  export/import too once ids are stable.
+- **Import fidelity** — done: `collivind export` writes a v2 bundle (header +
+  memories, entities, edges, vector ids/payloads, vectors optional) through
+  `GraphStore.iter_*` / `VectorStore.iter_all`, and `import` restores it by id
+  via the same `restore` path as `collivind migrate`, adding only what the
+  target lacks. v1 files still import through the pipeline. `collivind sync`
+  still uses v1 (content-level merge, new ids); id-stable sync belongs to the
+  sync server.
+- **`get_entity` / relationships export** — done: entities and edges are in the
+  v2 bundle with every field.
 - **Benchmark honesty**: when publishing numbers (LoCoMo/LongMemEval), report
   the full picture — the mempalace launch collapse is the cautionary tale.

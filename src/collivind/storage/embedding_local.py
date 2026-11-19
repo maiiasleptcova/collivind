@@ -19,20 +19,21 @@ class LocalEmbeddingProvider(EmbeddingProvider):
         """data_dir enables the resident embedding daemon (#16); None keeps
         everything in-process (init's model pre-download, tests)."""
         self.config = config
-        self._model = None
+        self._model: Any = None  # SentenceTransformer, imported lazily (optional extra)
         self._dimension = config.dimension
-        self._socket_path = embed_daemon.socket_path_for(Path(data_dir)) if data_dir else None
+        self._data_dir = Path(data_dir) if data_dir else None
 
     def _from_daemon(self, texts: List[str]) -> Optional[List[List[float]]]:
         """Never raises: any daemon problem means "embed in-process"."""
-        if self._model is not None or self._socket_path is None:
+        if self._model is not None or self._data_dir is None:
             return None
         if not embed_daemon.daemon_enabled(self.config.daemon):
             return None
         try:
-            return embed_daemon.embed_via_daemon(
-                self._socket_path, self.config.model, texts, self.config.daemon_idle_timeout
-            )
+            # resolved per call: a fallback dir under /tmp is re-checked
+            # (owner, mode) before every connect/spawn, not once per process
+            socket_path = embed_daemon.socket_path_for(self._data_dir)
+            return embed_daemon.embed_via_daemon(socket_path, self.config.model, texts, self.config.daemon_idle_timeout)
         except Exception as e:
             logger.debug(f"embed daemon failed, embedding in-process: {e}")
             return None

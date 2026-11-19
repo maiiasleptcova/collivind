@@ -7,10 +7,12 @@ memory<->memory edges and version chains survive, and re-running is a no-op
 """
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from collivind.engine.enrichment import build_enriched_text
 from collivind.engine.memory_manager import MemoryManager
+from collivind.models.entity import EntityNode
+from collivind.models.memory import MemoryNode
 from collivind.models.relationship import RelationshipEdge, RelType
 from collivind.storage.interfaces import EmbeddingProvider, GraphStore, VectorStore
 
@@ -53,12 +55,33 @@ def _target_ids(dst: Stores) -> Dict[str, Set[str]]:
     }
 
 
-def migrate(src: Stores, dst: Stores, *, reembed: bool, dry_run: bool) -> MigrationReport:
-    memories = list(src.graph.iter_memories())
-    entities = list(src.graph.iter_entities())
-    edges = list(src.graph.iter_relationships())
-    vectors = list(src.vector.iter_all())
+def _retired(memories: Iterable[MemoryNode]) -> Set[str]:
+    return {m.id for m in memories if m.valid_to or m.superseded_by}
 
+
+def migrate(src: Stores, dst: Stores, *, reembed: bool, dry_run: bool) -> MigrationReport:
+    return restore(
+        list(src.graph.iter_memories()),
+        list(src.graph.iter_entities()),
+        list(src.graph.iter_relationships()),
+        list(src.vector.iter_all()),
+        dst,
+        reembed=reembed,
+        dry_run=dry_run,
+    )
+
+
+def restore(
+    memories: List[MemoryNode],
+    entities: List[EntityNode],
+    edges: List[RelationshipEdge],
+    vectors: List[Tuple[str, Optional[List[float]], dict]],
+    dst: Stores,
+    *,
+    reembed: bool,
+    dry_run: bool,
+) -> MigrationReport:
+    """Add every record `dst` lacks, by id. A vector of None needs `reembed`."""
     node_ids = {m.id for m in memories} | {e.id for e in entities}
 
     def attached(edge: RelationshipEdge) -> bool:
@@ -67,14 +90,21 @@ def migrate(src: Stores, dst: Stores, *, reembed: bool, dry_run: bool) -> Migrat
     live_edges = [e for e in edges if attached(e)]
     dangling = tuple(e for e in edges if not attached(e))
 
+    # Copy only what the target lacks: a record already there may have been
+    # edited or invalidated since the last run, and the source must not
+    # silently revert it. (A record *deleted* from the target since then
+    # cannot be told apart from a new one and is copied again.)
+    have = _target_ids(dst)
+    # A memory the target already holds without a vector was retired from
+    # search there (superseded); restoring the stale vector would resurrect it.
+    # Likewise a memory invalidated on either side — on the target since the
+    # last run, or in a source written before 0.11.1, whose invalidate() kept
+    # the vector: the live index serves only current knowledge.
+    retired = {vid for vid, _, _ in vectors if vid in have["memories"] and vid not in have["vectors"]}
+    retired |= _retired(memories) | _retired(dst.graph.iter_memories())
     if not dry_run:
         dst.graph.initialize()
         dst.vector.initialize()
-        # Copy only what the target lacks: a record already there may have been
-        # edited or invalidated since the last run, and the source must not
-        # silently revert it. (A record *deleted* from the target since then
-        # cannot be told apart from a new one and is copied again.)
-        have = _target_ids(dst)
         for mem in memories:
             if mem.id not in have["memories"]:
                 dst.graph.restore_memory(mem)
@@ -86,17 +116,19 @@ def migrate(src: Stores, dst: Stores, *, reembed: bool, dry_run: bool) -> Migrat
                 dst.graph.restore_relationship(edge)
         texts = _embedding_texts(memories, entities, live_edges) if reembed else {}
         for vid, vector, payload in vectors:
-            if vid in have["vectors"]:
+            if vid in have["vectors"] or vid in retired:
                 continue
             if reembed:
                 vector = dst.embedder.embed(texts.get(vid) or _payload_text(payload))
+            if vector is None:
+                raise ValueError(f"vector {vid} has no values; restore it with reembed")
             dst.vector.upsert(vid, vector, payload)
 
     source_ids = {
         "memories": {m.id for m in memories},
         "entities": {e.id for e in entities},
         "relationships": {e.id for e in live_edges},
-        "vectors": {vid for vid, _, _ in vectors},
+        "vectors": {vid for vid, _, _ in vectors} - retired,
     }
     target_ids = _target_ids(dst)
     counts = tuple(

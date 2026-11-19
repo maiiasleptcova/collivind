@@ -1,6 +1,7 @@
 import click
 
 from collivind.cli.commands.agent_commands import commands
+from collivind.cli.commands.backup import export_cmd, import_cmd
 from collivind.cli.commands.docker import docker
 from collivind.cli.commands.embed_daemon import embed_daemon
 from collivind.cli.commands.hook import hook
@@ -8,10 +9,8 @@ from collivind.cli.commands.init import init
 from collivind.cli.commands.memory import (
     add,
     context,
-    export_cmd,
     forget,
     get,
-    import_cmd,
     invalidate,
     sync,
     update,

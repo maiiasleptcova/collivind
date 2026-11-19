@@ -7,8 +7,10 @@
 //   experimental.session.compacting   -> hook precompact (mark a checkpoint due)
 //   session.compacted                 -> hook compacted  (ask for the save)
 // A save request is sent as a synthetic prompt; it counts as saved only when
-// collivind_batch_add confirms its checkpoint id. Every failure is swallowed:
-// memory capture must never break the editor.
+// collivind_batch_add confirms its checkpoint id. The reply to that prompt
+// ends in another session.idle; it is our own continuation (Claude Code's
+// stop_hook_active), so it is passed as --continuation and never counted.
+// Every failure is swallowed: memory capture must never break the editor.
 const BIN = __COLLIVIND_BIN__;
 
 export const CollivindCapture = async ({ client, $ }) => {
@@ -20,13 +22,18 @@ export const CollivindCapture = async ({ client, $ }) => {
       return null;
     }
   };
+  const replying = new Set();
   const ask = async (sessionID, text) => {
+    // Marked before sending: the reply's idle can fire before prompt() resolves.
+    replying.add(sessionID);
     try {
       await client.session.prompt({
         path: { id: sessionID },
         body: { parts: [{ type: "text", text, synthetic: true }] },
       });
-    } catch {}
+    } catch {
+      replying.delete(sessionID);
+    }
   };
 
   return {
@@ -34,7 +41,9 @@ export const CollivindCapture = async ({ client, $ }) => {
       const id = event?.properties?.sessionID;
       if (!id) return;
       if (event.type === "session.idle") {
-        const out = await run(["hook", "stop", "--agent", "opencode", "--session", id]);
+        const args = ["hook", "stop", "--agent", "opencode", "--session", id];
+        if (replying.delete(id)) args.push("--continuation");
+        const out = await run(args);
         if (out?.decision === "block") await ask(id, out.reason);
       } else if (event.type === "session.compacted") {
         const out = await run(["hook", "compacted", "--agent", "opencode", "--session", id]);
