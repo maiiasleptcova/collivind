@@ -22,7 +22,6 @@ This module must stay cheap to import: hooks import it on every prompt.
 """
 
 import argparse
-import fcntl
 import json
 import logging
 import os
@@ -36,6 +35,11 @@ from typing import Any, Dict, List, Optional
 
 from collivind.version import __version__
 
+try:
+    import fcntl
+except ImportError:  # Windows: no flock, no unix sockets; embed in-process
+    fcntl = None  # type: ignore[assignment]
+
 logger = logging.getLogger(__name__)
 
 SOCKET_NAME = "embed.sock"
@@ -44,7 +48,10 @@ LOG_NAME = "embed-daemon.log"
 ENV_DISABLE = "COLLIVIND_EMBED_DAEMON"  # "0" disables the daemon
 MAX_SOCKET_PATH = 100  # AF_UNIX limit is 104 on macOS, 108 on Linux
 CONNECT_TIMEOUT = 1.0
-REPLY_TIMEOUT = 20.0  # under Claude Code's 30s hook timeout
+# A busy or hung daemon must leave the hook time to load in-process (6-9s)
+# within Claude Code's 30s hook timeout, so small requests give up fast.
+REPLY_TIMEOUT_BASE = 3.0
+REPLY_TIMEOUT_PER_TEXT = 0.05
 HANDLER_TIMEOUT = 10.0  # a stuck client must not pin the daemon
 LOCK_WAIT = 3.0  # lets a replacement wait out a daemon that is shutting down
 
@@ -75,7 +82,7 @@ class _Handler(socketserver.StreamRequestHandler):
             pass  # client gave up; it falls back in-process
 
 
-class EmbedServer(socketserver.UnixStreamServer):
+class EmbedServer(getattr(socketserver, "UnixStreamServer", socketserver.TCPServer)):
     """Single-threaded on purpose: requests are serialized, so the model is
     never used from two threads."""
 
@@ -110,7 +117,8 @@ class EmbedServer(socketserver.UnixStreamServer):
             texts = request["texts"]
             if not isinstance(texts, list) or not all(isinstance(t, str) for t in texts):
                 return {"ok": False, "error": "texts must be a list of strings"}
-            return {"ok": True, "vectors": self.model.encode(texts, batch_size=128).tolist()}
+            vectors = self.model.encode(texts, batch_size=128, show_progress_bar=False)
+            return {"ok": True, "vectors": vectors.tolist()}
         return {"ok": False, "error": f"unknown op: {op!r}"}
 
     def run(self):
@@ -158,7 +166,7 @@ def serve(socket_path: Path, model_name: str, idle_timeout: float, load_model=_l
         return 0
     try:
         model = load_model(model_name)  # before binding: clients never wait on a load
-        model.encode(["warm up"], batch_size=1)  # first encode pays device init (~0.6s on mps)
+        model.encode(["warm up"], batch_size=1, show_progress_bar=False)  # first encode pays device init (~0.6s on mps)
         socket_path.unlink(missing_ok=True)  # we hold the lock, so any socket here is stale
         server = EmbedServer(str(socket_path), model, model_name, idle_timeout)
         logger.info(f"embed daemon pid={os.getpid()} model={model_name} on {socket_path}")
@@ -175,7 +183,7 @@ def serve(socket_path: Path, model_name: str, idle_timeout: float, load_model=_l
 # --- client ---------------------------------------------------------------
 
 
-def request(socket_path: Path, payload: Dict[str, Any], timeout: float = REPLY_TIMEOUT) -> Dict[str, Any]:
+def request(socket_path: Path, payload: Dict[str, Any], timeout: float = REPLY_TIMEOUT_BASE) -> Dict[str, Any]:
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
         sock.settimeout(CONNECT_TIMEOUT)
         sock.connect(str(socket_path))
@@ -205,11 +213,11 @@ def embed_via_daemon(socket_path: Path, model_name: str, texts: List[str], idle_
     None never means failure for the caller. When no daemon is listening this
     starts one so the next call is fast; a version/model mismatch makes the old
     daemon exit and starts a matching one."""
-    if len(str(socket_path)) > MAX_SOCKET_PATH:
+    if fcntl is None or len(str(socket_path)) > MAX_SOCKET_PATH:
         return None  # can't bind there; spawning would just fail every time
     payload = {"op": "embed", "texts": texts, "version": __version__, "model": model_name}
     try:
-        reply = request(socket_path, payload)
+        reply = request(socket_path, payload, REPLY_TIMEOUT_BASE + REPLY_TIMEOUT_PER_TEXT * len(texts))
     except (FileNotFoundError, ConnectionRefusedError):
         if not lock_is_held(socket_path.with_name(LOCK_NAME)):  # held = alive or still loading
             _spawn_quietly(socket_path, model_name, idle_timeout)

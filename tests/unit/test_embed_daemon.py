@@ -26,7 +26,7 @@ MODEL = "fake/model"
 
 
 class FakeModel:
-    def encode(self, texts, batch_size=32):
+    def encode(self, texts, batch_size=32, **kwargs):
         if isinstance(texts, str):
             return np.array([float(len(texts)), 1.0])
         return np.array([[float(len(t)), 1.0] for t in texts])
@@ -136,6 +136,31 @@ def test_broken_daemon_falls_back_in_process(data_dir, daemon_on):
             assert provider.embed("ab") == [2.0, 1.0]
     finally:
         srv.close()
+
+
+def test_hung_daemon_times_out_and_falls_back(data_dir, daemon_on, monkeypatch):
+    """A daemon that accepts and never replies must not eat the hook's budget."""
+    monkeypatch.setattr(embed_daemon, "REPLY_TIMEOUT_BASE", 0.2)
+    path = embed_daemon.socket_path_for(data_dir)
+    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    srv.bind(str(path))
+    srv.listen(1)
+    provider = provider_for(data_dir)
+    try:
+        start = time.monotonic()
+        with patch.object(provider, "_load_model", side_effect=lambda: setattr(provider, "_model", FakeModel())):
+            assert provider.embed("abc") == [3.0, 1.0]
+        assert time.monotonic() - start < 2
+    finally:
+        srv.close()
+
+
+def test_no_daemon_without_flock(data_dir, daemon_on, monkeypatch):
+    """Windows has no fcntl: the daemon is skipped, not an import error."""
+    monkeypatch.setattr(embed_daemon, "fcntl", None)
+    with patch.object(embed_daemon, "spawn") as spawn:
+        assert embed_daemon.embed_via_daemon(embed_daemon.socket_path_for(data_dir), MODEL, ["x"], 60) is None
+    spawn.assert_not_called()
 
 
 def test_daemon_disabled_by_env_and_config(data_dir, monkeypatch):
