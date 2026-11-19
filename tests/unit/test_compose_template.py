@@ -1,17 +1,21 @@
 """The compose template is the whole deployment contract for docker mode.
 
 Issue #39: `/logs` was never declared, so Docker backed it with an anonymous
-volume. When that volume could not be written, Neo4j treated the failed log
-append as fatal and exited; `restart: unless-stopped` then crash-looped it 67
-times over 46 hours, and collivind was unusable for the whole period.
+volume. Neo4j then crash-looped 67 times over 46 hours on a full Docker VM
+disk, with `Unable to write to stream /logs/neo4j.log` in its output, and
+collivind was unusable for the whole period.
 
 Neither change here fixes that. Being precise about what they do, because
 two rounds of review were spent on claims that outran the diff:
 
 - The named `/logs` volume stops each down/up cycle leaking another dangling
-  anonymous volume and makes the logs findable. It does NOT prevent the crash
-  loop: named and anonymous volumes share a filesystem, so a full disk is
-  equally fatal. That needs ignoreExceptions="true" in conf/user-logs.xml.
+  anonymous volume and makes the logs findable. A full `/logs` was never
+  what killed Neo4j: measured on neo4j:5.26-community with the stock log4j2
+  config, a 100%-full `/logs` (at boot, and filled at runtime under write
+  load) logs that error and keeps serving bolt and HTTP, because appenders
+  default to ignoreExceptions="true". The likelier killer is the same full
+  disk under `/data`: Neo4j would not start on a full `/data` (runtime
+  exhaustion not tested). No compose setting prevents that.
 - The healthchecks do NOT surface a crash loop either. Measured: a
   crash-looping container shows `Restarting (1)` in `docker ps`, not
   `(unhealthy)`, and its probe runs zero times, because probes only execute
