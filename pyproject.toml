@@ -30,6 +30,9 @@ dev = [
     "pytest>=8.0.0",
     "ruff>=0.8.0",
     "mypy>=1.14.0",
+    # Parses the compose template in tests/unit/test_compose_template.py.
+    # Test-only: nothing in src/ reads YAML.
+    "pyyaml>=6.0",
 ]
 
 [project.scripts]

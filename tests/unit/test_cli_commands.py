@@ -100,7 +100,7 @@ class TestStatusCommand:
         }
         runner = CliRunner()
         result = runner.invoke(status)
-        assert result.exit_code == 0
+        assert result.exit_code == 1  # a backend is down: status must fail, not just print
         assert "Mode: docker" in result.output
         assert "qdrant" in result.output
         assert "neo4j" in result.output

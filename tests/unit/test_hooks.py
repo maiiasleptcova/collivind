@@ -136,7 +136,7 @@ def test_session_start_emits_context_index(monkeypatch):
     assert "[decision] Postgres chosen" in ctx
 
 
-def test_session_start_silent_when_empty_or_broken(monkeypatch):
+def test_session_start_silent_when_empty_warns_when_broken(monkeypatch):
     manager = __import__("unittest.mock", fromlist=["MagicMock"]).MagicMock()
     manager.get_timeline.return_value = []
     monkeypatch.setattr("collivind.cli.commands.hook._load_manager", lambda: manager)
@@ -150,7 +150,9 @@ def test_session_start_silent_when_empty_or_broken(monkeypatch):
     monkeypatch.setattr("collivind.cli.commands.hook._load_manager", boom)
     result = CliRunner().invoke(hook, ["session-start"])
     assert result.exit_code == 0
-    assert result.output.strip() == ""
+    # #39: a dead store must be visible, not look like an empty one.
+    context = json.loads(result.output)["hookSpecificOutput"]["additionalContext"]
+    assert "UNAVAILABLE" in context and "backend down" in context and "collivind status" in context
 
 
 def test_install_hooks_registers_session_start(tmp_path, monkeypatch):
@@ -218,7 +220,7 @@ def test_user_prompt_silent_on_short_prompt_or_no_match(monkeypatch):
     assert result.exit_code == 0 and result.output.strip() == ""
 
 
-def test_user_prompt_silent_on_garbage_stdin_or_broken_backend(monkeypatch):
+def test_user_prompt_silent_on_garbage_stdin_warns_on_broken_backend(monkeypatch):
     result = CliRunner().invoke(hook, ["user-prompt"], input="{not json")
     assert result.exit_code == 0 and result.output.strip() == ""
 
@@ -227,7 +229,21 @@ def test_user_prompt_silent_on_garbage_stdin_or_broken_backend(monkeypatch):
 
     monkeypatch.setattr("collivind.cli.commands.hook._load_manager", boom)
     result = CliRunner().invoke(hook, ["user-prompt"], input=_prompt_payload("a long enough prompt to search"))
+    assert result.exit_code == 0
+    # #39: recall silently returning nothing hid a 46-hour outage.
+    context = json.loads(result.output)["hookSpecificOutput"]["additionalContext"]
+    assert "UNAVAILABLE" in context and "backend down" in context
+
+
+def test_user_prompt_skips_embedding_when_project_store_is_empty(monkeypatch):
+    """#16: a cold model load on an empty store blew the 30s hook timeout."""
+    manager = __import__("unittest.mock", fromlist=["MagicMock"]).MagicMock()
+    manager.get_timeline.return_value = []
+    monkeypatch.setattr("collivind.cli.commands.hook._load_manager", lambda: manager)
+
+    result = CliRunner().invoke(hook, ["user-prompt"], input=_prompt_payload("a long enough prompt to search"))
     assert result.exit_code == 0 and result.output.strip() == ""
+    manager.get_context.assert_not_called()
 
 
 def test_hooks_use_absolute_binary_path(tmp_path, monkeypatch):

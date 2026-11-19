@@ -109,17 +109,33 @@ opencode and Copilot get the memory tools, so you can search and save
 explicitly, but nothing is injected into your prompts automatically — neither
 exposes a hook comparable to `UserPromptSubmit`.
 
-`collivind status` reports what is registered where.
+`collivind status` reports what is registered where — including Claude Code's MCP server, flagging a dead or duplicated entry — and, in docker mode, each container's state, so a crash-looping container is named rather than showing up only as "connection refused". It exits 1 when anything is broken, so it can run from cron or a script.
 
 ### Manual setup
 
 Register Collivind as an MCP server:
 
 ```bash
-claude mcp add --global collivind -- python3 -m collivind.mcp.server
+claude mcp add -s user collivind -- /path/to/python -m collivind.mcp.server
 ```
 
-`collivind init` does this automatically.
+Use an interpreter that can import collivind — agents spawn the server with
+their own environment, where a bare `python3` usually resolves to the system
+one and the server dies at import. `collivind init` does this for you and
+fills in the right interpreter automatically.
+
+`collivind init` registers this only when Claude Code has no collivind server
+already — including the one the plugin provides — since `claude mcp add`
+cannot update an entry in place and would leave you with two.
+
+Already have an entry pointing at the wrong interpreter? Replace it yourself;
+`claude mcp remove` finds it in whichever scope it lives in, which matters
+because a `local`-scope entry outranks a `user`-scope one:
+
+```bash
+claude mcp remove collivind
+collivind init
+```
 
 ### Hooks
 
@@ -173,7 +189,7 @@ Once connected, Claude Code gets these tools:
 
 ```bash
 collivind init              # Setup and start services
-collivind status            # Health check (backends + recall-hook registration)
+collivind status            # Health check: backends, containers, hooks, MCP registration (exit 1 if unhealthy)
 collivind search "query"    # Search memories from terminal
 collivind add "content" -c decision -t db,infra  # Store a memory
 collivind get <id>          # Show one memory
