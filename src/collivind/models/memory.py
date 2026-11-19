@@ -5,6 +5,12 @@ from enum import Enum
 from typing import List, Optional
 
 
+def stored_timestamp(value: Optional[str]) -> datetime:
+    """A required timestamp read back from a store; a missing one reads as now,
+    the same default MemoryNode.from_dict applies."""
+    return datetime.fromisoformat(value) if value else datetime.now(timezone.utc)
+
+
 def validate_confidence(value: float) -> float:
     """Coerce and range-check a confidence, or raise ValueError.
 

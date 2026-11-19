@@ -19,7 +19,7 @@ class LocalEmbeddingProvider(EmbeddingProvider):
         """data_dir enables the resident embedding daemon (#16); None keeps
         everything in-process (init's model pre-download, tests)."""
         self.config = config
-        self._model = None
+        self._model: Any = None  # SentenceTransformer, imported lazily (optional extra)
         self._dimension = config.dimension
         self._socket_path = embed_daemon.socket_path_for(Path(data_dir)) if data_dir else None
 

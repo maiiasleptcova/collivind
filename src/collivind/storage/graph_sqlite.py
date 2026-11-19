@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 
 from collivind.models.entity import EntityCreate, EntityNode, EntityType
-from collivind.models.memory import MemoryCategory, MemoryCreate, MemoryNode, MemorySource
+from collivind.models.memory import MemoryCategory, MemoryCreate, MemoryNode, MemorySource, stored_timestamp
 from collivind.models.relationship import RelationshipCreate, RelationshipEdge, RelType
 from collivind.storage.interfaces import GraphStore
 
@@ -288,8 +288,7 @@ class SqliteGraphStore(GraphStore):
             chain.append(prev)
             current = prev
         chain.reverse()
-        start = self.get_memory(memory_id)
-        current = start
+        current = chain[-1]  # the starting memory, after reverse()
         while current.superseded_by:
             nxt = self.get_memory(current.superseded_by)
             if not nxt:
@@ -316,7 +315,7 @@ class SqliteGraphStore(GraphStore):
                 confidence=row["confidence"],
                 source=row["source"],
                 properties=json.loads(row["properties"]) if row["properties"] else {},
-                created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
+                created_at=stored_timestamp(row["created_at"]),
             )
 
     def restore_memory(self, node: MemoryNode) -> None:
@@ -388,7 +387,7 @@ class SqliteGraphStore(GraphStore):
             summary=row["summary"],
             category=MemoryCategory(row["category"]),
             confidence=row["confidence"],
-            valid_from=datetime.fromisoformat(row["valid_from"]) if row["valid_from"] else None,
+            valid_from=stored_timestamp(row["valid_from"]),
             valid_to=datetime.fromisoformat(row["valid_to"]) if row["valid_to"] else None,
             project_id=row["project_id"],
             session_id=row["session_id"],
@@ -398,8 +397,8 @@ class SqliteGraphStore(GraphStore):
             tags=json.loads(row["tags"]) if row["tags"] else [],
             version=version,
             previous_version_id=prev_id,
-            created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
-            updated_at=datetime.fromisoformat(row["updated_at"]) if row["updated_at"] else None,
+            created_at=stored_timestamp(row["created_at"]),
+            updated_at=stored_timestamp(row["updated_at"]),
         )
 
     def _row_to_entity(self, row) -> EntityNode:
@@ -408,8 +407,8 @@ class SqliteGraphStore(GraphStore):
             name=row["name"],
             type=EntityType(row["type"]),
             properties=json.loads(row["properties"]) if row["properties"] else {},
-            created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
-            updated_at=datetime.fromisoformat(row["updated_at"]) if row["updated_at"] else None,
+            created_at=stored_timestamp(row["created_at"]),
+            updated_at=stored_timestamp(row["updated_at"]),
         )
 
     def _serialize_update_value(self, key: str, value: Any) -> Any:

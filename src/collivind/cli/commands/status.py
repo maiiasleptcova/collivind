@@ -54,12 +54,11 @@ def _status_embedded(config) -> bool:
     try:
         vector_store, graph_store, embedding_provider = create_all_backends(config)
 
-        backends = [
-            ("vector_store", vector_store),
-            ("graph_store", graph_store),
-            ("embedding_provider", embedding_provider),
+        results = [
+            _report("vector_store", vector_store.health_check()),
+            _report("graph_store", graph_store.health_check()),
+            _report("embedding_provider", embedding_provider.health_check()),
         ]
-        results = [_report(name, backend.health_check()) for name, backend in backends]
 
         legacy = config.expanded_data_dir / "qdrant_data"
         if legacy.exists():

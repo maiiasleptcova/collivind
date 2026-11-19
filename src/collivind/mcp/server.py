@@ -16,9 +16,9 @@ class MCPServer:
     def __init__(self):
         self.initialized = False
         self.backends_available = False
-        self.manager = None
-        self.tools = None
-        self._init_error = None
+        self.manager: Optional[MemoryManager] = None
+        self.tools: Optional[CollivindTools] = None
+        self._init_error: Optional[str] = None
         self.session_id = str(uuid.uuid4())
 
         if not self._build_backends():
@@ -82,7 +82,7 @@ class MCPServer:
 
         if method == "initialize":
             self.initialized = True
-            server_info = {"name": "collivind", "version": "0.1.0"}
+            server_info: Dict[str, Any] = {"name": "collivind", "version": "0.1.0"}
             if not self.backends_available:
                 server_info["status"] = "degraded"
                 server_info["degraded_reason"] = self._init_error
@@ -109,7 +109,7 @@ class MCPServer:
             if not self.backends_available:
                 self._build_backends()
 
-            if not self.backends_available:
+            if not self.backends_available or self.tools is None:
                 return {
                     "jsonrpc": "2.0",
                     "id": req_id,

@@ -16,10 +16,14 @@ import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from types import ModuleType
 from typing import Iterator, Optional
 
+fcntl: Optional[ModuleType]
 try:
-    import fcntl
+    import fcntl as _fcntl
+
+    fcntl = _fcntl
 except ImportError:  # Windows: no flock; state updates are then unlocked
     fcntl = None
 

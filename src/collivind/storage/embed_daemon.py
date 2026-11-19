@@ -35,14 +35,18 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from types import ModuleType
 from typing import Any, Dict, List, Optional
 
 from collivind.version import __version__
 
+fcntl: Optional[ModuleType]
 try:
-    import fcntl
+    import fcntl as _fcntl
+
+    fcntl = _fcntl
 except ImportError:  # Windows: no flock, no unix sockets; embed in-process
-    fcntl = None  # type: ignore[assignment]
+    fcntl = None
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +98,8 @@ def socket_path_for(data_dir: Path) -> Path:
 
 
 class _Handler(socketserver.StreamRequestHandler):
+    server: "EmbedServer"
+
     def handle(self):
         self.request.settimeout(HANDLER_TIMEOUT)
         try:
@@ -108,7 +114,13 @@ class _Handler(socketserver.StreamRequestHandler):
             pass  # client gave up; it falls back in-process
 
 
-class EmbedServer(getattr(socketserver, "UnixStreamServer", socketserver.TCPServer)):
+if sys.platform == "win32":  # no unix sockets: the class only has to import (fcntl is None there)
+    _ServerBase = socketserver.TCPServer
+else:
+    _ServerBase = socketserver.UnixStreamServer
+
+
+class EmbedServer(_ServerBase):
     """Single-threaded on purpose: requests are serialized, so the model is
     never used from two threads."""
 
@@ -154,6 +166,8 @@ class EmbedServer(getattr(socketserver, "UnixStreamServer", socketserver.TCPServ
 
 def acquire_lock(lock_path: Path, wait: float = 0.0):
     """Exclusive flock on lock_path, or None if someone else holds it."""
+    if fcntl is None:  # callers gate on fcntl first; this only makes it explicit
+        raise OSError("flock is not available on this platform")
     fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
     deadline = time.monotonic() + wait
     while True:

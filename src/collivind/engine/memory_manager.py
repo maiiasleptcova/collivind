@@ -203,7 +203,7 @@ class MemoryManager:
         # An invalidated memory has no vector (see invalidate); editing its
         # history must not put it back into the live index.
         live = updated is not None and not updated.valid_to and not updated.superseded_by
-        if live and any(f is not None for f in (content, summary, category, tags)):
+        if updated is not None and live and any(f is not None for f in (content, summary, category, tags)):
             entity_names, ok = self._entity_names(memory_id)
             if ok:
                 after = build_enriched_text(self._as_create(updated), entity_names=entity_names)
@@ -279,7 +279,7 @@ class MemoryManager:
                     # NULL). MemoryCreate now rejects that, and there is no
                     # per-record handling here — one bad row would abort the
                     # loop after earlier rows had already been committed.
-                    confidence=rec.get("confidence") if rec.get("confidence") is not None else 1.0,
+                    confidence=1.0 if rec.get("confidence") is None else rec["confidence"],
                     tags=rec.get("tags") or [],
                 )
             )

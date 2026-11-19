@@ -8,7 +8,8 @@ class GraphEngine:
         self.graph_store = graph_store
 
     def _neighbor_identity(self, neighbor: Dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
-        node = neighbor.get("node") if isinstance(neighbor.get("node"), dict) else {}
+        raw = neighbor.get("node")
+        node: Dict[str, Any] = raw if isinstance(raw, dict) else {}
         ent_id = neighbor.get("id") or node.get("id")
         ent_name = neighbor.get("name") or node.get("name")
         if not ent_name and ent_id:
@@ -20,7 +21,7 @@ class GraphEngine:
         Find memories connected to the seed memories via shared entities.
         Returns a dictionary mapping memory_id to {"memory": MemoryNode, "shared_entities": [entity names]}
         """
-        expanded = {}
+        expanded: Dict[str, Dict[str, Any]] = {}
         if not seed_memory_ids:
             return expanded
 
