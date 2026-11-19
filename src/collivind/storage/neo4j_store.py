@@ -34,11 +34,16 @@ def _retry(fn, max_retries=3, base_delay=0.5):
     raise last_error
 
 
-# Every node this store writes carries one of these labels, and each label has a
-# unique constraint on id (initialize). A bare `MATCH (n {id: $id})` cannot use
-# those indexes and scans every node; `(n:Memory|Entity|Session {id: $id})`
-# plans as a union of NodeUniqueIndexSeeks (checked with EXPLAIN on 5.26).
-_ID_LABELS = "Memory|Entity|Session"
+def _node_by_id(var: str, id_expr: str) -> str:
+    """`MATCH` for a node by id that the unique id constraints can serve.
+
+    Every node this store writes is a Memory, Entity or Session, each with a
+    unique constraint on id (initialize). A bare `MATCH (n {id: $id})` cannot
+    use those indexes and scans every node; the label OR plans as a union of
+    NodeUniqueIndexSeeks (EXPLAIN on 5.26). Spelled as WHERE rather than
+    `:Memory|Entity` so it still parses on Neo4j 4.4 for remote mode.
+    """
+    return f"MATCH ({var}) WHERE ({var}:Memory OR {var}:Entity OR {var}:Session) AND {var}.id = {id_expr}"
 
 
 class Neo4jGraphStore(GraphStore):
@@ -172,8 +177,8 @@ class Neo4jGraphStore(GraphStore):
 
     def create_relationship(self, data: RelationshipCreate) -> RelationshipEdge:
         query = f"""
-        MATCH (source:{_ID_LABELS} {{id: $source_id}})
-        MATCH (target:{_ID_LABELS} {{id: $target_id}})
+        {_node_by_id("source", "$source_id")}
+        {_node_by_id("target", "$target_id")}
         MERGE (source)-[r:{data.type.value}]->(target)
         ON CREATE SET r.confidence = $confidence, r.source = $source
         RETURN r
@@ -210,7 +215,8 @@ class Neo4jGraphStore(GraphStore):
             rel_pattern = f"<-[r:{type_filter}*1..{depth}]-"
 
         query = f"""
-        MATCH (n:{_ID_LABELS} {{id: $node_id}}){rel_pattern}(m)
+        {_node_by_id("n", "$node_id")}
+        MATCH (n){rel_pattern}(m)
         RETURN m, r
         """
         results = []
@@ -245,7 +251,8 @@ class Neo4jGraphStore(GraphStore):
         rel_pattern = {"OUT": f"-{rel}->", "IN": f"<-{rel}-"}.get(direction, f"-{rel}-")
         query = f"""
         UNWIND $ids AS nid
-        MATCH (n:{_ID_LABELS} {{id: nid}}){rel_pattern}(m)
+        {_node_by_id("n", "nid")}
+        MATCH (n){rel_pattern}(m)
         RETURN nid, m, r
         """
         ids = list(dict.fromkeys(node_ids))
@@ -266,11 +273,8 @@ class Neo4jGraphStore(GraphStore):
         # is Neo4j's choice on both paths)
         query = """
         UNWIND $ids AS eid
-        CALL (eid) {
-            MATCH (m:Memory)-[:ABOUT|MENTIONS]->(:Entity {id: eid})
-            RETURN m LIMIT $limit
-        }
-        RETURN eid, collect(m) AS ms
+        MATCH (m:Memory)-[:ABOUT|MENTIONS]->(:Entity {id: eid})
+        RETURN eid, collect(m)[..$limit] AS ms
         """
         by_slug: Dict[str, List[MemoryNode]] = {slug: [] for slug in slugs}
         with self.driver.session(database=self.config.database) as session:
@@ -414,8 +418,8 @@ class Neo4jGraphStore(GraphStore):
     def restore_relationship(self, edge: RelationshipEdge) -> None:
         rel_type = RelType(edge.type).value  # enum-checked: the only interpolated token
         query = f"""
-        MATCH (s:{_ID_LABELS} {{id: $source_id}})
-        MATCH (t:{_ID_LABELS} {{id: $target_id}})
+        {_node_by_id("s", "$source_id")}
+        {_node_by_id("t", "$target_id")}
         MERGE (s)-[r:{rel_type} {{id: $id}}]->(t)
         SET r.confidence = $confidence, r.source = $source,
             r.properties = $props, r.created_at = $created_at
@@ -424,7 +428,9 @@ class Neo4jGraphStore(GraphStore):
         # an id derived from the triple means the edge left a Neo4j without an
         # id; claim that original rather than MERGE a parallel twin beside it
         adopt = f"""
-        MATCH (s:{_ID_LABELS} {{id: $source_id}})-[r:{rel_type}]->(t:{_ID_LABELS} {{id: $target_id}})
+        {_node_by_id("s", "$source_id")}
+        {_node_by_id("t", "$target_id")}
+        MATCH (s)-[r:{rel_type}]->(t)
         WHERE r.id IS NULL
         WITH r LIMIT 1
         SET r.id = $id
