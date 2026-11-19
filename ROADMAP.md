@@ -77,8 +77,8 @@ by not being published. Decide and implement:
 - **Local daemon / loopback HTTP bridge**: the latency half shipped (#16).
   Embedded mode now keeps the model resident in `collivind.storage.embed_daemon`
   (unix socket `~/.collivind/embed.sock`, 0600, idle exit after 30 min; a
-  data dir too long for AF_UNIX falls back to a private dir under the system
-  temp dir),
+  data dir too long for AF_UNIX falls back to a private per-user dir under
+  /tmp),
   started on demand by the first embed; a warm hook embeds in ~0.01s instead
   of a 6-9s model load. Still open: it serves embeddings only — the store is
   still opened per process (cheap, ~0.1s), and the first prompt after the

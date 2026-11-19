@@ -239,3 +239,16 @@ def test_reasks_back_off():
             gaps.append(since)
             since = 0
     assert gaps == [capture.RETRY_AFTER * 2**i for i in range(capture.MAX_RETRIES)], gaps
+
+
+def test_checkpoint_carried_over_from_an_uncapped_build_is_given_up():
+    """0.11.0 counted re-asks without a cap; a session saved with retries=12
+    must not wait RETRY_AFTER * 2**12 responses before anything happens."""
+    for _ in range(3):
+        _stop()
+    with capture.locked_state() as state:
+        state["sessions"]["s1"]["pending"].update(retries=12, since=0)
+    for _ in range(capture.RETRY_AFTER * 2**capture.MAX_RETRIES):
+        assert _stop() is None
+    assert "pending" not in capture.read_state()["sessions"]["s1"]
+    assert [e["ok"] for e in capture.iter_history()] == [False]

@@ -7,10 +7,11 @@ memory<->memory edges and version chains survive, and re-running is a no-op
 """
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from collivind.engine.enrichment import build_enriched_text
 from collivind.engine.memory_manager import MemoryManager
+from collivind.models.memory import MemoryNode
 from collivind.models.relationship import RelationshipEdge, RelType
 from collivind.storage.interfaces import EmbeddingProvider, GraphStore, VectorStore
 
@@ -53,11 +54,20 @@ def _target_ids(dst: Stores) -> Dict[str, Set[str]]:
     }
 
 
+def _retired(memories: Iterable[MemoryNode]) -> Set[str]:
+    return {m.id for m in memories if m.valid_to or m.superseded_by}
+
+
 def migrate(src: Stores, dst: Stores, *, reembed: bool, dry_run: bool) -> MigrationReport:
     memories = list(src.graph.iter_memories())
     entities = list(src.graph.iter_entities())
     edges = list(src.graph.iter_relationships())
-    vectors = list(src.vector.iter_all())
+    # The live vector index serves only current knowledge (invalidate() drops
+    # the vector), so a vector whose memory is retired on either side — on
+    # the target since the last run, or in a source written before 0.11.1 —
+    # is neither copied nor counted.
+    retired = _retired(memories) | _retired(dst.graph.iter_memories())
+    vectors = [v for v in src.vector.iter_all() if v[0] not in retired]
 
     node_ids = {m.id for m in memories} | {e.id for e in entities}
 

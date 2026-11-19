@@ -176,7 +176,10 @@ class SearchEngine:
         """Hits rebuilt from vector payloads alone: no graph score, no entities.
 
         Invalidated, superseded and forgotten memories have no vector (the
-        manager deletes it), so a stale payload cannot surface here.
+        manager deletes it). ponytail: a memory invalidated by hand before
+        0.11.1 kept its vector and a live-looking payload, so it can still
+        surface here while the graph is down; `collivind migrate` drops such
+        vectors, add a one-off sweep if that double fault ever matters.
         """
         candidates: Dict[str, SearchResult] = {}
         for res in raw_vector_results:

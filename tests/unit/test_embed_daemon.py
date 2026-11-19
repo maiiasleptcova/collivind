@@ -261,7 +261,7 @@ def test_spawn_detaches_stdio(data_dir):
 def short_tmp(monkeypatch):
     """A private, short system temp dir for the fallback socket."""
     d = tempfile.mkdtemp(prefix="cvt", dir="/tmp")
-    monkeypatch.setattr(tempfile, "gettempdir", lambda: d)
+    monkeypatch.setattr(embed_daemon, "SHORT_SOCKET_BASE", d)
     yield Path(d)
     shutil.rmtree(d, ignore_errors=True)
 
@@ -306,3 +306,17 @@ def test_fallback_refuses_a_temp_dir_someone_else_could_write(short_tmp):
         assert len(str(embed_daemon.socket_path_for(long_dir))) > embed_daemon.MAX_SOCKET_PATH
     finally:
         path.parent.chmod(0o700)
+
+
+def test_fallback_dir_is_rechecked_on_every_use(short_tmp, daemon_on):
+    """A long-lived process must not keep trusting a dir that was replaced or opened up since start."""
+    long_dir = Path("/tmp/" + "v" * 120)
+    provider = provider_for(long_dir)
+    private = embed_daemon.socket_path_for(long_dir).parent
+    private.chmod(0o777)
+    try:
+        with patch.object(embed_daemon, "embed_via_daemon") as via:
+            provider._from_daemon(["x"])
+        assert len(str(via.call_args.args[0])) > embed_daemon.MAX_SOCKET_PATH  # refused, not the open dir
+    finally:
+        private.chmod(0o700)

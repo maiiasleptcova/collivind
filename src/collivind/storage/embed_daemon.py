@@ -3,7 +3,7 @@
 Every hook run is a fresh process, so without this each prompt pays the
 sentence-transformers import and model load (~9s warm, worse cold). The daemon
 loads the model once and answers JSON-line requests over a unix socket in the
-data dir (mode 0600), or in a private per-user dir under the system temp dir
+data dir (mode 0600), or in a private per-user dir under /tmp
 when that path is over the AF_UNIX limit. It exits after an idle timeout.
 
 Protocol, one request per connection:
@@ -32,7 +32,6 @@ import socketserver
 import stat
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 from types import ModuleType
@@ -55,6 +54,10 @@ LOCK_NAME = "embed.lock"
 LOG_NAME = "embed-daemon.log"
 ENV_DISABLE = "COLLIVIND_EMBED_DAEMON"  # "0" disables the daemon
 MAX_SOCKET_PATH = 100  # AF_UNIX limit is 104 on macOS, 108 on Linux
+# Fixed, not tempfile.gettempdir(): $TMPDIR differs between a sandboxed agent
+# and the user's shell, and both must find the same daemon. The 0700 + owner
+# check below is what makes a shared sticky /tmp safe.
+SHORT_SOCKET_BASE = "/tmp"
 CONNECT_TIMEOUT = 1.0
 # A busy or hung daemon must leave the hook time to load in-process (6-9s)
 # within Claude Code's 30s hook timeout, so small requests give up fast.
@@ -70,8 +73,9 @@ def daemon_enabled(config_flag: bool) -> bool:
 
 def socket_path_for(data_dir: Path) -> Path:
     """The socket for a data dir: inside it, or, when that path is over the
-    AF_UNIX limit, in a private per-user dir under the system temp dir keyed by
-    a hash of the data dir. Lock and log live next to the socket either way.
+    AF_UNIX limit, in a private per-user dir under /tmp keyed by a hash of the
+    data dir. Lock and log live next to the socket either way. Callers resolve
+    it per use, so the directory check is redone before every connect/spawn.
 
     If the short dir cannot be made safe (someone else owns it, or it is open
     to others) the long path is returned and the daemon stays off for it.
@@ -81,7 +85,7 @@ def socket_path_for(data_dir: Path) -> Path:
     if len(str(path)) <= MAX_SOCKET_PATH or not hasattr(os, "getuid"):
         return path
     key = hashlib.sha256(str(data_dir.resolve()).encode()).hexdigest()[:16]
-    short = Path(tempfile.gettempdir()) / f"collivind-{os.getuid()}-{key}"
+    short = Path(SHORT_SOCKET_BASE) / f"collivind-{os.getuid()}-{key}"
     try:
         short.mkdir(mode=0o700, exist_ok=True)
         st = short.lstat()  # lstat: a planted symlink is not a directory we own

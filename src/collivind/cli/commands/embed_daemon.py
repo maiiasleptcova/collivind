@@ -61,6 +61,12 @@ def status():
     _, path = _socket()
     info = _info(path)
     if not info:
-        click.echo(f"Not running (socket {path}).")
+        if len(str(path)) > daemon.MAX_SOCKET_PATH:
+            click.echo(
+                f"Disabled: {path} is over the unix socket limit and the private fallback "
+                f"under {daemon.SHORT_SOCKET_BASE} is unusable (see the log for why)."
+            )
+        else:
+            click.echo(f"Not running (socket {path}).")
         return
     click.echo(f"Running: pid {info['pid']}, collivind {info['version']}, model {info['model']}, socket {path}")

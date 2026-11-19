@@ -143,7 +143,8 @@ def stop_decision(state: dict, session_id: str, agent: str, threshold: int) -> O
     if pending:
         pending["since"] += 1
         retries = pending.get("retries", 0)
-        if pending["since"] < RETRY_AFTER * 2**retries:
+        # min(): a pre-cap build saved unbounded retry counts in hook_state.json
+        if pending["since"] < RETRY_AFTER * 2 ** min(retries, MAX_RETRIES):
             return None
         if retries >= MAX_RETRIES:
             s.pop("pending")
