@@ -69,7 +69,7 @@ def test_batch_tool_returns_stored_ids_on_partial_failure():
 
 def test_backend_error_carries_status_hint():
     manager = MagicMock()
-    manager.search.side_effect = CollivindError("Failed to get memory from Neo4j after retries: refused")
+    manager.search_with_status.side_effect = CollivindError("Failed to get memory from Neo4j after retries: refused")
     res = json.loads(CollivindTools(manager).handle_call("collivind_search", {"query": "anything"}))
     assert "Neo4j" in res["error"] and "collivind status" in res["hint"]
 

@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 
 from collivind import capture
 from collivind.engine.extractor import build_extraction_prompt, parse_extraction_response
-from collivind.engine.memory_manager import MemoryManager
+from collivind.engine.memory_manager import DEGRADED_NOTE, MemoryManager
 from collivind.exceptions import BatchPartiallyStoredError, CollivindError
 from collivind.models import (
     EntityCreate,
@@ -379,11 +379,13 @@ class CollivindTools:
                     date_from=date_from,
                     date_to=date_to,
                 )
-                results = self.memory_manager.search(q)
+                results, degraded = self.memory_manager.search_with_status(q)
                 limit = args.get("limit", 10)
                 page = results[offset : offset + limit]
+                response = {"degraded": degraded, **({"warning": DEGRADED_NOTE} if degraded else {})}
                 return json.dumps(
                     {
+                        **response,
                         "results": [
                             {
                                 "id": r.memory.id,
@@ -418,9 +420,8 @@ class CollivindTools:
                 return json.dumps({"status": "success", "message": "Memory invalidated"})
 
             elif name == "collivind_forget":
-                mem_id = args["memory_id"]
-                self.memory_manager.graph_store.delete_memory(mem_id)
-                self.memory_manager.vector_store.delete(mem_id)
+                if not self.memory_manager.forget(args["memory_id"]):
+                    return json.dumps({"error": "Memory not found"})
                 return json.dumps({"status": "success", "message": "Memory forgotten"})
 
             elif name == "collivind_get_entity":
@@ -545,5 +546,10 @@ class CollivindTools:
             # Backend failures used to surface as a bare driver trace with no
             # pointer at the cause (#39).
             return json.dumps({"error": str(e), "hint": BACKEND_HINT})
+        except (KeyError, TypeError, ValueError) as e:
+            return json.dumps({"error": str(e)})  # bad arguments, not a backend
         except Exception as e:
-            return json.dumps({"error": str(e)})
+            # Store drivers raise their own types (a dead Neo4j surfaces as
+            # neo4j.exceptions.ServiceUnavailable from most graph reads), so
+            # anything that is not an argument error gets the pointer too.
+            return json.dumps({"error": str(e), "hint": BACKEND_HINT})
