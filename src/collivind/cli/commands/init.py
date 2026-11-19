@@ -49,6 +49,10 @@ def _register_hooks(config):
         results = {t: ev for t, ev in install_all_hooks(config.hooks).items() if ev}
         if results:
             click.secho("done (" + "; ".join(f"{t}: {', '.join(ev)}" for t, ev in results.items()) + ")", fg="green")
+            if "codex" in results:
+                from collivind.cli.commands.hook import CODEX_REVIEW_NEXT_STEP
+
+                click.secho(CODEX_REVIEW_NEXT_STEP, fg="yellow")
         else:
             click.secho("skipped (disabled in config)", fg="yellow")
     except Exception as e:

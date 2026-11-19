@@ -31,6 +31,7 @@ def status():
             healthy = _status_containers(config.docker.compose_project) and healthy
 
     _status_hooks()
+    _status_capture()
     healthy = _status_claude_mcp() and healthy
     _status_codex_mcp()
     _status_other_agent_mcp()
@@ -215,6 +216,76 @@ def _status_hooks():
             )
         else:
             click.secho(f"✓ {h['tool']}: {', '.join(h['events'])}", fg="green")
+
+
+def _status_capture():
+    """Automatic capture, stated as what actually happened (#35).
+
+    Configured is not trusted, trusted is not executed, and a save request is
+    not a save. Hooks leave heartbeats; the MCP server records confirmed
+    writes; so each of those states is shown separately rather than implied
+    by backend health.
+    """
+    from collivind import capture
+    from collivind.cli.commands.hook import CODEX_REVIEW, hook_health
+
+    info = capture.summary()
+    beats = info["heartbeats"]
+    click.echo("\nAutomatic capture:")
+    for h in hook_health():
+        if not h["events"]:
+            continue
+        ran = {e: beats.get(f"{h['tool']}:{e}") for e in h["events"]}
+        never = [e for e, at in ran.items() if not at]
+        if never and h["tool"] == "codex":
+            click.secho(
+                f"? codex: {', '.join(never)} configured but never ran — trust unknown. {CODEX_REVIEW}", fg="yellow"
+            )
+        elif never:
+            click.secho(f"? {h['tool']}: {', '.join(never)} configured but has not run yet", fg="yellow")
+        if "Stop" in h["events"] and ran.get("Stop"):
+            click.secho(f"✓ {h['tool']}: Stop last ran {ran['Stop']}", fg="green")
+    if "codex" in {h["tool"] for h in hook_health() if h["events"]}:
+        _warn_codex_inline_hooks()
+
+    ok, fail = info["last_ok"], info["last_fail"]
+    if ok:
+        what = f"{ok['saved']} memories" if ok["saved"] else "checked, nothing new"
+        click.secho(f"✓ last confirmed save: {ok['at']} ({what})", fg="green")
+    else:
+        click.secho("? no confirmed save recorded yet", fg="yellow")
+    if fail and (not ok or fail["at"] > ok["at"]):
+        click.secho(f"✗ last save FAILED {fail['at']}: {fail.get('error', '')}", fg="red")
+    for p in info["pending"]:
+        retries = f", re-asked {p['retries']}x" if p.get("retries") else ""
+        click.secho(
+            f"? {p.get('agent')} session {p['session'][:12]}: checkpoint {p['id']} ({p['trigger']}) requested "
+            f"{p['requested']}, not yet confirmed{retries}",
+            fg="yellow",
+        )
+
+
+def _warn_codex_inline_hooks():
+    """Codex also reads `[hooks]` inline in config.toml; collivind entries in both fire twice."""
+    import tomllib
+
+    cfg = Path.home() / ".codex" / "config.toml"
+    try:
+        inline = tomllib.loads(cfg.read_text()).get("hooks") or {}
+    except (OSError, tomllib.TOMLDecodeError):
+        return
+    events = sorted(
+        ev
+        for ev, groups in inline.items()
+        if isinstance(groups, list)
+        and any("collivind hook" in str(h.get("command", "")) for g in groups for h in g.get("hooks", []))
+    )
+    if events:
+        click.secho(
+            f"✗ codex: {', '.join(events)} also declared inline in {cfg} — they fire twice. "
+            "Remove the collivind entries from its [hooks] table.",
+            fg="red",
+        )
 
 
 def _status_codex_mcp():

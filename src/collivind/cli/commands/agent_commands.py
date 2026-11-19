@@ -1,6 +1,6 @@
 """Install in-session slash commands (/mem-save, /mem-recall) for agents.
 
-Claude Code and Codex get user-level commands; Copilot prompt files are
+Claude Code, Codex and opencode get user-level commands; Copilot prompt files are
 workspace-level, so those install into the current repo's .github/prompts.
 """
 
@@ -49,6 +49,10 @@ def install_commands(tool: str, project_dir: Path | None = None) -> list[Path]:
     elif tool == "codex":
         target = Path.home() / ".codex" / "prompts"
         files = {f"{n}.md": COMMANDS[n] for n in COMMANDS}
+    elif tool == "opencode":
+        # opencode reads ~/.config/opencode/commands/*.md; frontmatter as Claude's (#34)
+        target = Path.home() / ".config" / "opencode" / "commands"
+        files = {f"{n}.md": _claude_file(n) for n in COMMANDS}
     elif tool == "copilot":
         target = (project_dir or Path.cwd()) / ".github" / "prompts"
         files = {f"{n}.prompt.md": _copilot_file(n) for n in COMMANDS}
@@ -70,6 +74,8 @@ def install_all_commands() -> dict:
     results = {"claude": install_commands("claude")}
     if (Path.home() / ".codex").exists():
         results["codex"] = install_commands("codex")
+    if (Path.home() / ".config" / "opencode").exists():
+        results["opencode"] = install_commands("opencode")
     return results
 
 
@@ -81,9 +87,9 @@ def commands():
 @commands.command()
 @click.option(
     "--tool",
-    type=click.Choice(["claude", "codex", "copilot", "auto"]),
+    type=click.Choice(["claude", "codex", "opencode", "copilot", "auto"]),
     default="auto",
-    help="auto = Claude Code + Codex if present; copilot writes into ./.github/prompts",
+    help="auto = Claude Code, plus Codex and opencode if present; copilot writes into ./.github/prompts",
 )
 def install(tool):
     """Install /mem-save and /mem-recall for your agents."""

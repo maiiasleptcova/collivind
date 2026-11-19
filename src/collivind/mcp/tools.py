@@ -1,6 +1,7 @@
 import json
 from typing import Any, Dict, List, Optional
 
+from collivind import capture
 from collivind.engine.extractor import build_extraction_prompt, parse_extraction_response
 from collivind.engine.memory_manager import MemoryManager
 from collivind.exceptions import BatchPartiallyStoredError, CollivindError
@@ -38,6 +39,40 @@ class CollivindTools:
             except Exception as e:
                 status[name] = {"status": "error", "message": str(e)}
         return status
+
+    def _batch_add(self, args: Dict[str, Any]) -> str:
+        """Store a batch and record the outcome against its checkpoint (#35).
+
+        The hook that asked for the save never sees this call, so the
+        checkpoint history is the only place "a save actually landed" exists.
+        """
+        checkpoint_id = args.get("checkpoint_id") or None
+        memories = []
+        for mem in args.get("memories") or []:
+            normalized = dict(mem)
+            if self.session_id:
+                normalized.setdefault("session_id", self.session_id)
+            memories.append(normalized)
+        try:
+            ids = self.memory_manager.batch_add_memories(memories) if memories else []
+        except BatchPartiallyStoredError as e:
+            self._record(checkpoint_id, False, e.stored_ids, error=str(e), failed_index=e.failed_index)
+            raise
+        except Exception as e:
+            self._record(checkpoint_id, False, [], error=str(e))
+            raise
+        self._record(checkpoint_id, True, ids)
+        result: Dict[str, Any] = {"status": "success", "memory_ids": ids}
+        if checkpoint_id:
+            result["checkpoint_id"] = checkpoint_id
+            result["checkpoint"] = "confirmed" if ids else "checked, nothing new"
+        return json.dumps(result)
+
+    def _record(self, checkpoint_id, ok, ids, **kw) -> None:
+        try:
+            capture.record(checkpoint_id, ok, ids, agent_session=self.session_id or "", **kw)
+        except OSError:
+            pass  # history is diagnostics; never fail a write because of it
 
     @staticmethod
     def get_tool_list() -> List[Dict[str, Any]]:
@@ -180,7 +215,7 @@ class CollivindTools:
             },
             {
                 "name": "collivind_batch_add",
-                "description": "Add multiple memories in batch.",
+                "description": "Add multiple memories in batch (all-or-nothing validation).",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -228,7 +263,15 @@ class CollivindTools:
                                 },
                                 "required": ["content", "summary", "category"],
                             },
-                        }
+                        },
+                        "checkpoint_id": {
+                            "type": "string",
+                            "description": (
+                                "Pass the checkpoint id from a <collivind_extraction> request so the save "
+                                "is recorded as that checkpoint's confirmation. An empty memories list with "
+                                "a checkpoint_id records 'checked, nothing new'."
+                            ),
+                        },
                     },
                     "required": ["memories"],
                 },
@@ -427,14 +470,7 @@ class CollivindTools:
                 )
 
             elif name == "collivind_batch_add":
-                memories = []
-                for mem in args["memories"]:
-                    normalized = dict(mem)
-                    if self.session_id:
-                        normalized.setdefault("session_id", self.session_id)
-                    memories.append(normalized)
-                ids = self.memory_manager.batch_add_memories(memories)
-                return json.dumps({"status": "success", "memory_ids": ids})
+                return self._batch_add(args)
 
             elif name == "collivind_get_version_chain":
                 chain = self.memory_manager.get_version_chain(args["memory_id"])

@@ -7,39 +7,23 @@ from pathlib import Path
 
 import click
 
-EXTRACTION_PROMPT = """
-<collivind_extraction>
-You are connected to the Collivind memory graph. It is time to extract and save important knowledge from this session so far.
-Please use the `collivind_batch_add` tool to store the following:
-1. Noteworthy facts, decisions, patterns, errors, or architecture choices you have learned or made.
-2. Ensure each memory is self-contained and makes sense without the conversation context.
-3. Classify each memory into one of: fact, decision, pattern, error, architecture, preference, snippet.
-4. Identify all relevant entities (project, file, service, concept, person, library, tool).
-5. Identify any relationships between entities or to previous memories if applicable.
-6. Skip trivial, common-sense, or highly ephemeral facts. Focus on knowledge valuable for future sessions.
-
-Once you have successfully invoked the tool and saved the memories, acknowledge it briefly and continue the conversation normally.
-</collivind_extraction>
-"""
-
-PRECOMPACT_PROMPT = """
-<collivind_urgent_extraction>
-WARNING: Your context window is about to be compressed or cleared!
-You MUST extract ALL relevant facts, context, architecture details, and project state from the current session immediately.
-Use the `collivind_batch_add` tool to store everything that might be useful when you resume.
-- Be aggressive in saving context.
-- Classify correctly (fact, decision, pattern, error, architecture, preference, snippet).
-- Extract entities and relationships.
-
-Save the data using the tool right now.
-</collivind_urgent_extraction>
-"""
+from collivind import capture
 
 HOOK_MARKER = "collivind hook"
 
+CODEX_REVIEW = (
+    "Codex skips hooks until you trust them: desktop app → Settings → Hooks (or 'Review hooks' in the "
+    "composer); CLI → `/hooks`. Re-review after any upgrade that changes the hook commands."
+)
+CODEX_REVIEW_NEXT_STEP = (
+    "Next step for Codex: these hooks will NOT run until you trust them. "
+    + CODEX_REVIEW.split(": ", 1)[1]
+    + " Restarting Codex does not trust them. Check with `collivind status` after your next Codex message."
+)
+
 
 def get_state_file() -> Path:
-    return Path.home() / ".collivind" / "hook_state.json"
+    return capture.state_path()
 
 
 def get_claude_settings_path() -> Path:
@@ -48,6 +32,40 @@ def get_claude_settings_path() -> Path:
 
 def get_codex_hooks_path() -> Path:
     return Path.home() / ".codex" / "hooks.json"
+
+
+def codex_plugin_enabled() -> bool:
+    """Whether the Collivind Codex plugin is installed and enabled.
+
+    Codex records plugins in config.toml as `[plugins."<name>@<marketplace>"]`.
+    With the plugin providing the hooks (listed under From Plugins), user-level
+    entries in hooks.json would run every event twice.
+    """
+    import tomllib
+
+    try:
+        plugins = tomllib.loads((Path.home() / ".codex" / "config.toml").read_text()).get("plugins") or {}
+    except (OSError, tomllib.TOMLDecodeError):
+        return False
+    return any(k.startswith("collivind@") and (v or {}).get("enabled", True) for k, v in plugins.items())
+
+
+def get_opencode_plugin_path() -> Path:
+    return Path.home() / ".config" / "opencode" / "plugins" / "collivind-capture.js"
+
+
+OPENCODE_EVENTS = ["Stop", "PreCompact"]
+
+
+def install_opencode_plugin() -> list[str]:
+    """Write the opencode capture plugin (opencode has no command hooks)."""
+    from importlib.resources import files
+
+    source = files("collivind.integrations").joinpath("opencode-capture.js").read_text()
+    path = get_opencode_plugin_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(source.replace("__COLLIVIND_BIN__", json.dumps(collivind_bin())))
+    return list(OPENCODE_EVENTS)
 
 
 def collivind_bin() -> str:
@@ -130,7 +148,10 @@ def hook_health() -> list[dict]:
     plugin_events = _plugin_hook_events()
     for tool, path in (("claude", get_claude_settings_path()), ("codex", get_codex_hooks_path())):
         registered = _registered_hooks(path)
-        from_plugin = plugin_events if tool == "claude" else []
+        if tool == "claude":
+            from_plugin = plugin_events
+        else:
+            from_plugin = ["PreCompact", "SessionStart", "Stop", "UserPromptSubmit"] if codex_plugin_enabled() else []
 
         if registered and from_plugin:
             source = "both"  # a real misconfiguration: every event fires twice
@@ -149,6 +170,18 @@ def hook_health() -> list[dict]:
                 "source": source,
                 "events": sorted(set(registered) | set(from_plugin)),
                 "broken": sorted(e for e, cmd in registered.items() if not _command_resolves(cmd)),
+            }
+        )
+    plugin = get_opencode_plugin_path()
+    if plugin.parent.parent.exists():
+        report.append(
+            {
+                "tool": "opencode",
+                "path": str(plugin),
+                "config_exists": plugin.exists(),
+                "source": "plugin" if plugin.exists() else "none",
+                "events": list(OPENCODE_EVENTS) if plugin.exists() else [],
+                "broken": [],
             }
         )
     return report
@@ -186,28 +219,30 @@ def install_hooks(
 ) -> list[str]:
     """Register collivind hooks for a tool. Returns the events registered.
 
-    Claude Code gets all hooks; Codex gets the recall hooks only
-    (SessionStart, UserPromptSubmit) — their additionalContext support is
-    documented, Stop/PreCompact injection isn't.
-    """
-    bin_path = collivind_bin()
-    recall = {}
-    if enable_session_start:
-        recall["SessionStart"] = f"{bin_path} hook session-start"
-    if enable_user_prompt:
-        recall["UserPromptSubmit"] = f"{bin_path} hook user-prompt"
+    Both agents get recall (SessionStart, UserPromptSubmit) and capture
+    (Stop, PreCompact). Codex documents the same Stop `decision: block`
+    contract as Claude Code and a PreCompact event (#35); its PreCompact
+    cannot inject context, so the save is requested by SessionStart with
+    `source: "compact"` right after compaction instead.
 
-    if tool == "codex":
-        wanted = recall
-        settings_path = get_codex_hooks_path()
-    else:
-        wanted = {}
-        if enable_stop:
-            wanted["Stop"] = f"{bin_path} hook stop --threshold {save_interval}"
-        if enable_precompact:
-            wanted["PreCompact"] = f"{bin_path} hook precompact"
-        wanted.update(recall)
-        settings_path = get_claude_settings_path()
+    The installed command strings carry no tunables (the interval lives in
+    config.toml): Codex trusts hooks by a hash of their definition, so any
+    change to the string forces the user to re-review them.
+    """
+    if tool == "opencode":
+        return install_opencode_plugin() if (enable_stop or enable_precompact) else []
+    bin_path = collivind_bin()
+    agent = "" if tool == "claude" else f" --agent {tool}"
+    wanted = {}
+    if enable_stop:
+        wanted["Stop"] = f"{bin_path} hook stop{agent}"
+    if enable_precompact:
+        wanted["PreCompact"] = f"{bin_path} hook precompact{agent}"
+    if enable_session_start:
+        wanted["SessionStart"] = f"{bin_path} hook session-start{agent}"
+    if enable_user_prompt:
+        wanted["UserPromptSubmit"] = f"{bin_path} hook user-prompt{agent}"
+    settings_path = get_codex_hooks_path() if tool == "codex" else get_claude_settings_path()
 
     if wanted:
         _merge_hook_entries(settings_path, wanted)
@@ -228,27 +263,11 @@ def install_all_hooks(cfg) -> dict:
         )
 
     results = {"claude": _install("claude")}
-    if get_codex_hooks_path().parent.exists():
+    if get_codex_hooks_path().parent.exists() and not codex_plugin_enabled():
         results["codex"] = _install("codex")
+    if get_opencode_plugin_path().parent.parent.exists():
+        results["opencode"] = _install("opencode")
     return results
-
-
-def read_state() -> dict:
-    state_file = get_state_file()
-    if state_file.exists():
-        try:
-            with open(state_file, "r") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {"message_count": 0}
-
-
-def write_state(state: dict):
-    state_file = get_state_file()
-    state_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(state_file, "w") as f:
-        json.dump(state, f)
 
 
 @click.group()
@@ -257,22 +276,55 @@ def hook():
     pass
 
 
+def _hook_input() -> dict:
+    """The JSON payload agents pipe to hooks; {} when there is none."""
+    try:
+        if sys.stdin is None or sys.stdin.isatty():
+            return {}
+        data = sys.stdin.read()
+        payload = json.loads(data) if data.strip() else {}
+        return payload if isinstance(payload, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _hooks_config():
+    from collivind.config import load_config
+
+    try:
+        return load_config().hooks
+    except Exception:
+        from collivind.config import HooksConfig
+
+        return HooksConfig()
+
+
+AGENT = click.option(
+    "--agent", default="claude", type=click.Choice(["claude", "codex", "opencode"]), help="Which agent runs this hook"
+)
+
+
 @hook.command()
-@click.option("--threshold", default=15, help="Number of messages before extraction")
-def stop(threshold):
-    """Periodic stop hook."""
-    state = read_state()
-    count = state.get("message_count", 0) + 1
-
-    if count >= threshold:
-        # Stop hooks only reach the model via a block decision; plain stdout
-        # is discarded by Claude Code.
-        click.echo(json.dumps({"decision": "block", "reason": EXTRACTION_PROMPT}))
-        state["message_count"] = 0
-    else:
-        state["message_count"] = count
-
-    write_state(state)
+@click.option("--threshold", default=None, type=int, help="Responses between checkpoints (default: config)")
+@click.option("--session", "session_id", default=None, help="Session id when the agent passes none on stdin")
+@AGENT
+def stop(threshold, session_id, agent):
+    """Periodic capture checkpoint. Asks the agent to save; never assumes it did."""
+    payload = _hook_input()
+    cfg = _hooks_config()
+    threshold = threshold or cfg.save_interval
+    sid = session_id or payload.get("session_id") or "default"
+    with capture.locked_state() as state:
+        capture.heartbeat(state, agent, "Stop")
+        if payload.get("stop_hook_active"):
+            return  # this response is our own continuation; never chain blocks
+        checkpoint = capture.stop_decision(state, sid, agent, threshold)
+    if checkpoint:
+        # Stop hooks reach the model only through a block decision; both
+        # Claude Code and Codex turn `reason` into a continuation prompt.
+        click.echo(
+            json.dumps({"decision": "block", "reason": capture.extraction_prompt(checkpoint, cfg.quiet_capture)})
+        )
 
 
 def _load_manager():
@@ -284,8 +336,24 @@ def _load_manager():
 @hook.command(name="session-start")
 @click.option("--project", "-p", default="default")
 @click.option("--limit", "-l", default=8, help="Memories in the index")
-def session_start(project, limit):
-    """Emit a compact memory index as SessionStart context. Never fails."""
+@AGENT
+def session_start(project, limit, agent):
+    """Emit a compact memory index as SessionStart context. Never fails.
+
+    After a compaction (`source: "compact"`) it also asks the agent to save
+    what the compaction may have dropped — the only point at which Codex lets
+    a hook speak to the model around compaction.
+    """
+    payload = _hook_input()
+    save_request = ""
+    try:
+        with capture.locked_state() as state:
+            capture.heartbeat(state, agent, "SessionStart")
+            if payload.get("source") == "compact":
+                save_request = _compaction_request(state, payload.get("session_id") or "default", agent)
+    except OSError:
+        pass  # state is best-effort; recall still runs
+
     try:
         memories = _load_manager().get_timeline(project, limit=limit)
     except Exception as e:
@@ -294,6 +362,8 @@ def session_start(project, limit):
         _emit_context("SessionStart", _unavailable_warning(e))
         return
     if not memories:
+        if save_request:
+            _emit_context("SessionStart", save_request)
         return
 
     lines = [
@@ -307,7 +377,23 @@ def session_start(project, limit):
         + "\nUse collivind_search or collivind_get_context to recall details.\n"
         "</collivind_memory_index>"
     )
-    _emit_context("SessionStart", text)
+    _emit_context("SessionStart", f"{text}\n{save_request}" if save_request else text)
+
+
+def _compaction_request(state: dict, session_id: str, agent: str) -> str:
+    s = capture.session(state, session_id, agent)
+    cid = (s.get("pending") or {}).get("id") or capture.new_checkpoint(s, "compaction")
+    return capture.extraction_prompt(cid, _hooks_config().quiet_capture, after_compaction=True)
+
+
+@hook.command()
+@click.option("--session", "session_id", required=True)
+@AGENT
+def compacted(session_id, agent):
+    """Print the post-compaction save request as JSON (for agents without SessionStart, e.g. opencode)."""
+    with capture.locked_state() as state:
+        capture.heartbeat(state, agent, "SessionStart")
+        click.echo(json.dumps({"prompt": _compaction_request(state, session_id, agent)}))
 
 
 def _emit_context(event: str, text: str) -> None:
@@ -327,13 +413,19 @@ def _unavailable_warning(error: Exception) -> str:
 @hook.command(name="user-prompt")
 @click.option("--project", "-p", default="default")
 @click.option("--max-tokens", default=800, type=int, help="Recall context budget")
-def user_prompt(project, max_tokens):
+@AGENT
+def user_prompt(project, max_tokens, agent):
     """Inject memory context relevant to the submitted prompt. Never fails.
 
     Reads the UserPromptSubmit payload from stdin, searches memory with the
     prompt text, and emits a token-budgeted context block — or nothing when
     no stored knowledge is relevant.
     """
+    try:
+        with capture.locked_state() as state:
+            capture.heartbeat(state, agent, "UserPromptSubmit")
+    except OSError:
+        pass
     try:
         payload = json.load(sys.stdin)
         prompt = (payload.get("prompt") or "").strip()
@@ -364,9 +456,9 @@ def user_prompt(project, max_tokens):
 @hook.command()
 @click.option(
     "--tool",
-    type=click.Choice(["claude", "codex", "auto"]),
+    type=click.Choice(["claude", "codex", "opencode", "auto"]),
     default="auto",
-    help="Which agent to register hooks for (auto = Claude Code + Codex if present)",
+    help="Which agent to register hooks for (auto = Claude Code, plus Codex and opencode if present)",
 )
 def install(tool):
     """Register collivind hooks (Claude Code settings.json / Codex hooks.json)."""
@@ -393,13 +485,25 @@ def install(tool):
         return
     for t, events in registered.items():
         click.secho(f"{t}: registered {', '.join(events)}", fg="green")
+    if "codex" in registered:
+        click.secho(CODEX_REVIEW_NEXT_STEP, fg="yellow")
 
 
 @hook.command()
-def precompact():
-    """Urgent pre-compact extraction hook."""
-    click.echo(PRECOMPACT_PROMPT)
-    # Reset count since we are extracting now
-    state = read_state()
-    state["message_count"] = 0
-    write_state(state)
+@click.option("--session", "session_id", default=None, help="Session id when the agent passes none on stdin")
+@AGENT
+def precompact(session_id, agent):
+    """Mark a compaction checkpoint as due; SessionStart(compact) requests it.
+
+    Neither agent lets PreCompact inject context into the model (Codex
+    ignores its stdout), so printing an instruction here was never a save.
+    The request is made right after compaction instead, carrying the same
+    checkpoint id, and stays pending until a write confirms it.
+    """
+    payload = _hook_input()
+    with capture.locked_state() as state:
+        capture.heartbeat(state, agent, "PreCompact")
+        s = capture.session(state, session_id or payload.get("session_id") or "default", agent)
+        if not s.get("pending"):
+            capture.new_checkpoint(s, f"compaction:{payload.get('trigger') or 'unknown'}")
+        s["count"] = 0

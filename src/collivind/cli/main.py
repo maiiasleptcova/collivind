@@ -59,3 +59,7 @@ cli.add_command(export_cmd)
 cli.add_command(import_cmd)
 cli.add_command(sync)
 cli.add_command(commands)
+
+
+if __name__ == "__main__":
+    cli()

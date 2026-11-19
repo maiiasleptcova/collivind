@@ -62,6 +62,9 @@ class HooksConfig:
     enable_stop: bool = True
     enable_session_start: bool = True
     enable_user_prompt: bool = True
+    # Ask the agent to checkpoint without announcing or confirming routine
+    # saves; failures are still reported (#35).
+    quiet_capture: bool = True
 
 
 @dataclass
@@ -156,6 +159,7 @@ enable_precompact = true
 enable_stop = true
 enable_session_start = true
 enable_user_prompt = true
+quiet_capture = true
 """
 
 
