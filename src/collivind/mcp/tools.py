@@ -1,9 +1,11 @@
 import json
+from dataclasses import replace
 from typing import Any, Dict, List, Optional
 
 from collivind import capture
 from collivind.engine.extractor import build_extraction_prompt, parse_extraction_response
 from collivind.engine.memory_manager import DEGRADED_NOTE, MemoryManager
+from collivind.engine.project_labels import DEFAULT_PROJECT, NO_CONTEXT, resolve_project
 from collivind.exceptions import BatchPartiallyStoredError, CollivindError
 from collivind.models import (
     EntityCreate,
@@ -16,6 +18,13 @@ from collivind.models import (
 )
 from collivind.storage.interfaces import EmbeddingProvider, GraphStore, VectorStore
 
+# No schema default: an agent copies a default back verbatim, and "default"
+# is exactly the label that filed every memory under no project.
+PROJECT_PROP = {
+    "type": "string",
+    "description": "Project id. Omit it: the server uses the current repo's project.",
+}
+
 BACKEND_HINT = (
     "A storage backend is failing. Run `collivind status` (or the collivind_status tool) "
     "to see which one; in docker mode check `docker ps` for a restarting container."
@@ -23,9 +32,27 @@ BACKEND_HINT = (
 
 
 class CollivindTools:
-    def __init__(self, memory_manager: MemoryManager, session_id: Optional[str] = None):
+    def __init__(
+        self, memory_manager: MemoryManager, session_id: Optional[str] = None, project_id: Optional[str] = None
+    ):
         self.memory_manager = memory_manager
         self.session_id = session_id
+        self.project_id = project_id or resolve_project()
+
+    def _asked_project(self, args: Dict[str, Any]) -> Optional[str]:
+        # "default" counts as omitted: agents copy it from older hook output
+        # and schemas, and it is the label that filed everything under no project.
+        asked = args.get("project_id")
+        return None if not asked or asked == DEFAULT_PROJECT else asked
+
+    def _project(self, args: Dict[str, Any]) -> str:
+        return self._asked_project(args) or self.project_id
+
+    def _recall_projects(self, args: Dict[str, Any]) -> List[str]:
+        """Projects to search, in order: the one asked for, else the current
+        one and then the unlabelled "default" bucket older memories sit in."""
+        asked = self._asked_project(args)
+        return [asked] if asked else list(dict.fromkeys([self.project_id, DEFAULT_PROJECT]))
 
     def _backend_health(self) -> Dict[str, Any]:
         backends: Dict[str, VectorStore | GraphStore | EmbeddingProvider] = {
@@ -51,6 +78,7 @@ class CollivindTools:
         memories = []
         for mem in args.get("memories") or []:
             normalized = dict(mem)
+            normalized["project_id"] = self._project(normalized)
             if self.session_id:
                 normalized.setdefault("session_id", self.session_id)
             memories.append(normalized)
@@ -92,7 +120,7 @@ class CollivindTools:
                         "content": {"type": "string"},
                         "summary": {"type": "string"},
                         "category": {"type": "string", "enum": [c.value for c in MemoryCategory]},
-                        "project_id": {"type": "string", "default": "default"},
+                        "project_id": PROJECT_PROP,
                         "entities": {
                             "type": "array",
                             "items": {
@@ -131,7 +159,7 @@ class CollivindTools:
                     "properties": {
                         "query": {"type": "string"},
                         "category": {"type": "string"},
-                        "project_id": {"type": "string", "default": "default"},
+                        "project_id": PROJECT_PROP,
                         "limit": {"type": "integer", "default": 10},
                         "offset": {"type": "integer", "default": 0},
                         "include_graph": {"type": "boolean", "default": True},
@@ -152,7 +180,7 @@ class CollivindTools:
                     "type": "object",
                     "properties": {
                         "query": {"type": "string"},
-                        "project_id": {"type": "string", "default": "default"},
+                        "project_id": PROJECT_PROP,
                         "limit": {"type": "integer", "default": 10},
                         "max_tokens": {"type": "integer", "description": "Approximate token budget for the block"},
                     },
@@ -196,13 +224,12 @@ class CollivindTools:
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "project_id": {"type": "string", "default": "default"},
+                        "project_id": PROJECT_PROP,
                         "entity_name": {"type": "string"},
                         "session_id": {"type": "string", "description": "Filter by session"},
                         "limit": {"type": "integer", "default": 50},
                         "offset": {"type": "integer", "default": 0},
                     },
-                    "required": ["project_id"],
                 },
             },
             {
@@ -228,7 +255,7 @@ class CollivindTools:
                                     "content": {"type": "string"},
                                     "summary": {"type": "string"},
                                     "category": {"type": "string", "enum": [c.value for c in MemoryCategory]},
-                                    "project_id": {"type": "string", "default": "default"},
+                                    "project_id": PROJECT_PROP,
                                     "entities": {
                                         "type": "array",
                                         "items": {
@@ -297,7 +324,7 @@ class CollivindTools:
                     "type": "object",
                     "properties": {
                         "text": {"type": "string", "description": "Raw text to extract from"},
-                        "project_id": {"type": "string", "default": "default"},
+                        "project_id": PROJECT_PROP,
                     },
                     "required": ["text"],
                 },
@@ -309,7 +336,7 @@ class CollivindTools:
                     "type": "object",
                     "properties": {
                         "llm_response": {"type": "string", "description": "JSON from LLM extraction"},
-                        "project_id": {"type": "string", "default": "default"},
+                        "project_id": PROJECT_PROP,
                     },
                     "required": ["llm_response"],
                 },
@@ -345,7 +372,7 @@ class CollivindTools:
                     content=args["content"],
                     summary=args["summary"],
                     category=MemoryCategory(args["category"]),
-                    project_id=args.get("project_id", "default"),
+                    project_id=self._project(args),
                     confidence=args.get("confidence", 1.0),
                     tags=args.get("tags", []),
                     session_id=args.get("session_id", self.session_id),
@@ -370,7 +397,7 @@ class CollivindTools:
                 q = SearchQuery(
                     query=args["query"],
                     category=args.get("category"),
-                    project_id=args.get("project_id", "default"),
+                    project_id=self._project(args),
                     limit=fetch_limit,
                     include_graph=args.get("include_graph", True),
                     tags=args.get("tags"),
@@ -380,13 +407,17 @@ class CollivindTools:
                     date_from=date_from,
                     date_to=date_to,
                 )
-                results, degraded = self.memory_manager.search_with_status(q)
+                for project in self._recall_projects(args):
+                    results, degraded = self.memory_manager.search_with_status(replace(q, project_id=project))
+                    if results:
+                        break
                 limit = args.get("limit", 10)
                 page = results[offset : offset + limit]
                 response = {"degraded": degraded, **({"warning": DEGRADED_NOTE} if degraded else {})}
                 return json.dumps(
                     {
                         **response,
+                        "project_id": project,
                         "results": [
                             {
                                 "id": r.memory.id,
@@ -406,12 +437,15 @@ class CollivindTools:
                 )
 
             elif name == "collivind_get_context":
-                context = self.memory_manager.get_context(
-                    query_str=args["query"],
-                    project_id=args.get("project_id", "default"),
-                    limit=args.get("limit", 10),
-                    max_tokens=args.get("max_tokens"),
-                )
+                for project in self._recall_projects(args):
+                    context = self.memory_manager.get_context(
+                        query_str=args["query"],
+                        project_id=project,
+                        limit=args.get("limit", 10),
+                        max_tokens=args.get("max_tokens"),
+                    )
+                    if NO_CONTEXT not in context:
+                        break
                 return context
 
             elif name == "collivind_invalidate":
@@ -435,7 +469,7 @@ class CollivindTools:
                 offset = args.get("offset", 0)
                 limit = args.get("limit", 50)
                 timeline = self.memory_manager.get_timeline(
-                    project_id=args.get("project_id", "default"),
+                    project_id=self._project(args),
                     entity=args.get("entity_name"),
                     limit=limit + offset,
                 )
@@ -494,7 +528,7 @@ class CollivindTools:
             elif name == "collivind_extract":
                 prompt = build_extraction_prompt(
                     args["text"],
-                    project_id=args.get("project_id", "default"),
+                    project_id=self._project(args),
                 )
                 return json.dumps(
                     {
@@ -512,7 +546,7 @@ class CollivindTools:
                 extracted = parse_extraction_response(args["llm_response"])
                 if not extracted:
                     return json.dumps({"status": "no_memories", "count": 0})
-                project_id = args.get("project_id", "default")
+                project_id = self._project(args)
                 prepared: List[tuple] = []
                 for r in extracted:
                     entities = [EntityCreate(name=e["name"], type=EntityType(e["type"])) for e in r.entities]

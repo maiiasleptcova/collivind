@@ -13,3 +13,10 @@ def _no_live_copilot_home(monkeypatch):
     """COPILOT_HOME overrides Path.home() for Copilot paths; a value set on
     the developer's machine would point tests at live config."""
     monkeypatch.delenv("COPILOT_HOME", raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _pinned_project(monkeypatch):
+    """Tests run inside this git checkout; without a pin every unlabelled call
+    would resolve to the repo's own name instead of "default"."""
+    monkeypatch.setenv("COLLIVIND_PROJECT", "default")

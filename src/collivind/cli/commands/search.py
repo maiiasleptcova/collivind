@@ -2,13 +2,14 @@ import click
 
 from collivind.config import load_config
 from collivind.engine.memory_manager import DEGRADED_NOTE, MemoryManager
+from collivind.engine.project_labels import resolve_project
 from collivind.models import SearchQuery
 from collivind.storage.factory import create_all_backends
 
 
 @click.command()
 @click.argument("query")
-@click.option("--project", "-p", default="default", help="Project to search in")
+@click.option("--project", "-p", default=None, help="Project (default: resolved from the current directory)")
 @click.option("--category", "-c", default=None, help="Filter by category")
 @click.option("--limit", "-l", default=10, help="Max results")
 def search(query, project, category, limit):
@@ -21,7 +22,7 @@ def search(query, project, category, limit):
 
         q = SearchQuery(
             query=query,
-            project_id=project,
+            project_id=project or resolve_project(),
             category=category,
             limit=limit,
         )
