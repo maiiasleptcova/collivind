@@ -1,4 +1,5 @@
 import json
+import os
 import shlex
 import subprocess
 import sys
@@ -376,16 +377,39 @@ def register_copilot_mcp() -> bool:
     )
 
 
+def vscode_user_dir() -> Path:
+    """VS Code's user profile folder, where it reads the user-level mcp.json."""
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "Code" / "User"
+    if sys.platform == "win32":
+        return Path(os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming") / "Code" / "User"
+    return Path.home() / ".config" / "Code" / "User"
+
+
+def register_vscode_profile_mcp() -> bool:
+    """Add collivind to VS Code's profile mcp.json, so agent mode has the tool
+    its agentStop checkpoints ask for."""
+    user_dir = vscode_user_dir()
+    if not user_dir.exists():
+        return False  # VS Code has never run for this user
+    return _json_register(
+        user_dir / "mcp.json",
+        "servers",
+        "collivind",
+        {"type": "stdio", "command": _mcp_interpreter(), "args": ["-m", "collivind.mcp.server"]},
+    )
+
+
 def register_copilot_cli_mcp() -> bool:
     """Add collivind to the Copilot CLI/app MCP config ($COPILOT_HOME/mcp-config.json).
 
     Its Stop hook asks the agent to call `collivind_batch_add`; without the
     server registered there the tool does not exist and every save fails.
     """
-    from collivind.cli.commands.hook import copilot_home
+    from collivind.cli.commands.hook import copilot_cli_installed, copilot_home
 
-    if not copilot_home().exists():
-        return False  # not a Copilot CLI user; do not create the directory
+    if not copilot_cli_installed():
+        return False  # not a Copilot CLI user; do not create the config
 
     return _json_register(
         copilot_home() / "mcp-config.json",
@@ -453,6 +477,7 @@ def _register_mcp_server():
     for label, registrar, hint in (
         ("opencode", register_opencode_mcp, "~/.config/opencode/opencode.json"),
         ("Copilot", register_copilot_mcp, "~/.vscode/mcp.json"),
+        ("VS Code", register_vscode_profile_mcp, "your VS Code user mcp.json"),
         ("Copilot CLI", register_copilot_cli_mcp, "~/.copilot/mcp-config.json"),
     ):
         try:

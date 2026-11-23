@@ -2,6 +2,7 @@
 
 import contextlib
 import json
+import subprocess
 from io import StringIO
 from unittest.mock import MagicMock
 
@@ -27,7 +28,8 @@ def home(tmp_path, monkeypatch):
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
     repo = tmp_path / "repo"
     repo.mkdir()
-    monkeypatch.chdir(repo)  # not a git repo: repo_root() falls back to cwd
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    monkeypatch.chdir(repo)
     return tmp_path
 
 
@@ -250,3 +252,42 @@ def test_status_flags_unresolvable_command(home):
         )
     )
     assert "✗ copilot: Stop registered but the command no longer resolves" in _status()
+
+
+def test_outside_a_repo_user_claude_settings_are_not_a_repo_double(home, monkeypatch):
+    """From ~ (no repo), ~/.claude/settings.json is user config, not a repo file Copilot also runs."""
+    from collivind.cli.commands.hook import copilot_warnings
+
+    (home / ".copilot").mkdir()
+    install_all_hooks(HooksConfig())  # writes ~/.claude/settings.json and the Copilot file
+    monkeypatch.chdir(home)
+    assert copilot_warnings() == []
+    result = CliRunner().invoke(hook, ["install", "--tool", "copilot", "--workspace"])
+    assert result.exit_code != 0 and "git repository" in result.output
+    assert not (home / ".github").exists()
+
+
+def test_workspace_command_that_does_not_resolve_is_flagged(home, monkeypatch):
+    monkeypatch.setattr("collivind.cli.commands.hook.shutil.which", lambda _: None)
+    install_hooks(tool="copilot", workspace=True)
+    assert "✗ copilot: PreCompact, SessionStart, Stop, UserPromptSubmit registered but the command" in _status()
+
+
+def test_vscode_only_user_gets_profile_mcp_but_no_cli_config(home, monkeypatch):
+    from collivind.cli.commands import init as init_mod
+
+    monkeypatch.setattr(init_mod.sys, "platform", "linux")
+    (home / ".vscode").mkdir()
+    (home / ".config" / "Code" / "User").mkdir(parents=True)
+    install_all_hooks(HooksConfig())  # creates ~/.copilot/hooks
+    for _ in range(2):
+        assert not init_mod.register_copilot_cli_mcp()
+        init_mod.register_vscode_profile_mcp()
+    assert not (home / ".copilot" / "mcp-config.json").exists()
+    servers = json.loads((home / ".config" / "Code" / "User" / "mcp.json").read_text())["servers"]
+    assert servers["collivind"]["args"] == ["-m", "collivind.mcp.server"]
+
+    (home / ".copilot" / "config.json").write_text("{}")  # a real CLI install
+    assert init_mod.register_copilot_cli_mcp()
+    entry = json.loads((home / ".copilot" / "mcp-config.json").read_text())["mcpServers"]["collivind"]
+    assert entry["type"] == "local" and entry["tools"] == ["*"]

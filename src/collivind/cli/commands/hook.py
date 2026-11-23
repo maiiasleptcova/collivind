@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Optional
 
 import click
 
@@ -78,23 +79,31 @@ def get_copilot_hooks_path() -> Path:
     return copilot_home() / "hooks" / "collivind.json"
 
 
+def copilot_cli_installed() -> bool:
+    """~/.copilot holds more than the hooks/ dir collivind writes for VS Code users."""
+    home = copilot_home()
+    return home.is_dir() and any(p.name != "hooks" for p in home.iterdir())
+
+
 def copilot_present() -> bool:
     """Copilot CLI/app (~/.copilot) or VS Code (~/.vscode) is installed."""
     return copilot_home().exists() or (Path.home() / ".vscode").exists()
 
 
-def repo_root() -> Path:
+def repo_root() -> Optional[Path]:
+    """The current git repo's root; None outside one, or for a dotfiles repo
+    at ~ (whose .claude/ is the user-level config, not a repo's)."""
     try:
         out = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, timeout=5)
-        if out.returncode == 0 and out.stdout.strip():
-            return Path(out.stdout.strip())
     except (OSError, subprocess.SubprocessError):
-        pass
-    return Path.cwd()
+        return None
+    root = Path(out.stdout.strip()) if out.returncode == 0 and out.stdout.strip() else None
+    return None if root is None or root.resolve() == Path.home().resolve() else root
 
 
-def get_workspace_hooks_path() -> Path:
-    return repo_root() / ".github" / "hooks" / "collivind.json"
+def get_workspace_hooks_path() -> Optional[Path]:
+    root = repo_root()
+    return root / ".github" / "hooks" / "collivind.json" if root else None
 
 
 def write_copilot_hooks(path: Path, bin_path: str, subcommands: dict) -> None:
@@ -117,8 +126,10 @@ def write_copilot_hooks(path: Path, bin_path: str, subcommands: dict) -> None:
     path.write_text(json.dumps({"version": 1, "hooks": hooks}, indent=2) + "\n")
 
 
-def _copilot_registered(path: Path) -> dict:
+def _copilot_registered(path: Optional[Path]) -> dict:
     """Collivind commands in a Copilot hooks file, keyed by agent-neutral event."""
+    if path is None:
+        return {}
     try:
         doc = json.loads(path.read_text())
     except (OSError, ValueError):
@@ -136,8 +147,12 @@ def _copilot_registered(path: Path) -> dict:
 def _repo_claude_hooks() -> list[str]:
     """Collivind events in the repo's .claude/settings*.json, which VS Code's
     Copilot harness also runs — alongside the Copilot hooks, so twice."""
-    root = repo_root() / ".claude"
-    return sorted({e for f in ("settings.json", "settings.local.json") for e in _registered_hooks(root / f)})
+    root = repo_root()
+    if root is None:
+        return []
+    return sorted(
+        {e for f in ("settings.json", "settings.local.json") for e in _registered_hooks(root / ".claude" / f)}
+    )
 
 
 def copilot_warnings() -> list[str]:
@@ -151,7 +166,7 @@ def copilot_warnings() -> list[str]:
     repo = _repo_claude_hooks()
     if repo:
         warnings.append(
-            f"{repo_root() / '.claude'} registers collivind {', '.join(repo)} and VS Code's Copilot harness runs "
+            f"The repo's .claude/settings*.json registers collivind {', '.join(repo)} and VS Code's Copilot harness runs "
             "those too, so these events fire twice under Copilot. Move them to ~/.claude/settings.json."
         )
     return warnings
@@ -288,7 +303,9 @@ def hook_health() -> list[dict]:
                 if workspace
                 else "none",
                 "events": sorted(set(user) | set(workspace)),
-                "broken": sorted(e for e, cmd in user.items() if not _command_resolves(cmd)),
+                "broken": sorted(
+                    {e for found in (user, workspace) for e, cmd in found.items() if not _command_resolves(cmd)}
+                ),
             }
         )
     plugin = get_opencode_plugin_path()
@@ -365,6 +382,8 @@ def install_hooks(
         # machine's absolute path means nothing; there it is plain `collivind`.
         if subcommands:
             path = get_workspace_hooks_path() if workspace else get_copilot_hooks_path()
+            if path is None:
+                raise click.UsageError("--workspace must run inside a git repository")
             write_copilot_hooks(path, "collivind" if workspace else collivind_bin(), subcommands)
         return [COPILOT_EVENTS[e] for e in subcommands]
     bin_path = collivind_bin()

@@ -235,8 +235,9 @@ VS Code agent mode, the Copilot CLI and the Copilot app share one hook system,
 which GitHub and VS Code still mark as **preview**; an organization policy can
 switch it off. When `~/.copilot` or `~/.vscode` exists, `collivind init` (or
 `collivind hook install --tool copilot`) writes `~/.copilot/hooks/collivind.json`
-(`$COPILOT_HOME/hooks/` if set) and registers the MCP server in
-`~/.copilot/mcp-config.json` for the CLI/app. The file is collivind's own, so
+(`$COPILOT_HOME/hooks/` if set), and registers the MCP server in VS Code's user
+profile `mcp.json` and, for the CLI/app, `~/.copilot/mcp-config.json` — checkpoints
+ask for `collivind_batch_add`, so the agent needs the tool, not just the hooks. The file is collivind's own, so
 re-running rewrites it and leaves your other hook files alone.
 
 - **sessionStart** injects the memory index (or the "memory unavailable" warning).
@@ -251,7 +252,7 @@ re-running rewrites it and leaves your other hook files alone.
   right away instead of waiting for the interval.
 
 `collivind hook install --tool copilot --workspace` writes
-`.github/hooks/collivind.json` in the current repo instead — the only location
+`.github/hooks/collivind.json` at the current git repo's root instead — the only location
 the Copilot cloud agent reads. It calls a plain `collivind` (an absolute path
 means nothing on another machine), so the cloud agent needs collivind installed
 and a reachable store; locally, having both files fires every hook twice and
