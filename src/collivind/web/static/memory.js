@@ -24,8 +24,9 @@ export const META_ROWS = [
   ["ID", (m) => m.id],
 ];
 
-export function card(m) {
-  return `<article class="memory${m.superseded_by || m.valid_to ? " is-superseded" : ""}" data-id="${esc(m.id)}">
+export function card(m, lead = "") {
+  return `<article class="memory${lead ? " is-pickable" : ""}${m.superseded_by || m.valid_to ? " is-superseded" : ""}" data-id="${esc(m.id)}">
+    ${lead}
     <button class="summary-link" data-open="${esc(m.id)}">${esc(m.summary || m.content)}</button>
     <div class="content">${esc(m.content)}</div>
     <div class="meta">

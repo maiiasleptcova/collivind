@@ -241,9 +241,9 @@ body.has-panel .graph-view { grid-template-columns: var(--rail) minmax(0, 1fr) v
 .muted-chip { border: 1px dashed var(--line-2); border-radius: 100px; padding: 0 0.5rem; }
 
 .connections { list-style: none; margin: 0 0 1rem; padding: 0; display: flex; flex-direction: column; gap: 0.15rem; }
-.connections li { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr) auto; gap: 0.5rem; align-items: center; font-size: var(--step--1); padding: 0.15rem 0; }
+.connections li { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr) auto auto; gap: 0.5rem; align-items: center; font-size: var(--step--1); padding: 0.15rem 0; }
 .connections .rel { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.connections .link-like { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.connections .link-like { overflow: hidden; text-align: left; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .versions { margin: 0.6rem 0 0; padding-left: 1.2rem; font-size: var(--step--1); display: flex; flex-direction: column; gap: 0.3rem; }
 .versions [aria-current="true"] { font-weight: 650; text-decoration: none; }
 
@@ -360,3 +360,13 @@ dialog .actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-
   .store-badge, #theme-label { display: none; }
   .list-view, .projects-view { padding-inline: 1rem; }
 }
+
+/* Search results -> topic (topic.js) */
+.topic-bar { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; padding: 0.6rem 0.8rem; margin-bottom: 0.8rem; background: var(--surface, var(--paper)); border: 1px solid var(--line-2); border-radius: var(--radius-sm); font-size: var(--step--1); }
+.topic-bar input { flex: 1 1 14rem; min-height: 34px; }
+.topic-bar select { width: auto; min-height: 34px; }
+.topic-count { color: var(--ink-2); margin-right: auto; }
+.memory.is-pickable { position: relative; padding-left: 2.6rem; }
+.memory .pick { position: absolute; left: 0.9rem; top: 1.05rem; }
+.memory .pick input { width: 1.05rem; height: 1.05rem; accent-color: var(--accent, currentColor); }
+.connections .when { color: var(--muted); font-size: var(--step--2, 0.75rem); white-space: nowrap; }

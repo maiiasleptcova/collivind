@@ -3,6 +3,7 @@
 import { $, $$, api, esc, toast, showError, clearError, projectColor, projectName } from "./util.js";
 import { CATEGORIES, card, editorMarkup, readEditor } from "./memory.js";
 import { GraphView } from "./graph.js";
+import { topicBar, pickBox, wireTopic } from "./topic.js";
 import { initPanel, openNode, closePanel, currentId, refreshPanel } from "./panel.js";
 import { initProjects, renderProjects } from "./projects.js";
 import { CATEGORY, OPEN_LIMIT, OTHER, categoryClusters, entityClusters, entityLinks, membersAt, openIds, projectClusters } from "./overview.js";
@@ -35,6 +36,7 @@ const state = {
   knownEdgeTypes: new Set(),
   focusGraph: null,      // the neighbourhood of the search results, from the server
   page: { sort: "newest", group: "", offset: 0, total: 0 },
+  picked: new Set(),     // search results ticked for "Link to topic"
 };
 
 // What the graph view draws from: the search neighbourhood when there is one.
@@ -300,13 +302,28 @@ function renderNote() {
   $("#graph-empty").hidden = !empty;
 }
 
+// Vector search only returns memories, so a topic named exactly what was
+// typed would never come up. Entity names are matched here and listed first.
+function topicsMatching(query) {
+  const q = query.trim().toLowerCase();
+  if (q.length < 3) return [];
+  return state.graph.nodes
+    .filter((n) => n.kind === "entity" && n.label.length >= 3
+      && (n.label.toLowerCase().includes(q) || q.includes(n.label.toLowerCase())))
+    .sort((a, b) => (b.label.toLowerCase() === q) - (a.label.toLowerCase() === q) || b.label.length - a.label.length)
+    .slice(0, 5);
+}
+
 // Text in the box filters labels live; Enter asks the store by meaning.
 function updateHighlight() {
   const results = $("#results");
   let hits = [];
   let heading = "";
   if (state.search) {
-    hits = state.search.results.map((m) => ({ id: m.id, label: m.summary || m.content || m.label, sub: m.score === undefined ? m.kind || "" : `match ${Number(m.score).toFixed(2)}`, kind: "memory", category: m.category }));
+    hits = [
+      ...(state.search.topics || []).map((n) => ({ id: n.id, label: n.label, sub: `topic · ${n.type}`, kind: "entity" })),
+      ...state.search.results.map((m) => ({ id: m.id, label: m.summary || m.content || m.label, sub: m.score === undefined ? m.kind || "" : `match ${Number(m.score).toFixed(2)}`, kind: "memory", category: m.category })),
+    ];
     heading = `Search results for “${state.search.query}”`;
   } else if (state.text) {
     const q = state.text.toLowerCase();
@@ -331,10 +348,11 @@ async function runSearch(query) {
   try {
     clearError();
     const data = await api(`/api/memories?limit=30&project=${encodeURIComponent(project)}&q=${encodeURIComponent(query)}`);
-    state.search = { query, results: data.memories || [] };
+    state.search = { query, results: data.memories || [], topics: topicsMatching(query) };
     // a selection outranks the highlight, so results would stay hidden behind it
     if (state.selected) select(null);
     await refocus();
+    state.picked = new Set();
     if (state.view === "list") { state.list = state.search.results; renderList(); }
   } catch (e) { showError(e); }
 }
@@ -342,7 +360,7 @@ async function runSearch(query) {
 // Search first: the results become the graph, with their neighbourhood
 // fetched server-side, so a hit outside the loaded newest-N still shows.
 async function refocus({ apply = true } = {}) {
-  const seeds = (state.search?.results || []).map((m) => m.id);
+  const seeds = [...(state.search?.topics || []), ...(state.search?.results || [])].map((m) => m.id);
   if (!seeds.length) { state.focusGraph = null; rebuildById(); if (apply) applyFilters(); return; }
   const params = new URLSearchParams({ seeds: seeds.join(","), depth: String(state.depth), types: [...state.edgeTypes].join(","), limit: "1500" });
   if (state.filters.project) params.set("project", state.filters.project);
@@ -426,6 +444,7 @@ async function loadList() {
     const params = new URLSearchParams({ limit: String(q ? 100 : PAGE), project, q, sort, group, offset: String(q ? 0 : offset) });
     const data = await api(`/api/memories?${params}`);
     state.list = data.memories || [];
+    state.picked = new Set();  // nothing ticked: search results are rarely all on one subject
     state.page = { ...state.page, total: data.total ?? state.list.length };
     renderList();
   } catch (e) {
@@ -455,11 +474,13 @@ function renderList() {
   // the server already orders a page by its group; search results are sorted here
   const rows = group && searchText() ? [...state.list].sort((a, b) => keyOf(a).localeCompare(keyOf(b))) : state.list;
   let last = null;
+  const picking = Boolean(searchText()) && !state.creating;
   list.innerHTML = (state.creating ? `<article class="memory">${editorMarkup(null, [...new Set(projectIds)])}</article>` : "")
+    + (picking ? topicBar(state.list.length, state.picked.size) : "")
     + rows.map((m) => {
       const head = group && keyOf(m) !== last ? `<h2 class="group-head">${esc(keyOf(m))}<small>${rows.filter((r) => keyOf(r) === keyOf(m)).length} on this page</small></h2>` : "";
       last = keyOf(m);
-      return head + (m.id === state.editingId ? `<article class="memory">${editorMarkup(m)}</article>` : card(m));
+      return head + (m.id === state.editingId ? `<article class="memory">${editorMarkup(m)}</article>` : card(m, picking ? pickBox(m.id, state.picked.has(m.id)) : ""));
     }).join("");
   wireList();
 }
@@ -476,6 +497,11 @@ function renderPager() {
 
 function wireList() {
   const list = $("#list");
+  wireTopic(list, state.picked, async (topic) => {
+    await loadGraph();
+    setView("graph");
+    if (state.byId.has(topic.entity_id)) select(topic.entity_id, { center: true });
+  });
   $$("[data-edit]", list).forEach((b) => b.onclick = () => { state.editingId = b.dataset.edit; state.creating = false; renderList(); $("#f-summary")?.focus(); });
   $$("[data-forget]", list).forEach((b) => b.onclick = () => confirmForget(b.dataset.forget));
   $$("[data-show], [data-open]", list).forEach((b) => b.onclick = () => {

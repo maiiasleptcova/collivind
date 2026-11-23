@@ -309,6 +309,27 @@ class MemoryManager:
         self.graph_store.create_relationship(edge)
         return edge
 
+    def link_topic(self, name: str, entity_type: EntityType, memory_ids: List[str]) -> Dict[str, Any]:
+        """Make (or reuse) entity `name` and link every given memory ABOUT it.
+
+        Turns a set of search results into one graph node, so a subject the
+        extractor never named (a client site, an incident) can be opened as
+        a whole. Checks every id before writing anything.
+        """
+        name = name.strip()
+        if not name:
+            raise ValueError("topic name is required")
+        ids = list(dict.fromkeys(memory_ids))
+        missing = [i for i in ids if self._node_kind(i) != "memory"]
+        if missing:
+            raise LookupError(f"no memory {missing[0]!r}")
+        entity = self._graph_write(
+            self.graph_store.create_entity, EntityCreate(name=name, type=entity_type), outcome="nothing was linked"
+        )
+        for memory_id in ids:
+            self.link(memory_id, entity.id, RelType.ABOUT)
+        return {"entity_id": entity.id, "name": entity.name, "type": entity_type.value, "linked": len(ids)}
+
     def find_conflicts(self, memory_id: str) -> Optional[List[SearchResult]]:
         """Conflict candidates for a stored memory, scored on the vector it was stored with.
 
