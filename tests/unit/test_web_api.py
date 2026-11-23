@@ -36,7 +36,7 @@ UI_METADATA_FIELDS = (
 @pytest.fixture
 def api():
     manager = MagicMock()
-    manager.get_timeline.return_value = [_node()]
+    manager.graph_store.iter_memories.return_value = [_node()]
     manager.search.return_value = []
     return MemoryAPI(manager, mode="docker")
 
@@ -50,7 +50,7 @@ class TestReading:
         """Browsing must not pay a search round-trip (#16 makes that costly)."""
         status, payload = call(api, "GET", "/api/memories")
         assert status == 200 and payload["searched"] is False
-        api.manager.get_timeline.assert_called_once()
+        assert payload["memories"] and payload["total"] == 1
         api.manager.search.assert_not_called()
 
     def test_query_searches(self, api):
