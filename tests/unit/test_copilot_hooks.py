@@ -273,21 +273,14 @@ def test_workspace_command_that_does_not_resolve_is_flagged(home, monkeypatch):
     assert "✗ copilot: PreCompact, SessionStart, Stop, UserPromptSubmit registered but the command" in _status()
 
 
-def test_vscode_only_user_gets_profile_mcp_but_no_cli_config(home, monkeypatch):
+def test_mcp_registered_where_vscode_and_the_cli_both_read_it(home):
     from collivind.cli.commands import init as init_mod
 
-    monkeypatch.setattr(init_mod.sys, "platform", "linux")
+    assert not init_mod.register_copilot_cli_mcp()  # nothing installed: create nothing
+    assert not (home / ".copilot").exists()
     (home / ".vscode").mkdir()
-    (home / ".config" / "Code" / "User").mkdir(parents=True)
-    install_all_hooks(HooksConfig())  # creates ~/.copilot/hooks
-    for _ in range(2):
-        assert not init_mod.register_copilot_cli_mcp()
-        init_mod.register_vscode_profile_mcp()
-    assert not (home / ".copilot" / "mcp-config.json").exists()
-    servers = json.loads((home / ".config" / "Code" / "User" / "mcp.json").read_text())["servers"]
-    assert servers["collivind"]["args"] == ["-m", "collivind.mcp.server"]
-
-    (home / ".copilot" / "config.json").write_text("{}")  # a real CLI install
     assert init_mod.register_copilot_cli_mcp()
+    assert not init_mod.register_copilot_cli_mcp()  # idempotent
     entry = json.loads((home / ".copilot" / "mcp-config.json").read_text())["mcpServers"]["collivind"]
     assert entry["type"] == "local" and entry["tools"] == ["*"]
+    assert entry["args"] == ["-m", "collivind.mcp.server"]

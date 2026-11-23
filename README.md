@@ -170,7 +170,7 @@ data dir first.)
 | Claude Code | yes | yes — SessionStart + UserPromptSubmit | yes — Stop hook | yes — PreCompact marks it, SessionStart (`compact`) asks |
 | Codex | yes | yes — after you trust the hooks | yes — Stop hook, after you trust it | yes — PreCompact marks it, SessionStart (`compact`) asks |
 | opencode | yes | **no** — no prompt hook to inject into | yes — plugin on `session.idle` | yes — plugin on `session.compacted` |
-| GitHub Copilot (VS Code agent mode, CLI, app; hooks in preview) | yes | yes — sessionStart index + userPromptTransformed | yes — agentStop hook | yes — preCompact marks it, the next agentStop asks |
+| GitHub Copilot (VS Code agent mode, CLI, app; hooks in preview in VS Code) | yes | yes — sessionStart index + userPromptTransformed | yes — agentStop hook | yes — preCompact marks it, the next agentStop asks |
 
 `collivind init` registers the MCP server for every agent it finds installed,
 plus the hooks (Claude Code, Codex, GitHub Copilot) or the capture plugin (opencode,
@@ -232,12 +232,13 @@ the last time it ran once it has.
 #### GitHub Copilot (preview)
 
 VS Code agent mode, the Copilot CLI and the Copilot app share one hook system,
-which GitHub and VS Code still mark as **preview**; an organization policy can
+which VS Code still marks as **preview**; an organization policy can
 switch it off. When `~/.copilot` or `~/.vscode` exists, `collivind init` (or
 `collivind hook install --tool copilot`) writes `~/.copilot/hooks/collivind.json`
-(`$COPILOT_HOME/hooks/` if set), and registers the MCP server in VS Code's user
-profile `mcp.json` and, for the CLI/app, `~/.copilot/mcp-config.json` — checkpoints
-ask for `collivind_batch_add`, so the agent needs the tool, not just the hooks. The file is collivind's own, so
+(`$COPILOT_HOME/hooks/` if set) and registers the MCP server in
+`~/.copilot/mcp-config.json`, which the CLI, the app and VS Code's Copilot harness
+all read — checkpoints ask for `collivind_batch_add`, so the agent needs the tool,
+not just the hooks. Not yet verified in a live Copilot run. The file is collivind's own, so
 re-running rewrites it and leaves your other hook files alone.
 
 - **sessionStart** injects the memory index (or the "memory unavailable" warning).

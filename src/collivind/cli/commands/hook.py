@@ -79,12 +79,6 @@ def get_copilot_hooks_path() -> Path:
     return copilot_home() / "hooks" / "collivind.json"
 
 
-def copilot_cli_installed() -> bool:
-    """~/.copilot holds more than the hooks/ dir collivind writes for VS Code users."""
-    home = copilot_home()
-    return home.is_dir() and any(p.name != "hooks" for p in home.iterdir())
-
-
 def copilot_present() -> bool:
     """Copilot CLI/app (~/.copilot) or VS Code (~/.vscode) is installed."""
     return copilot_home().exists() or (Path.home() / ".vscode").exists()

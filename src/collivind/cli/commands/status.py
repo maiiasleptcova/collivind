@@ -346,16 +346,14 @@ def _status_other_agent_mcp():
     import json
     from pathlib import Path
 
-    from collivind.cli.commands.hook import copilot_cli_installed, copilot_home
-    from collivind.cli.commands.init import vscode_user_dir
+    from collivind.cli.commands.hook import copilot_home, copilot_present
 
     checks: tuple[tuple[str, Path, Path, str], ...] = (
         ("opencode", Path.home() / ".config" / "opencode", Path.home() / ".config/opencode/opencode.json", "mcp"),
         ("copilot", Path.home() / ".vscode", Path.home() / ".vscode/mcp.json", "servers"),
-        ("VS Code", vscode_user_dir(), vscode_user_dir() / "mcp.json", "servers"),
     )
-    if copilot_cli_installed():
-        checks += (("copilot CLI", copilot_home(), copilot_home() / "mcp-config.json", "mcpServers"),)
+    if copilot_present():  # read by the Copilot CLI/app and VS Code's Copilot harness
+        checks += (("copilot (~/.copilot)", Path.home(), copilot_home() / "mcp-config.json", "mcpServers"),)
     for label, agent_dir, config_path, container in checks:
         if not agent_dir.exists():
             continue  # agent not installed; stay quiet
