@@ -28,6 +28,15 @@ DEGRADED_NOTE = (
 )
 
 
+# Which edge types a person may draw between which kinds of node. SUPERSEDES
+# is written only by versioning, and session edges only by capture.
+LINKABLE = {
+    ("memory", "memory"): ("RELATES_TO", "CONTRADICTS", "CAUSED_BY", "DEPENDS_ON"),
+    ("memory", "entity"): ("ABOUT", "MENTIONS"),
+    ("entity", "entity"): ("RELATED_TO", "DEPENDS_ON", "PART_OF", "USES", "IMPLEMENTS"),
+}
+
+
 class MemoryManager:
     def __init__(
         self,
@@ -252,6 +261,50 @@ class MemoryManager:
         self.graph_store.delete_memory(memory_id)
         self.vector_store.delete(memory_id)
         return True
+
+    def get_memory(self, memory_id: str) -> Optional[MemoryNode]:
+        return self.graph_store.get_memory(memory_id)
+
+    def _node_kind(self, node_id: str) -> Optional[str]:
+        if self.graph_store.get_memory(node_id):
+            return "memory"
+        entity = self.graph_store.get_entity(node_id)
+        # get_entity slugifies its argument, so it must round-trip to this id
+        return "entity" if entity is not None and entity.id == node_id else None
+
+    def link(self, source_id: str, target_id: str, rel_type: RelType) -> RelationshipCreate:
+        """Create a manual edge after checking both ends exist and the type fits them.
+
+        Idempotent: when the triple already exists it is left as it is (an
+        extracted edge keeps its confidence and source), so a second click
+        does not stack duplicate rows in SQLite. Linking does not re-embed;
+        the next content edit picks up new entity names.
+        """
+        if source_id == target_id:
+            raise ValueError("a node cannot link to itself")
+        source_kind, target_kind = self._node_kind(source_id), self._node_kind(target_id)
+        if source_kind is None or target_kind is None:
+            raise LookupError(f"no memory or entity {source_id if source_kind is None else target_id!r}")
+        allowed = LINKABLE.get((source_kind, target_kind), ())
+        if rel_type.value not in allowed:
+            choices = ", ".join(allowed) or "none"
+            raise ValueError(f"{rel_type.value} cannot link {source_kind} -> {target_kind}; use one of {choices}")
+        edge = RelationshipCreate(source_id=source_id, target_id=target_id, type=rel_type, source="manual")
+        existing = self._graph_write(
+            self.graph_store.get_neighbors, source_id, [rel_type.value], "OUT", outcome="nothing was linked"
+        )
+        if any(n.get("id") == target_id for n in existing):
+            return edge
+        self.graph_store.create_relationship(edge)
+        return edge
+
+    def unlink(self, source_id: str, target_id: str, rel_type: RelType) -> int:
+        """Remove edges matching the triple. Version edges are history, not links."""
+        if rel_type == RelType.SUPERSEDES:
+            raise ValueError("SUPERSEDES is the version history and cannot be unlinked")
+        return self._graph_write(
+            self.graph_store.delete_relationship, source_id, target_id, rel_type.value, outcome="nothing was unlinked"
+        )
 
     def export_memories(self, project_id: str = "default", limit: int = 100_000) -> List[Dict[str, Any]]:
         """All memories of a project as plain dicts (newest first).

@@ -9,14 +9,69 @@ import json
 import logging
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Any, Optional, Tuple
 from urllib.parse import parse_qs, unquote, urlparse
 
+from collivind.exceptions import CollivindError
 from collivind.web.api import MemoryAPI, route
 
 logger = logging.getLogger(__name__)
 
 STATIC = Path(__file__).parent / "static"
-CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".css": "text/css", ".js": "text/javascript"}
+CONTENT_TYPES = {
+    ".html": "text/html; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".woff2": "font/woff2",
+    ".txt": "text/plain; charset=utf-8",
+    ".svg": "image/svg+xml",
+}
+# Everything the page loads is its own: no inline script, no third party.
+CSP = (
+    "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; "
+    "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+)
+LOCAL_HOSTNAMES = {"127.0.0.1", "localhost", "[::1]", "::1"}
+WRITE_METHODS = {"POST", "PATCH", "PUT", "DELETE"}
+MAX_BODY = 1_000_000
+
+
+def _hostname(netloc: str) -> str:
+    netloc = netloc.strip().lower()
+    if netloc.startswith("["):
+        return netloc[: netloc.find("]") + 1]
+    return netloc.rsplit(":", 1)[0] if ":" in netloc else netloc
+
+
+def check_request(method: str, headers: Any) -> Optional[Tuple[int, str]]:
+    """Refuse requests a page on another origin could make. None means allowed.
+
+    The server has no auth, so the browser is the threat: a page elsewhere
+    must not read the store or write to it.
+    - Host must name loopback. A DNS-rebinding page reaches 127.0.0.1 under
+      its own hostname, and this is what tells the two apart. Applies to reads
+      too, since reads expose every memory.
+    - Writes must carry an Origin equal to the Host they were sent to (browsers
+      always send one on POST/PATCH/DELETE), so another local port, say a dev
+      server on :3000, cannot write either.
+    - Writes must be JSON: a cross-site HTML form can only send text/plain or
+      form encodings without a preflight.
+
+    `headers` is anything with .get(name): the request's Message or a dict.
+    """
+    host = headers.get("Host") or ""
+    if _hostname(host) not in LOCAL_HOSTNAMES:
+        return 403, "this UI only answers on localhost"
+    if method not in WRITE_METHODS:
+        return None
+    origin = headers.get("Origin") or ""
+    parsed = urlparse(origin)
+    if parsed.scheme not in ("http", "https") or parsed.netloc.lower() != host.strip().lower():
+        return 403, "cross-origin write refused (Origin must match this server)"
+    content_type = (headers.get("Content-Type") or "").split(";")[0].strip().lower()
+    if content_type != "application/json":
+        return 415, "writes must be application/json"
+    return None
 
 
 def _make_handler(api: MemoryAPI):
@@ -32,6 +87,10 @@ def _make_handler(api: MemoryAPI):
             self.send_header("Content-Length", str(len(body)))
             # A local tool has no business being embedded elsewhere.
             self.send_header("X-Frame-Options", "DENY")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("Content-Security-Policy", CSP)
+            self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(body)
 
@@ -40,34 +99,62 @@ def _make_handler(api: MemoryAPI):
 
         def _static(self, path: str):
             name = "index.html" if path in ("/", "") else path.lstrip("/")
-            target = (STATIC / name).resolve()
+            try:
+                target = (STATIC / name).resolve()
+            except (ValueError, OSError):  # e.g. a NUL byte from %00
+                return self._json(404, {"error": "not found"})
             # Never serve outside the static dir, whatever the URL claims.
-            if not str(target).startswith(str(STATIC.resolve())) or not target.is_file():
+            if not target.is_relative_to(STATIC.resolve()) or not target.is_file():
                 return self._json(404, {"error": "not found"})
             self._send(200, target.read_bytes(), CONTENT_TYPES.get(target.suffix, "application/octet-stream"))
+
+        def _refuse(self, status: int, message: str):
+            # Close instead of keeping the connection alive: the body of a
+            # refused request is never read, and on keep-alive the server
+            # would parse it as the next request. A cross-site no-cors POST
+            # could then carry a forged same-origin write past check_request.
+            self.close_connection = True
+            return self._json(status, {"error": message})
 
         def _handle(self, method: str):
             parsed = urlparse(self.path)
             path = unquote(parsed.path)
+            if self.headers.get("Transfer-Encoding"):
+                return self._refuse(501, "chunked request bodies are not supported; send Content-Length")
+            refused = check_request(method, self.headers)
+            if refused:
+                return self._refuse(*refused)
             if not path.startswith("/api"):
                 if method != "GET":
-                    return self._json(405, {"error": "method not allowed"})
+                    return self._refuse(405, "method not allowed")
+                if (self.headers.get("Content-Length") or "0").strip() != "0":
+                    self.close_connection = True  # an unread body must not become the next request
                 return self._static(path)
 
             body = {}
-            length = int(self.headers.get("Content-Length") or 0)
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = -1
+            if length < 0:
+                return self._refuse(400, "bad Content-Length")
+            if length > MAX_BODY:
+                return self._refuse(413, "request body too large")
             if length:
                 try:
                     body = json.loads(self.rfile.read(length) or b"{}")
-                except json.JSONDecodeError:
+                except (json.JSONDecodeError, UnicodeDecodeError):
                     return self._json(400, {"error": "body is not valid JSON"})
 
             params = {k: v[0] for k, v in parse_qs(parsed.query).items()}
             try:
                 status, payload = route(api, method, path, params, body)
-            except Exception as e:  # a UI action must not take the server down
+            except CollivindError as e:  # written for people, e.g. "the graph store is unavailable"
                 logger.exception("request failed")
-                status, payload = 500, {"error": str(e)}
+                status, payload = 503, {"error": str(e)}
+            except Exception:  # a UI action must not take the server down
+                logger.exception("request failed")
+                status, payload = 500, {"error": "internal error; the server log has the details"}
             self._json(status, payload)
 
         def do_GET(self):
@@ -86,5 +173,10 @@ def _make_handler(api: MemoryAPI):
 
 
 def build_server(api: MemoryAPI, host: str = "127.0.0.1", port: int = 8765) -> ThreadingHTTPServer:
-    """Bind the UI server. Loopback only — this exposes the whole store."""
+    """Bind the UI server. Loopback by default: this exposes the whole store.
+
+    The container binds 0.0.0.0 inside its own network namespace and is
+    published on the host's 127.0.0.1 only; check_request still refuses any
+    Host header that is not loopback.
+    """
     return ThreadingHTTPServer((host, port), _make_handler(api))

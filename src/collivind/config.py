@@ -200,6 +200,17 @@ def _apply_env_overrides(config: "CollivindConfig") -> None:
     if embeddings_base:
         config.embeddings.base_url = embeddings_base
 
+    # Service addresses, so a container can reach its siblings by compose
+    # service name without a config.toml of its own.
+    if os.environ.get("COLLIVIND_QDRANT_HOST"):
+        config.qdrant.host = os.environ["COLLIVIND_QDRANT_HOST"]
+    if os.environ.get("COLLIVIND_NEO4J_URI"):
+        config.neo4j.uri = os.environ["COLLIVIND_NEO4J_URI"]
+    if os.environ.get("COLLIVIND_NEO4J_PASSWORD"):
+        config.neo4j.password = os.environ["COLLIVIND_NEO4J_PASSWORD"]
+    if os.environ.get("COLLIVIND_EMBEDDINGS_URL"):
+        config.embeddings.service_url = os.environ["COLLIVIND_EMBEDDINGS_URL"]
+
     mode = os.environ.get("COLLIVIND_MODE", "")
     if mode:
         config.mode = mode

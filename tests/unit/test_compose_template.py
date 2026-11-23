@@ -43,7 +43,7 @@ def compose():
     return yaml.safe_load(text)
 
 
-SERVICES = ("qdrant", "neo4j", "embeddings")
+SERVICES = ("qdrant", "neo4j", "embeddings", "web")
 
 
 def test_the_template_still_parses(compose):
@@ -136,6 +136,26 @@ def test_every_named_volume_is_used(compose):
         v.split(":")[0]
         for svc in compose["services"].values()
         for v in svc.get("volumes", [])
-        if ":" in v and not v.startswith((".", "/"))
+        # a placeholder source is a bind mount filled in by copy_templates
+        if ":" in v and not v.startswith((".", "/", "placeholder-"))
     }
     assert set(compose["volumes"]) == mounted, "declared volumes and mounted volumes disagree"
+
+
+def test_web_is_published_on_loopback_only(compose):
+    """The UI has no login: a 0.0.0.0 mapping would hand the store to the LAN."""
+    ports = compose["services"]["web"]["ports"]
+    assert ports and all(str(p).startswith("127.0.0.1:") for p in ports)
+
+
+def test_web_reaches_its_siblings_by_service_name(compose):
+    env = dict(e.split("=", 1) for e in compose["services"]["web"]["environment"])
+    assert env["COLLIVIND_MODE"] == "docker"
+    assert env["COLLIVIND_QDRANT_HOST"] == "qdrant"
+    assert env["COLLIVIND_NEO4J_URI"] == "bolt://neo4j:7687"
+    assert env["COLLIVIND_EMBEDDINGS_URL"] == "http://embeddings:8090"
+    assert set(compose["services"]["web"]["depends_on"]) == {"qdrant", "neo4j", "embeddings"}
+
+
+def test_config_mount_is_read_only(compose):
+    assert all(v.endswith(":ro") for v in compose["services"]["web"]["volumes"])

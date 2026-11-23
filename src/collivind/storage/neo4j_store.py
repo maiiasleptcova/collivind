@@ -200,6 +200,19 @@ class Neo4jGraphStore(GraphStore):
             source=data.source,
         )
 
+    def delete_relationship(self, source_id: str, target_id: str, rel_type: str) -> int:
+        rel = RelType(rel_type).value  # enum-checked: the only interpolated token
+        query = f"""
+        {_node_by_id("s", "$source_id")}
+        {_node_by_id("t", "$target_id")}
+        MATCH (s)-[r:{rel}]->(t)
+        DELETE r
+        RETURN count(*) AS n
+        """
+        with self.driver.session(database=self.config.database) as session:
+            record = session.run(query, source_id=source_id, target_id=target_id).single()
+        return int(record["n"]) if record else 0
+
     def get_neighbors(
         self,
         node_id: str,

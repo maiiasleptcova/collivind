@@ -13,6 +13,14 @@ A local web UI over the same collivind store the agents write to. It reads
 Neo4j) or embedded (SQLite) — the browser shows exactly what the hooks and MCP
 tools see. No separate database, no sync.
 
+It has three views over that one store, not three apps: the **graph** (the
+default: memories, entities and their links on one canvas, with a side panel
+for reading and editing the selected node), the **list** (the reading surface
+for search results and recent memories) and **projects** (what each project
+holds, and the name, colour and links that make it recognisable on the graph).
+It runs on the host with `collivind web`, or as a container next to the docker
+stack.
+
 ## Who uses it
 
 One person: the developer whose agents have been writing memories all day. They
@@ -25,7 +33,7 @@ four different apps:
 3. **Curate** — the store accumulates noise. Fix a wrong category, sharpen a
    summary, delete what should never have been saved.
 4. **Inspect the graph** — follow entities between memories, walk a version
-   chain to see what superseded what.
+   chain to see what superseded what, draw the link the agent missed.
 
 ## The central tension
 
@@ -34,6 +42,11 @@ table chrome). The chosen feel pulls the other way. **Reading wins by default;
 density appears on demand.** The list is comfortable to read at rest, and
 compacts only when the user asks for it. Editing is inline and quiet, never a
 modal-first workflow.
+
+The graph is dense by nature, so it stays quiet at rest: muted edges, labels
+only where they can be read, colour reserved for the project a memory belongs
+to. Hovering or selecting a node dims everything that is not its neighbourhood,
+and the text of a memory is always read in the side panel, never on the canvas.
 
 ## Personality
 

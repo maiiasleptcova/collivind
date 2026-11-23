@@ -230,6 +230,14 @@ class SqliteGraphStore(GraphStore):
         self.conn.commit()
         return edge
 
+    def delete_relationship(self, source_id: str, target_id: str, rel_type: str) -> int:
+        cur = self.conn.execute(
+            "DELETE FROM relationships WHERE source_id = ? AND target_id = ? AND type = ?",
+            (source_id, target_id, RelType(rel_type).value),
+        )
+        self.conn.commit()
+        return cur.rowcount
+
     def get_neighbors(
         self,
         node_id: str,

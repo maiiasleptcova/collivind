@@ -1,0 +1,35 @@
+# The collivind web UI, built from the collivind package installed on the
+# host: `collivind docker up` copies that package into web-src/ next to this
+# file, so the container always runs the same version as the CLI.
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    HOME=/home/collivind \
+    COLLIVIND_IN_CONTAINER=1
+
+# Runtime dependencies as declared by the installed package (no extras).
+COPY web-src/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+# Embedded mode needs the local embedding model. Off by default: it adds
+# about 1 GB, and the container refuses embedded mode on macOS bind mounts
+# anyway (see collivind/web/container.py). Build with --build-arg EMBEDDED=1.
+ARG EMBEDDED=0
+RUN if [ "$EMBEDDED" = "1" ]; then \
+      pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
+      pip install --no-cache-dir "sentence-transformers>=2.0.0"; \
+    fi
+
+RUN useradd --create-home --uid 10001 collivind && mkdir -p /home/collivind/.collivind && \
+    chown -R collivind /home/collivind
+COPY web-src/collivind /app/collivind
+USER collivind
+WORKDIR /home/collivind
+EXPOSE 8765
+
+# 0.0.0.0 inside the container's own network namespace only; compose
+# publishes it on the host's 127.0.0.1, and the server refuses any request
+# whose Host header is not loopback.
+CMD ["python", "-m", "collivind.cli.main", "web", "--host", "0.0.0.0", "--port", "8765", "--no-open-browser"]

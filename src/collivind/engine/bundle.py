@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from typing import Dict, Iterable, Iterator, List, Optional, Set, TextIO, Tuple
 
 from collivind.engine.migrate import MigrationReport, Stores, restore
+from collivind.engine.projects import meta_entity_id
 from collivind.models.entity import EntityNode, EntityType
 from collivind.models.memory import MemoryNode
 from collivind.models.relationship import RelationshipEdge, RelType
@@ -124,7 +125,9 @@ def _selection(src: Stores, project: Optional[str]) -> Tuple[Dict[str, Set[str]]
     if project is not None:
         # Entities have no project: keep those a selected memory links to.
         linked = {end for _, s, t in edges if s in memory_ids or t in memory_ids for end in (s, t)}
-        entity_ids &= linked
+        # The project's own metadata entity (display name, colour, ...) links
+        # to nothing, but belongs to exactly this project.
+        entity_ids &= linked | {meta_entity_id(project)}
     nodes = memory_ids | entity_ids
     edge_ids = {rid for rid, s, t in edges if s in nodes and t in nodes}
     touching = sum(1 for _, s, t in edges if s in nodes or t in nodes)
