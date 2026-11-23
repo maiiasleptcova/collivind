@@ -336,6 +336,7 @@ Once connected, Claude Code gets these tools:
 | `collivind_invalidate` | Mark a memory as outdated/superseded |
 | `collivind_forget` | Delete a memory permanently |
 | `collivind_find_contradictions` | List memories close enough to need checking against one (update, conflict or neighbour) |
+| `collivind_mark_conflict` | Flag two memories as a genuine, unresolved conflict for later review |
 | `collivind_get_version_chain` | Full supersession history of a memory |
 | `collivind_extract` | Get an extraction prompt for raw text |
 | `collivind_extract_save` | Parse and store an LLM extraction response |

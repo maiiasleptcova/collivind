@@ -190,6 +190,19 @@ class CollivindTools:
                 },
             },
             {
+                "name": "collivind_mark_conflict",
+                "description": (
+                    "Flag two memories as genuinely contradicting each other when neither the source of truth "
+                    "nor the user can settle it now. Draws a CONTRADICTS edge for later review; resolve it "
+                    "afterwards with collivind_invalidate."
+                ),
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {"memory_id": {"type": "string"}, "other_id": {"type": "string"}},
+                    "required": ["memory_id", "other_id"],
+                },
+            },
+            {
                 "name": "collivind_invalidate",
                 "description": (
                     "Retire a memory that is outdated or wrong: it leaves search but stays in the version "
@@ -457,6 +470,13 @@ class CollivindTools:
                     max_tokens=args.get("max_tokens"),
                 )
                 return context
+
+            elif name == "collivind_mark_conflict":
+                try:
+                    self.memory_manager.link(args["memory_id"], args["other_id"], RelType.CONTRADICTS)
+                except LookupError as e:
+                    return json.dumps({"error": str(e)})
+                return json.dumps({"status": "success", "message": "Conflict flagged"})
 
             elif name == "collivind_invalidate":
                 self.memory_manager.invalidate(

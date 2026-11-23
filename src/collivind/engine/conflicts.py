@@ -37,8 +37,9 @@ CONFLICT_INSTRUCTION = (
     "stale one with superseded_by set to the current one. If they genuinely disagree, check the "
     "source of truth (the code, docs, git history, the user's own words) and invalidate the wrong "
     "one the same way. If you still cannot tell, ask the user one short question, invalidate the "
-    "wrong one after they answer, and save their answer as a memory. Do not use collivind_forget "
-    "for this, because invalidating keeps the history."
+    "wrong one after they answer, and save their answer as a memory. If nobody can be asked now, "
+    "call collivind_mark_conflict on the pair so it is flagged for review. Do not use "
+    "collivind_forget for this, because invalidating keeps the history."
 )
 
 _STOP = frozenset(
@@ -51,6 +52,7 @@ _DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}(?:t[\d:.]+(?:z|[+-]\d{2}:\d{2})?)?\b")
 _WORD = re.compile(r"[a-z][a-z0-9_]{2,}")
 _NUMBER = re.compile(r"\b\d{2,}\b")
 _HEX = re.compile(r"\b[0-9a-f]{7,40}\b")
+_REF = re.compile(r"(?:\bpr\s*#?|\bissue\s*#?|\bpull/|#)(\d+)\b")
 
 
 def _words(text: str) -> Set[str]:
@@ -68,12 +70,16 @@ def same_subject(a: str, b: str) -> bool:
     """Cheap lexical check that two similar memories talk about the same thing.
 
     Two memories about different PRs (776 vs 773) embed almost identically,
-    so when both carry identifiers they must share one. Without identifiers a
-    real overlap in wording is required.
+    so when both name a PR or issue they must name the same one. Any other
+    shared identifier (a SHA, a port) is enough; otherwise a real overlap in
+    wording is required. Other numbers never veto: "timeout is 30s" vs
+    "timeout is 60s" is exactly the conflict to catch.
     """
-    aa, ab = _anchors(a), _anchors(b)
-    if aa and ab:
-        return bool(aa & ab)
+    ra, rb = set(_REF.findall(a.lower())), set(_REF.findall(b.lower()))
+    if ra and rb:
+        return bool(ra & rb)
+    if _anchors(a) & _anchors(b):
+        return True
     wa, wb = _words(a), _words(b)
     return len(wa & wb) / max(1, len(wa | wb)) >= MIN_WORD_OVERLAP
 
@@ -184,8 +190,9 @@ def _apply(manager: "MemoryManager", verdicts: List[EdgeVerdict], memories: Dict
             older, newer = sorted((memories[v.source_id], memories[v.target_id]), key=_created)
             assert older is not None and newer is not None
             # invalidate overwrites the successor's previous_version_id; never
-            # cut an existing version chain to record a duplicate
-            if not newer.previous_version_id:
+            # cut an existing version chain (or one set earlier in this run)
+            current = graph.get_memory(newer.id)
+            if current is not None and not current.previous_version_id:
                 graph.delete_relationship(v.source_id, v.target_id, RelType.CONTRADICTS.value)
                 manager.invalidate(older.id, newer.id, "duplicate found by contradictions review")
                 retired.add(older.id)

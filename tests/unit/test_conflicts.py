@@ -266,3 +266,52 @@ def test_review_cli_dry_run_and_apply(backlog, monkeypatch):
     out = runner.invoke(contradictions, ["review", "--apply"])
     assert out.exit_code == 0 and "Applied" in out.output
     assert len(_edges(manager, RelType.CONTRADICTS)) == 2
+
+
+def test_changed_value_without_identifiers_is_a_candidate(manager):
+    """The textbook contradiction: same statement, different number, no PR to anchor it."""
+    old = _add(manager, "alpha: the request timeout is 30 seconds")
+    _, found = manager.add_memory_checked(
+        MemoryCreate(
+            content="bravo: the request timeout is 60 seconds",
+            summary="t",
+            category=MemoryCategory.FACT,
+            project_id="p",
+        )
+    )
+    assert [c.memory.id for c in found] == [old.id]
+
+
+def test_mark_conflict_tool_flags_the_pair(manager):
+    a = _add(manager, "alpha: the request timeout is 30 seconds")
+    b = _add(manager, "unrelated: the request timeout is 60 seconds")
+    tools = CollivindTools(manager)
+    res = json.loads(tools.handle_call("collivind_mark_conflict", {"memory_id": b.id, "other_id": a.id}))
+    assert res["status"] == "success"
+    assert (b.id, a.id, "manual") in _edges(manager, RelType.CONTRADICTS)
+    missing = json.loads(tools.handle_call("collivind_mark_conflict", {"memory_id": b.id, "other_id": "nope"}))
+    assert "error" in missing
+
+
+def test_review_apply_keeps_version_chain_when_newer_side_repeats(manager):
+    """One newer memory duplicating two older ones: only the first becomes its previous version."""
+    newer = _add(manager, "delta: PR 7 status, newest")
+    olders = []
+    for i in range(2):
+        m = manager.graph_store.create_memory(
+            MemoryCreate(content=f"delta: PR 7 status {i}", summary="o", category=MemoryCategory.FACT, project_id="p")
+        )
+        manager.vector_store.upsert(m.id, BASE, m.to_dict())
+        olders.append(m)
+    # make the stored "newer" memory actually newer than both
+    manager.graph_store.update_memory(newer.id, created_at="2999-01-01T00:00:00+00:00")
+    for m in olders:
+        manager.graph_store.create_relationship(
+            RelationshipCreate(newer.id, m.id, RelType.CONTRADICTS, confidence=0.95, source="auto_detection")
+        )
+    assert {v.bucket for v in review_backlog(manager)} == {DUPLICATE}
+
+    review_backlog(manager, apply=True)
+    head = manager.graph_store.get_memory(newer.id)
+    retired = [m.id for m in olders if manager.graph_store.get_memory(m.id).superseded_by == newer.id]
+    assert retired == [head.previous_version_id]  # one link, not one overwritten by the next
