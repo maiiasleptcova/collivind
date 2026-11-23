@@ -213,7 +213,7 @@ def test_batch_add_labels_unlabelled_memories_with_the_current_project():
     from unittest.mock import MagicMock
 
     manager = MagicMock()
-    manager.batch_add_memories.return_value = ["a", "b", "c"]
+    manager.batch_add_checked.return_value = (["a", "b", "c"], {})
     mems = [
         {"content": "c", "summary": "s", "category": "fact"},
         {"content": "c", "summary": "s", "category": "fact", "project_id": "other"},
@@ -221,7 +221,7 @@ def test_batch_add_labels_unlabelled_memories_with_the_current_project():
     ]
     with patch("collivind.mcp.tools.capture.record"):
         _tools(manager).handle_call("collivind_batch_add", {"memories": mems})
-    sent = manager.batch_add_memories.call_args.args[0]
+    sent = manager.batch_add_checked.call_args.args[0]
     assert [m["project_id"] for m in sent] == ["v5_flask", "other", "v5_flask"]
 
 
