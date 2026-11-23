@@ -253,7 +253,10 @@ Call `collivind_batch_add` ONCE with `checkpoint_id: "{checkpoint_id}"` and the 
 1. Self-contained facts, decisions, preferences, patterns, errors, risks, open questions and follow-ups
    learned since the last checkpoint. Each must make sense without this conversation.
 2. Corrections: if something stored earlier is now wrong, save the corrected version and say what it replaces.
-3. Categories: fact, decision, pattern, error, architecture, preference, snippet. Add entities and relationships.
+3. Categories: fact, decision, pattern, error, architecture, preference, snippet. Add entities, and say how they
+   connect: in `relationships`, {{source, type, target}} between entity names (DEPENDS_ON, USES, PART_OF, IMPLEMENTS,
+   INTERACTS_WITH, RELATED_TO) and {{target_id, type: RESOLVES|CAUSED_BY}} to an existing memory, each with a short
+   `note` on why it holds. A typed edge with a note is what lets the next reader follow the graph.
 4. Skip trivial chatter, secrets/credentials, and raw transcript dumps.
 5. If the response lists `possible_conflicts`, check each against the source of truth (code, docs, git
    history, the user's words). Retire the stale or wrong memory with `collivind_invalidate` (superseded_by =

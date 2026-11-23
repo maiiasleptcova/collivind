@@ -241,7 +241,7 @@ body.has-panel .graph-view { grid-template-columns: var(--rail) minmax(0, 1fr) v
 .muted-chip { border: 1px dashed var(--line-2); border-radius: 100px; padding: 0 0.5rem; }
 
 .connections { list-style: none; margin: 0 0 1rem; padding: 0; display: flex; flex-direction: column; gap: 0.15rem; }
-.connections li { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr) auto auto; gap: 0.5rem; align-items: center; font-size: var(--step--1); padding: 0.15rem 0; }
+.connections li { display: grid; grid-template-columns: 8.5rem minmax(0, 1fr) auto auto; gap: 0.5rem; align-items: center; font-size: var(--step--1); padding: 0.15rem 0; }
 .connections .rel { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .connections .link-like { overflow: hidden; text-align: left; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .versions { margin: 0.6rem 0 0; padding-left: 1.2rem; font-size: var(--step--1); display: flex; flex-direction: column; gap: 0.3rem; }
@@ -370,3 +370,6 @@ dialog .actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-
 .memory .pick { position: absolute; left: 0.9rem; top: 1.05rem; }
 .memory .pick input { width: 1.05rem; height: 1.05rem; accent-color: var(--accent, currentColor); }
 .connections .when { color: var(--muted); font-size: var(--step--2, 0.75rem); white-space: nowrap; }
+.connections li.is-auto .rel, .connections li.is-auto .link-like { opacity: 0.6; }
+.connections .note { grid-column: 2 / -1; color: var(--ink-2); font-size: var(--step--2, 0.75rem); margin-top: -0.15rem; }
+.link-form .grow { flex: 1 1 12rem; }

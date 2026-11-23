@@ -10,6 +10,7 @@ from collivind.engine.memory_manager import LINKABLE
 from collivind.engine.projects import list_projects, set_project_meta, validate_project_id
 from collivind.models import MemoryCategory, MemoryCreate, RelType, SearchQuery
 from collivind.models.entity import EntityType
+from collivind.models.relations import MEANINGS
 from collivind.web.graph import DEFAULT_LIMIT, MAX_LIMIT, build_graph
 
 Result = Tuple[int, Dict[str, Any]]
@@ -92,6 +93,7 @@ class MemoryAPI:
             "mode": self.mode,
             "categories": [c.value for c in MemoryCategory],
             "linkable": {f"{a}:{b}": list(types) for (a, b), types in LINKABLE.items()},
+            "meanings": {t: m._asdict() for t, m in MEANINGS.items()},
         }
 
     def get_memory(self, memory_id: str) -> Result:
@@ -257,7 +259,7 @@ class MemoryAPI:
     def link(self, body: Dict[str, Any]) -> Result:
         try:
             source, target, rel = self._link_args(body)
-            self.manager.link(source, target, rel)
+            self.manager.link(source, target, rel, note=body.get("note") or "")
         except LookupError as e:
             return 404, {"error": str(e.args[0])}
         except ValueError as e:

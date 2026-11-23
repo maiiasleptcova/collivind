@@ -373,18 +373,29 @@ class SqliteGraphStore(GraphStore):
         for row in self.conn.execute("SELECT * FROM entities ORDER BY id").fetchall():
             yield self._row_to_entity(row)
 
+    def edges_of(self, node_id: str) -> List[RelationshipEdge]:
+        rows = self.conn.execute(
+            "SELECT * FROM relationships WHERE source_id = ? OR target_id = ? ORDER BY created_at, id",
+            (node_id, node_id),
+        ).fetchall()
+        return [self._row_to_edge(row) for row in rows]
+
     def iter_relationships(self) -> Iterator[RelationshipEdge]:
         for row in self.conn.execute("SELECT * FROM relationships ORDER BY created_at, id").fetchall():
-            yield RelationshipEdge(
-                id=row["id"],
-                source_id=row["source_id"],
-                target_id=row["target_id"],
-                type=RelType(row["type"]),
-                confidence=row["confidence"],
-                source=row["source"],
-                properties=json.loads(row["properties"]) if row["properties"] else {},
-                created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
-            )
+            yield self._row_to_edge(row)
+
+    @staticmethod
+    def _row_to_edge(row) -> RelationshipEdge:
+        return RelationshipEdge(
+            id=row["id"],
+            source_id=row["source_id"],
+            target_id=row["target_id"],
+            type=RelType(row["type"]),
+            confidence=row["confidence"],
+            source=row["source"],
+            properties=json.loads(row["properties"]) if row["properties"] else {},
+            created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
+        )
 
     def restore_memory(self, node: MemoryNode) -> None:
         d = node.to_dict()

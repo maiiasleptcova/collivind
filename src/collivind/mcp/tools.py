@@ -13,15 +13,40 @@ from collivind.models import (
     EntityType,
     MemoryCategory,
     MemoryCreate,
-    RelationshipCreate,
     RelType,
     SearchQuery,
     SearchResult,
 )
+from collivind.models.relations import ENTITY_RELATIONS, MAX_NOTE, glossary, parse_relationship
 from collivind.storage.interfaces import EmbeddingProvider, GraphStore, VectorStore
 
 # No schema default: an agent copies a default back verbatim, and "default"
 # is exactly the label that filed every memory under no project.
+# How a save states edges. Typed edges are what let an agent or a person
+# walking the graph read *how* things connect, not just that they do.
+RELATIONSHIPS_PROP: Dict[str, Any] = {
+    "type": "array",
+    "description": (
+        "Typed edges, each with an optional one-line `note` saying why or how it holds. "
+        "Between two entities, name them: {source, type, target} — " + glossary(ENTITY_RELATIONS) + ". "
+        "From this memory to an existing memory id: {target_id, type} — "
+        + glossary(("RESOLVES", "CAUSED_BY", "DEPENDS_ON", "RELATES_TO"))
+        + "."
+    ),
+    "items": {
+        "type": "object",
+        "properties": {
+            "type": {"type": "string", "enum": sorted({r.value for r in RelType})},
+            "source": {"type": "string", "description": "entity name (entity-to-entity edge)"},
+            "target": {"type": "string", "description": "entity name (entity-to-entity edge)"},
+            "target_id": {"type": "string", "description": "existing memory or entity id (edge from this memory)"},
+            "note": {"type": "string", "maxLength": MAX_NOTE},
+            "properties": {"type": "object"},
+        },
+        "required": ["type"],
+    },
+}
+
 PROJECT_PROP = {
     "type": "string",
     "description": "Project id. Omit it: the server uses the current repo's project.",
@@ -163,18 +188,7 @@ class CollivindTools:
                                 "required": ["name", "type"],
                             },
                         },
-                        "relationships": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "target_id": {"type": "string"},
-                                    "type": {"type": "string", "enum": [r.value for r in RelType]},
-                                    "properties": {"type": "object"},
-                                },
-                                "required": ["target_id", "type"],
-                            },
-                        },
+                        "relationships": RELATIONSHIPS_PROP,
                         "tags": {"type": "array", "items": {"type": "string"}},
                         "confidence": {"type": "number", "default": 1.0},
                     },
@@ -258,7 +272,10 @@ class CollivindTools:
             },
             {
                 "name": "collivind_get_entity",
-                "description": "Get an entity and its related memories.",
+                "description": (
+                    "Get an entity, its related memories, and `relations`: how it fits with other entities, "
+                    "each as a readable phrase ('uses', 'is part of', 'is needed by'...) with an optional note."
+                ),
                 "inputSchema": {
                     "type": "object",
                     "properties": {"entity_name": {"type": "string"}},
@@ -322,18 +339,7 @@ class CollivindTools:
                                             "required": ["name", "type"],
                                         },
                                     },
-                                    "relationships": {
-                                        "type": "array",
-                                        "items": {
-                                            "type": "object",
-                                            "properties": {
-                                                "target_id": {"type": "string"},
-                                                "type": {"type": "string", "enum": [r.value for r in RelType]},
-                                                "properties": {"type": "object"},
-                                            },
-                                            "required": ["target_id", "type"],
-                                        },
-                                    },
+                                    "relationships": RELATIONSHIPS_PROP,
                                     "tags": {"type": "array", "items": {"type": "string"}},
                                     "confidence": {"type": "number", "default": 1.0},
                                     "session_id": {
@@ -410,17 +416,7 @@ class CollivindTools:
                         EntityCreate(name=e["name"], type=EntityType(e["type"]), properties=e.get("properties", {}))
                     )
 
-                # Parse relationships
-                relationships = []
-                for r in args.get("relationships", []):
-                    relationships.append(
-                        RelationshipCreate(
-                            source_id="",  # Will be filled by memory_manager
-                            target_id=r["target_id"],
-                            type=RelType(r["type"]),
-                            properties=r.get("properties", {}),
-                        )
-                    )
+                relationships = [parse_relationship(r) for r in args.get("relationships", [])]
 
                 mem_create = MemoryCreate(
                     content=args["content"],

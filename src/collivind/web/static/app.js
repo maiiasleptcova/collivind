@@ -1,6 +1,6 @@
 // Entry point: state, the three views (graph, list, projects), filters and search.
 
-import { $, $$, api, esc, toast, showError, clearError, projectColor, projectName } from "./util.js";
+import { $, $$, api, esc, relPhrase, toast, showError, clearError, projectColor, projectName } from "./util.js";
 import { CATEGORIES, card, editorMarkup, readEditor } from "./memory.js";
 import { GraphView } from "./graph.js";
 import { topicBar, pickBox, wireTopic } from "./topic.js";
@@ -21,6 +21,7 @@ const state = {
   projects: [],
   meta: {},
   linkable: {},
+  meanings: {},          // edge type -> {forward, inverse, description}
   filters: { project: "", categories: new Set(CATEGORIES), entityTypes: null, showEntities: true, from: "", to: "", hideSuperseded: false },
   text: "",
   search: null,          // { query, results } after Enter
@@ -53,6 +54,7 @@ const view = new GraphView($("#canvas"), {
 initPanel({
   graph: () => ({ byId: state.byId, nodes: state.visible, edges: shown().edges }),
   linkable: () => state.linkable,
+  meanings: () => state.meanings,
   projects: () => state.meta,
   colorOf,
   select: (id, opts) => select(id, opts),
@@ -569,7 +571,7 @@ function renderEdgeTypes() {
   for (const e of state.graph.edges) counts.set(e.type, (counts.get(e.type) || 0) + 1);
   const box = $("#f-edge-types");
   box.innerHTML = counts.size ? [...counts].sort((a, b) => b[1] - a[1]).map(([t, n]) =>
-    `<label class="check"><input type="checkbox" value="${esc(t)}"${state.edgeTypes.has(t) ? " checked" : ""}> ${esc(t.toLowerCase().replace(/_/g, " "))} <span class="count">${n.toLocaleString()}</span></label>`).join("")
+    `<label class="check" title="${esc(state.meanings[t]?.description || "")}"><input type="checkbox" value="${esc(t)}"${state.edgeTypes.has(t) ? " checked" : ""}> ${esc(relPhrase(state.meanings, t))} <span class="count">${n.toLocaleString()}</span></label>`).join("")
     : `<p class="hint">No links yet.</p>`;
   $$("input", box).forEach((i) => i.onchange = () => {
     const next = new Set(state.edgeTypes);
@@ -719,6 +721,8 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => view
   try {
     const s = await api("/api/status");
     state.linkable = s.linkable || {};
+    state.meanings = s.meanings || {};
+    view.setMeanings(state.meanings);
     $("#store").textContent = `${s.mode} store`;
   } catch { $("#store").textContent = "store unknown"; }
   try { await loadProjects(); } catch (e) { showError(e); }

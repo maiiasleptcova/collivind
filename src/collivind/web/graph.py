@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from collivind.engine.projects import is_meta_entity
 from collivind.models.memory import MemoryNode
+from collivind.models.relations import NOTE_KEY
 from collivind.models.relationship import RelType
 from collivind.storage.interfaces import GraphStore
 
@@ -78,8 +79,12 @@ def build_graph(
     def allowed(rel: str) -> bool:
         return types is None or rel in types
 
-    raw = [(r.source_id, _enum(r.type), r.target_id) for r in graph.iter_relationships()]
-    raw = [e for e in raw if allowed(e[1])]
+    rels = [r for r in graph.iter_relationships() if allowed(_enum(r.type))]
+    raw = [(r.source_id, _enum(r.type), r.target_id) for r in rels]
+    # what the panel and the edge labels show: the note, and who drew it
+    detail = {
+        (r.source_id, _enum(r.type), r.target_id): ((r.properties or {}).get(NOTE_KEY, ""), r.source) for r in rels
+    }
     # SQLite records supersession only in the memory row; Neo4j also writes a
     # SUPERSEDES edge. Derive it from the row so both modes draw the chain.
     derived = (
@@ -106,6 +111,14 @@ def build_graph(
         # filter or the cap does not leave a cloud of orphan entities behind.
         touching = [(s, t) for s, _, t in raw if s in memory_ids or t in memory_ids]
         linked_entities = {end for pair in touching for end in pair if end in entities}
+        # and one entity-to-entity hop further: "Neo4j is part of the docker stack"
+        # should show even when no loaded memory is about the docker stack itself
+        linked_entities |= {
+            end
+            for s, _, t in raw
+            if s in entities and t in entities and (s in linked_entities or t in linked_entities)
+            for end in (s, t)
+        }
         total, truncated = len(memories), len(memories) > len(kept)
 
     nodes_ok = memory_ids | linked_entities
@@ -117,7 +130,8 @@ def build_graph(
             if key in seen or s == t or s not in nodes_ok or t not in nodes_ok:
                 continue
             seen.add(key)
-            edges.append({"source": s, "target": t, "type": rel, "derived": is_derived})
+            note, origin = detail.get(key, ("", "versioning"))
+            edges.append({"source": s, "target": t, "type": rel, "derived": is_derived, "note": note, "origin": origin})
 
     nodes = [_memory_node(m) for m in kept] + [
         {"id": e.id, "kind": "entity", "label": e.name, "type": _enum(e.type)}

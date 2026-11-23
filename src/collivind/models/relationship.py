@@ -15,6 +15,7 @@ class RelType(str, Enum):
     CONTRADICTS = "CONTRADICTS"
     RELATES_TO = "RELATES_TO"
     CAUSED_BY = "CAUSED_BY"
+    RESOLVES = "RESOLVES"
     DEPENDS_ON_MEM = "DEPENDS_ON"
 
     # Entity -> Entity
@@ -22,6 +23,7 @@ class RelType(str, Enum):
     DEPENDS_ON_ENT = "DEPENDS_ON"
     PART_OF = "PART_OF"
     USES = "USES"
+    INTERACTS_WITH = "INTERACTS_WITH"
     RELATED_TO = "RELATED_TO"
 
     # Session
