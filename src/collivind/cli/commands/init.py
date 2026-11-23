@@ -53,6 +53,11 @@ def _register_hooks(config):
                 from collivind.cli.commands.hook import CODEX_REVIEW_NEXT_STEP
 
                 click.secho(CODEX_REVIEW_NEXT_STEP, fg="yellow")
+            if "copilot" in results:
+                from collivind.cli.commands.hook import copilot_warnings
+
+                for warning in copilot_warnings():
+                    click.secho(f"Warning: {warning}", fg="red")
         else:
             click.secho("skipped (disabled in config)", fg="yellow")
     except Exception as e:
@@ -371,6 +376,30 @@ def register_copilot_mcp() -> bool:
     )
 
 
+def register_copilot_cli_mcp() -> bool:
+    """Add collivind to the Copilot CLI/app MCP config ($COPILOT_HOME/mcp-config.json).
+
+    Its Stop hook asks the agent to call `collivind_batch_add`; without the
+    server registered there the tool does not exist and every save fails.
+    """
+    from collivind.cli.commands.hook import copilot_home
+
+    if not copilot_home().exists():
+        return False  # not a Copilot CLI user; do not create the directory
+
+    return _json_register(
+        copilot_home() / "mcp-config.json",
+        "mcpServers",
+        "collivind",
+        {
+            "type": "local",
+            "command": _mcp_interpreter(),
+            "args": ["-m", "collivind.mcp.server"],
+            "tools": ["*"],
+        },
+    )
+
+
 def _register_mcp_server():
     """Register Collivind as an MCP server with Claude Code, plus Codex when
     ~/.codex exists."""
@@ -424,6 +453,7 @@ def _register_mcp_server():
     for label, registrar, hint in (
         ("opencode", register_opencode_mcp, "~/.config/opencode/opencode.json"),
         ("Copilot", register_copilot_mcp, "~/.vscode/mcp.json"),
+        ("Copilot CLI", register_copilot_cli_mcp, "~/.copilot/mcp-config.json"),
     ):
         try:
             changed = registrar()
