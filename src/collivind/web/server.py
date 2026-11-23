@@ -9,7 +9,7 @@ import json
 import logging
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Mapping, Optional, Tuple
+from typing import Any, Optional, Tuple
 from urllib.parse import parse_qs, unquote, urlparse
 
 from collivind.web.api import MemoryAPI, route
@@ -42,7 +42,7 @@ def _hostname(netloc: str) -> str:
     return netloc.rsplit(":", 1)[0] if ":" in netloc else netloc
 
 
-def check_request(method: str, headers: Mapping[str, str]) -> Optional[Tuple[int, str]]:
+def check_request(method: str, headers: Any) -> Optional[Tuple[int, str]]:
     """Refuse requests a page on another origin could make. None means allowed.
 
     The server has no auth, so the browser is the threat: a page elsewhere
@@ -55,6 +55,8 @@ def check_request(method: str, headers: Mapping[str, str]) -> Optional[Tuple[int
       server on :3000, cannot write either.
     - Writes must be JSON: a cross-site HTML form can only send text/plain or
       form encodings without a preflight.
+
+    `headers` is anything with .get(name): the request's Message or a dict.
     """
     host = headers.get("Host") or ""
     if _hostname(host) not in LOCAL_HOSTNAMES:

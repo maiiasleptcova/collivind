@@ -59,7 +59,8 @@ def build_graph(graph: GraphStore, project: Optional[str] = None, limit: int = D
     raw = [(r.source_id, _enum(r.type), r.target_id) for r in graph.iter_relationships()]
     # An entity is drawn only when a kept memory reaches it, so a project
     # filter or the cap does not leave a cloud of orphan entities behind.
-    linked_entities = {end for s, _, t in raw if s in memory_ids or t in memory_ids for end in (s, t) if end in entities}
+    touching = [(s, t) for s, _, t in raw if s in memory_ids or t in memory_ids]
+    linked_entities = {end for pair in touching for end in pair if end in entities}
     nodes_ok = memory_ids | linked_entities
     for s, rel, t in raw:
         if s in nodes_ok and t in nodes_ok:

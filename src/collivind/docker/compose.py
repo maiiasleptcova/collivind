@@ -1,14 +1,17 @@
 import hashlib
 import re
+import shutil
 import string
 import subprocess
-from importlib import resources
+from importlib import metadata, resources
 from pathlib import Path
 
 from collivind.config import CollivindConfig
 from collivind.exceptions import DockerExecutionError
 
 _NEO4J_AUTH = re.compile(r"NEO4J_AUTH=neo4j/(\S+)")
+DIST_NAME = "collivind-memory"
+WEB_PORT = 8765
 
 
 def copy_templates(data_dir: Path, config: CollivindConfig) -> str:
@@ -35,9 +38,12 @@ def copy_templates(data_dir: Path, config: CollivindConfig) -> str:
     compose_tmpl = resources.files(pkg).joinpath("docker-compose.yml.template").read_text()
 
     # Substitute variables
+    config_file = Path("~/.collivind/config.toml").expanduser()
     compose_content = string.Template(compose_tmpl).safe_substitute(
         COMPOSE_PROJECT=config.docker.compose_project,
         NEO4J_PASSWORD=kept.group(1) if kept else config.neo4j.password,
+        WEB_PORT=str(WEB_PORT),
+        COLLIVIND_CONFIG=str(config_file) if config_file.is_file() else "/dev/null",
     )
 
     # A hash of what we last wrote tells an untouched file (safe to refresh)
@@ -60,7 +66,39 @@ def copy_templates(data_dir: Path, config: CollivindConfig) -> str:
     # Copy embedding_server.py
     server_content = resources.files(pkg).joinpath("embedding_server.py").read_text()
     (data_dir / "embedding_server.py").write_text(server_content)
+
+    (data_dir / "Dockerfile.web").write_text(resources.files(pkg).joinpath("Dockerfile.web").read_text())
+    copy_web_source(data_dir / "web-src")
     return "replaced" if replaced else ""
+
+
+def _requirements() -> str:
+    """The installed package's runtime requirements, extras left out."""
+    try:
+        reqs = metadata.requires(DIST_NAME) or []
+    except metadata.PackageNotFoundError:  # running from a source tree without install
+        reqs = []
+    return "\n".join(r for r in reqs if "extra ==" not in r) + "\n"
+
+
+def copy_web_source(target: Path) -> None:
+    """The web image's build input: this very collivind package plus its requirements.
+
+    Copied from the running install rather than fetched from PyPI, so the
+    container serves the same version as the host CLI (and works for a
+    source checkout that was never published).
+    """
+    import collivind
+
+    if target.exists():
+        shutil.rmtree(target)  # a file removed upstream must not linger in the image
+    target.mkdir(parents=True)
+    shutil.copytree(
+        Path(collivind.__file__).parent,
+        target / "collivind",
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+    )
+    (target / "requirements.txt").write_text(_requirements())
 
 
 def check_docker_running():

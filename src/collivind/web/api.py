@@ -197,8 +197,10 @@ class MemoryAPI:
         return 200, _memory_dict(node)
 
     def _link_args(self, body: Dict[str, Any]) -> Tuple[str, str, RelType]:
-        return _id(body.get("source_id"), "source_id"), _id(body.get("target_id"), "target_id"), _rel_type(
-            body.get("type")
+        return (
+            _id(body.get("source_id"), "source_id"),
+            _id(body.get("target_id"), "target_id"),
+            _rel_type(body.get("type")),
         )
 
     def link(self, body: Dict[str, Any]) -> Result:

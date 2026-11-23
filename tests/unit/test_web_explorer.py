@@ -309,3 +309,42 @@ class TestOverTheWire:
     def test_rebinding_read_refused(self, server):
         resp, _ = _request(server, "GET", "/api/graph", headers={"Host": "attacker.example"})
         assert resp.status == 403
+
+
+class TestContainerGuard:
+    MOUNTS = """overlay / overlay rw 0 0
+proc /proc proc rw 0 0
+{src} /home/collivind/.collivind {fstype} rw 0 0
+"""
+
+    def _refusal(self, tmp_path, fstype, monkeypatch, allow=None):
+        from pathlib import Path
+
+        from collivind.web.container import embedded_refusal
+
+        if allow:
+            monkeypatch.setenv("COLLIVIND_WEB_ALLOW_EMBEDDED", allow)
+        mounts = tmp_path / "mounts"
+        mounts.write_text(self.MOUNTS.format(src="data", fstype=fstype))
+        return embedded_refusal(Path("/home/collivind/.collivind"), mounts)
+
+    @pytest.mark.parametrize("fstype", ["virtiofs", "fuse.grpcfuse", "fakeowner", "fuse.sshfs", "9p", "nfs4"])
+    def test_vm_shared_mounts_are_refused(self, tmp_path, fstype, monkeypatch):
+        reason = self._refusal(tmp_path, fstype, monkeypatch)
+        assert reason and fstype in reason and "collivind web" in reason
+
+    @pytest.mark.parametrize("fstype", ["ext4", "xfs", "btrfs"])
+    def test_same_kernel_mounts_are_allowed(self, tmp_path, fstype, monkeypatch):
+        assert self._refusal(tmp_path, fstype, monkeypatch) is None
+
+    def test_override(self, tmp_path, monkeypatch):
+        assert self._refusal(tmp_path, "virtiofs", monkeypatch, allow="1") is None
+
+    def test_longest_mount_wins(self):
+        from pathlib import Path
+
+        from collivind.web.container import mount_fstype
+
+        mounts = "a / overlay rw 0 0\nb /data ext4 rw 0 0\nc /data/x virtiofs rw 0 0\n"
+        assert mount_fstype(Path("/data/x/y"), mounts) == "virtiofs"
+        assert mount_fstype(Path("/data/xy"), mounts) == "ext4"

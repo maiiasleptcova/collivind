@@ -176,6 +176,7 @@ function wireLinkForm() {
     const types = plan ? plan.types : [];
     select.innerHTML = types.map((t) => `<option value="${esc(t)}">${esc(t.toLowerCase().replace(/_/g, " "))}</option>`).join("");
     select.disabled = submit.disabled = !types.length;
+    select.closest(".editor-row").hidden = !types.length; // nothing to choose until a target is picked
   };
   refreshTypes();
   input.oninput = () => {

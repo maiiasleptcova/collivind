@@ -31,7 +31,6 @@ const view = new GraphView($("#canvas"), {
   onConnect: (source, target) => { select(source); openNode(source, { linkTo: target }); },
 });
 
-window.__view = view; // DEBUG
 initPanel({
   graph: () => ({ byId: state.byId, nodes: state.visible, edges: state.graph.edges }),
   linkable: () => state.linkable,
@@ -174,6 +173,8 @@ async function runSearch(query) {
     clearError();
     const data = await api(`/api/memories?limit=30&project=${encodeURIComponent(project)}&q=${encodeURIComponent(query)}`);
     state.search = { query, results: data.memories || [] };
+    // a selection outranks the highlight, so results would stay hidden behind it
+    if (state.selected) select(null);
     updateHighlight();
     if (state.view === "list") { state.list = state.search.results; renderList(); }
   } catch (e) { showError(e); }

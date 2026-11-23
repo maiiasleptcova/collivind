@@ -104,3 +104,18 @@ def test_unedited_compose_from_an_older_template_is_refreshed(tmp_path):
     (tmp_path / ".docker-compose.sha256").write_text(hashlib.sha256(old.encode()).hexdigest())
     assert copy_templates(tmp_path, _config(tmp_path)) == "replaced"
     assert "# older template" not in compose.read_text()
+
+
+def test_web_build_context_carries_this_package(tmp_path):
+    """The web image is built from the installed package, not PyPI."""
+    from collivind.version import __version__
+
+    copy_templates(tmp_path, _config(tmp_path))
+    src = tmp_path / "web-src"
+    assert (tmp_path / "Dockerfile.web").is_file()
+    assert f'"{__version__}"' in (src / "collivind" / "version.py").read_text()
+    assert (src / "collivind" / "web" / "static" / "graph.js").is_file()
+    assert not list(src.rglob("__pycache__"))
+    assert "qdrant-client" in (src / "requirements.txt").read_text()
+    compose = (tmp_path / "docker-compose.yml").read_text()
+    assert "127.0.0.1:8765:8765" in compose and "${" not in compose

@@ -104,9 +104,7 @@ def list_projects(graph: GraphStore) -> List[Dict[str, Any]]:
             live[m.project_id] += 1
     metas = _meta_entities(graph)
     ids = set(total) | set(metas)
-    rows = [
-        {"project_id": pid, "memories": total[pid], "live": live[pid], **_meta_of(metas.get(pid))} for pid in ids
-    ]
+    rows = [{"project_id": pid, "memories": total[pid], "live": live[pid], **_meta_of(metas.get(pid))} for pid in ids]
     return sorted(rows, key=lambda r: (-r["live"], r["project_id"]))
 
 
@@ -127,4 +125,7 @@ def set_project_meta(graph: GraphStore, project_id: str, updates: Dict[str, Any]
             updated_at=now,
         )
     )
-    return {"project_id": project_id, **_meta_of(EntityNode(name=project_id, type=EntityType.PROJECT, properties=props))}
+    return {
+        "project_id": project_id,
+        **_meta_of(EntityNode(name=project_id, type=EntityType.PROJECT, properties=props)),
+    }

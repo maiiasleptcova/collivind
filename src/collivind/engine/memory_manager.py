@@ -281,13 +281,13 @@ class MemoryManager:
         """
         if source_id == target_id:
             raise ValueError("a node cannot link to itself")
-        kinds = (self._node_kind(source_id), self._node_kind(target_id))
-        if None in kinds:
-            missing = source_id if kinds[0] is None else target_id
-            raise LookupError(f"no memory or entity {missing!r}")
-        allowed = LINKABLE.get((kinds[0], kinds[1]), ())
+        source_kind, target_kind = self._node_kind(source_id), self._node_kind(target_id)
+        if source_kind is None or target_kind is None:
+            raise LookupError(f"no memory or entity {source_id if source_kind is None else target_id!r}")
+        allowed = LINKABLE.get((source_kind, target_kind), ())
         if rel_type.value not in allowed:
-            raise ValueError(f"{rel_type.value} cannot link {kinds[0]} -> {kinds[1]}; use one of {', '.join(allowed)}")
+            choices = ", ".join(allowed) or "none"
+            raise ValueError(f"{rel_type.value} cannot link {source_kind} -> {target_kind}; use one of {choices}")
         edge = RelationshipCreate(source_id=source_id, target_id=target_id, type=rel_type, source="manual")
         self._graph_write(
             self.graph_store.delete_relationship, source_id, target_id, rel_type.value, outcome="nothing was linked"

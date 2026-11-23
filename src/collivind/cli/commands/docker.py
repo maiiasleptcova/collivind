@@ -3,7 +3,7 @@ import subprocess
 import click
 
 from collivind.config import load_config
-from collivind.docker.compose import copy_templates, docker_compose_down, docker_compose_up
+from collivind.docker.compose import WEB_PORT, copy_templates, docker_compose_down, docker_compose_up
 
 
 @click.group()
@@ -34,6 +34,8 @@ def up():
             )
         docker_compose_up(data_dir)
         click.secho("Containers started.", fg="green")
+        if refreshed != "kept-edits":
+            click.echo(f"Memory explorer: http://127.0.0.1:{WEB_PORT} (loopback only)")
     except Exception as e:
         click.secho(f"Failed: {e}", fg="red")
 

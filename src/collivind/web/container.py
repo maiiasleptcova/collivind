@@ -24,7 +24,7 @@ def in_container() -> bool:
 
 def mount_fstype(path: Path, mounts: str) -> Optional[str]:
     """Filesystem type of the longest mount point containing `path`, from /proc/mounts text."""
-    target = str(path.resolve())
+    target = os.path.abspath(path)
     best, best_type = "", None
     for line in mounts.splitlines():
         fields = line.split()
@@ -51,6 +51,6 @@ def embedded_refusal(data_dir: Path, mounts_file: Path = Path("/proc/mounts")) -
             f"{data_dir} is a {fstype} mount shared across a VM boundary (Docker Desktop or Colima on macOS). "
             "SQLite's WAL locks do not reach across it, so this container and the collivind CLI on the host "
             "could corrupt the embedded store. Run `collivind web` on the host instead, or use docker mode. "
-            f"On a Linux host with a plain bind mount, set {ALLOW_ENV}=1."
+            f"If you know this mount shares the host's kernel, set {ALLOW_ENV}=1."
         )
     return None

@@ -96,19 +96,69 @@ installed (`uv tool install /path/to/collivind` from a checkout). It resolves
 that binary itself rather than relying on PATH, since Claude Code spawns hooks
 with its own environment.
 
-### Web UI
+### Web UI: the memory explorer
 
 ```
-collivind web
+collivind web            # on the host, any mode
 ```
 
-Opens a local browser UI on `127.0.0.1:8765` for searching, reading, editing
-and deleting memories. It reads `~/.collivind/config.toml`, so it shows exactly
-the store your hooks and MCP tools use, and says which mode that is in the
-header. Each memory carries a **Details** disclosure with the rest of its
-record — project, source, confidence, tags, version chain, validity window,
-session and id. Loopback only, no auth — it exposes the whole store to anything
-that can reach the port.
+Opens a local explorer on `127.0.0.1:8765` over the same store your hooks and
+MCP tools use (it reads `~/.collivind/config.toml` and names the mode in the
+header). Three views, keyboard reachable (`/` search, `g` `l` `p` to switch,
+`Esc` to deselect):
+
+- **Graph**: memories and the entities they mention, with entity links,
+  `RELATES_TO`/`CAUSED_BY`/`DEPENDS_ON`, `CONTRADICTS` (dashed) and version
+  chains (`SUPERSEDES`, dotted; superseded versions drawn hollow). Pan, zoom,
+  drag; hover lights up a node's neighbours; click opens it in the side panel.
+  Filter by project, category, entity type and date, hide superseded versions,
+  or switch to a local graph of 1 to 3 hops around the selection. Canvas
+  rendering with a built-in force layout stays interactive at a few thousand
+  nodes; past 3,000 memories the newest are loaded and the sidebar says so
+  (pick a project to see the rest).
+- **Search**: typing filters node labels live; Enter runs the hybrid semantic
+  search and lights the results up on the graph (and lists them in the List view).
+- **Edit and link**: the side panel edits content, summary, category, tags and
+  confidence (same id, re-embedded like `collivind update`), forgets with a
+  confirmation, walks the version chain, and adds or removes links between two
+  memories, a memory and an entity, or two entities. Shift-drag from one node
+  to another to start a link. Version edges are history and cannot be unlinked.
+- **Projects**: every project with its memory counts, plus a display name,
+  description, graph colour, repository URL or path, and tags. These live in the
+  store itself (one `project` entity per project, id `project:<name>`), so
+  `export`, `import` and `migrate` carry them.
+
+Light and dark themes follow the system, or pick one from the header.
+
+**Security.** There is no login: anything that can reach the port can read and
+edit every memory, so it binds loopback only. Requests whose `Host` is not
+`localhost`/`127.0.0.1`/`[::1]` are refused (DNS rebinding), and every write
+must be JSON with an `Origin` equal to the server's own (cross-site pages and
+other local ports cannot write). A strict Content-Security-Policy forbids
+inline and third-party scripts.
+
+**In Docker.** `collivind docker up` also starts a `web` container next to
+Qdrant, Neo4j and the embedder, built from the collivind package installed on
+the host (no PyPI needed) and published on `127.0.0.1:8765` only. It mounts
+your `config.toml` read-only and reaches the other services by name. Stop a
+host-side `collivind web` first, or give it `--port`, since both default to 8765.
+
+**Embedded mode in a container** is refused on macOS. The embedded store is
+SQLite in WAL mode, whose locks only work when every process shares one kernel.
+Docker Desktop and Colima share your data dir with the Linux VM over virtiofs
+or FUSE, and a test with the host CLI and a container writing the same database
+over Colima's virtiofs lost half the writes and corrupted the file. The image
+checks the mount type of the data dir and exits with an explanation. On a
+Linux host, where a bind mount is the same kernel, it is supported:
+
+```
+cd ~/.collivind && docker build -f Dockerfile.web --build-arg EMBEDDED=1 -t collivind-web .
+docker run --rm -p 127.0.0.1:8765:8765 --user "$(id -u):$(id -g)" \
+  -e COLLIVIND_MODE=embedded -v ~/.collivind:/home/collivind/.collivind collivind-web
+```
+
+(`collivind docker up` writes `Dockerfile.web` and the package copy into the
+data dir first.)
 
 ### Agent support
 
@@ -269,7 +319,8 @@ collivind import backup.jsonl  # Restore by id; only adds what is missing
 collivind migrate --from embedded --to docker  # Copy everything between modes, ids kept
 collivind sync ./shared-memory  # Two-way team sync via a git-tracked dir
 collivind reset             # Wipe all data (with confirmation)
-collivind docker up|down|logs  # Container management (docker mode)
+collivind docker up|down|logs  # Container management (docker mode), including the web UI
+collivind web               # Local memory explorer on 127.0.0.1:8765
 collivind hook install      # Register Claude Code hooks
 ```
 
