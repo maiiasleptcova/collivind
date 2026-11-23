@@ -169,13 +169,18 @@ data dir first.)
 |---|---|---|---|---|
 | Claude Code | yes | yes — SessionStart + UserPromptSubmit | yes — Stop hook | yes — PreCompact marks it, SessionStart (`compact`) asks |
 | Codex | yes | yes — after you trust the hooks | yes — Stop hook, after you trust it | yes — PreCompact marks it, SessionStart (`compact`) asks |
-| opencode | yes | **no** — no prompt hook to inject into | yes — plugin on `session.idle` | yes — plugin on `session.compacted` |
+| opencode | yes | yes — plugin on `chat.message` (index on a session's first message, recall on every prompt) | yes — plugin on `session.idle` | yes — plugin on `session.compacted` |
 | GitHub Copilot | yes | **no** — Copilot has no hook system | **no** | **no** |
 
 `collivind init` registers the MCP server for every agent it finds installed,
 plus the hooks (Claude Code, Codex) or the capture plugin (opencode,
 `~/.config/opencode/plugins/collivind-capture.js`). Copilot gets the memory
 tools only, so you search and save explicitly.
+
+In opencode, recall runs before the message is sent, so it has a 5 s deadline
+(`COLLIVIND_RECALL_TIMEOUT_MS`) and the message goes without memory context
+when it is missed. The plugin uses opencode's V1 plugin API (opencode 1.x);
+opencode's V2 session hooks are not in a published release yet.
 
 **What "capture" means, precisely.** A hook cannot write memories itself —
 extraction needs the agent's model. So a checkpoint *asks* the agent to call
