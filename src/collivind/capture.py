@@ -255,6 +255,10 @@ Call `collivind_batch_add` ONCE with `checkpoint_id: "{checkpoint_id}"` and the 
 2. Corrections: if something stored earlier is now wrong, save the corrected version and say what it replaces.
 3. Categories: fact, decision, pattern, error, architecture, preference, snippet. Add entities and relationships.
 4. Skip trivial chatter, secrets/credentials, and raw transcript dumps.
+5. If the response lists `possible_conflicts`, check each against the source of truth (code, docs, git
+   history, the user's words). Retire the stale or wrong memory with `collivind_invalidate` (superseded_by =
+   the one that is right). Ignore compatible ones. Only if you still cannot tell, ask the user one short
+   question (even when saving quietly), then invalidate the wrong one and save their answer.
 If nothing new is worth saving, still call `collivind_batch_add` with `checkpoint_id: "{checkpoint_id}"` and
 an empty `memories` list, so the checkpoint is recorded as checked.
 {tone}

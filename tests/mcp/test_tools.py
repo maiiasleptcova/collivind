@@ -9,7 +9,7 @@ def test_tools_list():
     tools = CollivindTools(manager)
     tool_list = tools.get_tool_list()
 
-    assert len(tool_list) == 13
+    assert len(tool_list) == 14
     names = [t["name"] for t in tool_list]
     assert "collivind_status" in names
     assert "collivind_add_memory" in names
@@ -21,7 +21,7 @@ def test_add_memory_tool():
     manager = MagicMock()
     mock_mem = MagicMock()
     mock_mem.id = "test-mem-1"
-    manager.add_memory.return_value = mock_mem
+    manager.add_memory_checked.return_value = (mock_mem, [])
 
     tools = CollivindTools(manager)
     args = {
@@ -37,12 +37,12 @@ def test_add_memory_tool():
 
     assert res_dict["status"] == "success"
     assert res_dict["memory_id"] == "test-mem-1"
-    manager.add_memory.assert_called_once()
+    manager.add_memory_checked.assert_called_once()
 
 
 def test_batch_add_tool():
     manager = MagicMock()
-    manager.batch_add_memories.return_value = ["mem-1", "mem-2"]
+    manager.batch_add_checked.return_value = (["mem-1", "mem-2"], {})
 
     tools = CollivindTools(manager, session_id="session-123")
     args = {
@@ -57,8 +57,8 @@ def test_batch_add_tool():
 
     assert res_dict["status"] == "success"
     assert "mem-1" in res_dict["memory_ids"]
-    manager.batch_add_memories.assert_called_once()
-    saved_memories = manager.batch_add_memories.call_args.args[0]
+    manager.batch_add_checked.assert_called_once()
+    saved_memories = manager.batch_add_checked.call_args.args[0]
     assert saved_memories[0]["session_id"] == "session-123"
     assert saved_memories[1]["session_id"] == "session-123"
 

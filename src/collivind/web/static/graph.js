@@ -30,6 +30,12 @@ export class GraphView {
     this.userMoved = false;
     this.pointer = null;
     this.reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    this.gen = 0; this.inFlight = false;
+    try {
+      this.worker = new Worker("/layout-worker.js", { type: "module" });
+      this.worker.onmessage = (e) => this.onLayout(e.data);
+      this.worker.onerror = () => { this.worker = null; this.inFlight = false; }; // tick inline instead
+    } catch { this.worker = null; }
     this.readTheme();
     this.resize();
     new ResizeObserver(() => this.resize()).observe(canvas);
@@ -62,7 +68,9 @@ export class GraphView {
 
   // nodes/edges: the subset to draw. Positions persist by id, so filtering
   // does not throw the reader's mental map away.
-  setGraph(nodes, edges, { reheat = 0.5 } = {}) {
+  // fixed: nodes carry their own x/y/r (the overview's packed bubbles), so
+  // nothing simulates and the view fits them at once.
+  setGraph(nodes, edges, { reheat = 0.5, fixed = false } = {}) {
     const spread = 12 * Math.sqrt(nodes.length + 1);
     this.nodes = nodes.map((n, i) => {
       let p = this.byId.get(n.id);
@@ -72,6 +80,7 @@ export class GraphView {
         p = { x: r * Math.cos(a), y: r * Math.sin(a), vx: 0, vy: 0 };
         this.byId.set(n.id, p);
       }
+      if (fixed) Object.assign(p, { x: n.x, y: n.y, vx: 0, vy: 0 });
       return Object.assign(p, { data: n, id: n.id, degree: 0 });
     });
     const visible = new Map(this.nodes.map((n) => [n.id, n]));
@@ -80,15 +89,52 @@ export class GraphView {
     for (const e of edges) {
       const s = visible.get(e.source), t = visible.get(e.target);
       if (!s || !t) continue;
-      this.links.push({ source: s, target: t, type: e.type, style: EDGE_STYLE[e.type] || "memory", data: e });
+      this.links.push({ source: s, target: t, type: e.type, style: e.type === "CLUSTER" ? "cluster" : EDGE_STYLE[e.type] || "memory", data: e });
       s.degree++; t.degree++;
       this.adj.get(s.id).add(t.id); this.adj.get(t.id).add(s.id);
     }
-    for (const n of this.nodes) n.r = n.data.kind === "entity" ? 3.6 : Math.min(11, 4 + Math.sqrt(n.degree) * 1.1);
+    for (const n of this.nodes) {
+      n.r = n.data.kind === "cluster" ? n.data.r : n.data.kind === "entity" ? 3.6 : Math.min(11, 4 + Math.sqrt(n.degree) * 1.1);
+    }
     if (this.selected && !visible.has(this.selected)) this.selected = null;
-    this.alpha = Math.max(this.alpha, reheat);
-    this.settled = false;
+    this.alpha = fixed ? 0 : Math.max(this.alpha, reheat);
+    // Thousands of edges at full strength are a solid smear; the more there
+    // are, the fainter each one, so structure shows through the density.
+    this.edgeAlpha = Math.min(0.9, 45 / Math.sqrt(this.links.length || 1));
     this.dirty = true;
+    this.gen++; this.inFlight = false;
+    if (fixed) { this.userMoved = false; this.fit(60); return; }
+    this.postGraph();
+  }
+
+  // Hand the worker this graph's positions; it answers one request at a time.
+  postGraph() {
+    if (!this.worker) return;
+    const index = new Map(this.nodes.map((n, i) => [n.id, i]));
+    const pos = new Float64Array(this.nodes.length * 2);
+    this.nodes.forEach((n, i) => { pos[i * 2] = n.x; pos[i * 2 + 1] = n.y; });
+    const links = new Int32Array(this.links.length * 2);
+    this.links.forEach((l, i) => { links[i * 2] = index.get(l.source.id); links[i * 2 + 1] = index.get(l.target.id); });
+    const degrees = Float64Array.from(this.nodes, (n) => n.degree);
+    this.worker.postMessage({ type: "graph", gen: this.gen, pos, links, degrees }, [pos.buffer, links.buffer, degrees.buffer]);
+  }
+
+  onLayout({ gen, pos, alpha }) {
+    if (gen !== this.gen) return;
+    this.inFlight = false;
+    const dragged = this.pointer?.dragging;
+    this.nodes.forEach((n, i) => { if (n !== dragged) { n.x = pos[i * 2]; n.y = pos[i * 2 + 1]; } });
+    // a drag may have reheated the layout while this tick was out
+    this.alpha = this.pointer?.dragging ? Math.max(alpha, this.alpha) : alpha;
+    if (!this.userMoved && (!this.reduced || this.alpha <= 0.004)) this.fit();
+    this.dirty = true;
+  }
+
+  requestTick(ticks) {
+    const d = this.pointer?.dragging;
+    const pin = d ? { i: this.nodes.indexOf(d), x: d.x, y: d.y } : null;
+    this.inFlight = true;
+    this.worker.postMessage({ type: "tick", gen: this.gen, alpha: this.alpha, ticks, pin });
   }
 
   setHighlight(ids) { this.highlight = ids && ids.size ? ids : null; this.dirty = true; }
@@ -131,10 +177,12 @@ export class GraphView {
 
   // ---- loop -----------------------------------------------------------
   loop() {
-    if (this.alpha > 0.004) {
-      // With reduced motion the layout still settles, it just is not watched:
-      // many ticks per frame, then one fitted paint.
-      const ticks = this.reduced ? 40 : this.nodes.length > 1500 ? 1 : 2;
+    // With reduced motion the layout still settles, it just is not watched:
+    // many ticks per frame, then one fitted paint.
+    const ticks = this.reduced ? 40 : this.nodes.length > 1500 ? 1 : 2;
+    if (this.alpha > 0.004 && this.worker) {
+      if (!this.inFlight) this.requestTick(ticks);
+    } else if (this.alpha > 0.004) {
       for (let i = 0; i < ticks && this.alpha > 0.004; i++) {
         layoutTick(this.nodes, this.links, this.alpha, this.pointer?.dragging);
         this.alpha *= 0.985;
@@ -167,6 +215,7 @@ export class GraphView {
       entity: [t.entityEdge, 0.8, []], memory: [t.line, 1.1, []],
       contradicts: [t.danger, 1.3, [4, 3]], supersedes: [t.steel, 1.2, [1.5, 2.5]],
     };
+    this.drawClusterLinks(focus);
     for (const pass of [false, true]) {
       for (const [style, [color, width, dash]] of Object.entries(styles)) {
         ctx.beginPath();
@@ -179,7 +228,7 @@ export class GraphView {
           ctx.moveTo(l.source.x, l.source.y); ctx.lineTo(l.target.x, l.target.y); any = true;
         }
         if (!any) continue;
-        ctx.globalAlpha = pass ? 1 : focus ? 0.12 : 0.9;
+        ctx.globalAlpha = pass ? (focus ? 1 : this.edgeAlpha) : 0.12;
         ctx.strokeStyle = color; ctx.lineWidth = (pass && focus ? width * 1.6 : width) / Math.sqrt(k);
         ctx.setLineDash(dash.map((d) => d / Math.sqrt(k)));
         ctx.stroke();
@@ -211,9 +260,31 @@ export class GraphView {
     this.drawLabels(focus);
   }
 
+  drawClusterLinks(focus) {
+    const { ctx, k, theme: t } = this;
+    ctx.strokeStyle = t.line;
+    for (const l of this.links) {
+      if (l.style !== "cluster") continue;
+      const on = !focus || (focus.has(l.source.id) && focus.has(l.target.id));
+      ctx.globalAlpha = on ? (focus ? 0.7 : 0.3) : 0.06;
+      ctx.lineWidth = (0.75 + Math.log2(l.data.weight || 1) * 0.6) / k;
+      ctx.beginPath(); ctx.moveTo(l.source.x, l.source.y); ctx.lineTo(l.target.x, l.target.y); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
   drawNode(n) {
     const { ctx, theme: t } = this;
     const d = n.data;
+    if (d.kind === "cluster") {
+      const color = d.level === "entity" && d.type ? t.entity : this.colorOf(d.project_id);
+      const a = ctx.globalAlpha;
+      ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+      ctx.fillStyle = t.bg; ctx.fill();
+      ctx.globalAlpha = a * 0.2; ctx.fillStyle = color; ctx.fill();
+      ctx.globalAlpha = a; ctx.strokeStyle = color; ctx.lineWidth = 1.5 / this.k; ctx.stroke();
+      return;
+    }
     if (d.kind === "entity") {
       const s = n.r * 1.7;
       ctx.fillStyle = t.entity;
@@ -255,8 +326,9 @@ export class GraphView {
     ctx.textBaseline = "middle";
     const anchor = this.hover || this.selected;
     let pool;
+    if (this.nodes.length && this.nodes[0].data.kind === "cluster") { this.drawClusterLabels(anchor); return; }
     if (focus) pool = this.nodes.filter((n) => focus.has(n.id));
-    else if (k >= 1.1) pool = this.nodes;
+    else if (k >= 1.1 || this.nodes.length <= 300) pool = this.nodes; // small sets: label what fits at any zoom
     else pool = [];
     pool = pool
       .map((n) => ({ n, sx: n.x * k + tx, sy: n.y * k + ty }))
@@ -276,6 +348,32 @@ export class GraphView {
       ctx.globalAlpha = 1; ctx.fillStyle = n.id === anchor ? t.ink : t.label;
       ctx.fillText(text, x, y);
     }
+  }
+
+  // Every bubble gets its name and count; biggest first, so on a collision
+  // the smaller one gives way.
+  drawClusterLabels(anchor) {
+    const { ctx, k, tx, ty, theme: t } = this;
+    ctx.textAlign = "center";
+    const taken = [];
+    for (const n of [...this.nodes].sort((a, b) => (b.id === anchor) - (a.id === anchor) || b.data.count - a.data.count)) {
+      const sx = n.x * k + tx, sy = n.y * k + ty, sr = n.r * k;
+      let text = n.data.label || n.id;
+      if (text.length > 30) text = text.slice(0, 29) + "…";
+      const inside = sr > 34;
+      const y = inside ? sy - 7 : sy + sr + 11;
+      ctx.font = `600 12px "Instrument Sans", system-ui, sans-serif`;
+      const w = Math.max(ctx.measureText(text).width, 30);
+      if (n.id !== anchor && taken.some((r) => Math.abs(sx - r[0]) < (w + r[2]) / 2 && Math.abs(y - r[1]) < 26)) continue;
+      taken.push([sx, y, w]);
+      if (!inside) { ctx.fillStyle = t.labelBg; ctx.globalAlpha = 0.85; ctx.fillRect(sx - w / 2 - 3, y - 8, w + 6, 30); ctx.globalAlpha = 1; }
+      ctx.fillStyle = n.id === anchor ? t.ink : t.label;
+      ctx.fillText(text, sx, y);
+      ctx.font = `500 11px "Instrument Sans", system-ui, sans-serif`;
+      ctx.fillStyle = t.steel;
+      ctx.fillText(`${n.data.count.toLocaleString()} ${n.data.count === 1 ? "memory" : "memories"}`, sx, y + 14);
+    }
+    ctx.textAlign = "start";
   }
 
   // ---- pointer --------------------------------------------------------
@@ -315,11 +413,11 @@ export class GraphView {
       if (p.connecting) {
         const over = this.hit(sx, sy);
         this.hover = over && over.id !== p.connecting ? over.id : null;
-      } else if (p.node && p.moved) {
+      } else if (p.node && p.moved && this.byId.get(p.node).data.kind !== "cluster") {
         const n = this.byId.get(p.node);
         p.dragging = n; n.x = wx; n.y = wy; n.vx = n.vy = 0;
         this.alpha = Math.max(this.alpha, 0.12);
-      } else if (!p.node) {
+      } else if (p.moved) { // empty canvas, or a bubble: bubbles stay where they were packed
         this.tx += sx - p.sx; this.ty += sy - p.sy; this.userMoved = true;
         c.style.cursor = "grabbing";
       }

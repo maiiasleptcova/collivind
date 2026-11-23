@@ -26,8 +26,9 @@ research page for their numbers.
 
 **LongMemEval-S, session-level Recall@5, raw mode (no LLM): 98.0%** on all
 500 questions with `BAAI/bge-small-en-v1.5` (collivind's default embedding
-model), standard uncleaned split, nothing excluded (this dataset variant
-contains no abstention questions). Measured 2026-07-07; per-question outcomes
+model), standard uncleaned split, nothing excluded. That includes the 30
+abstention (`_abs`) questions, which LongMemEval's own retrieval eval skips;
+without them the figure is 98.3% (462/470). Measured 2026-07-07; per-question outcomes
 in [`results_longmemeval_r5_bge.jsonl`](results_longmemeval_r5_bge.jsonl).
 
 | Question type | bge-small (default) | all-MiniLM-L6-v2 | Questions |
@@ -67,6 +68,147 @@ uv run python benchmarks/longmemeval_bench.py benchmarks/data/longmemeval_s.json
 Runtime is roughly 8 minutes on an Apple-silicon laptop (local embeddings,
 no network). Per-question outcomes land in
 `benchmarks/results_longmemeval_r5.jsonl`.
+
+## LoCoMo turn-level retrieval through the full engine
+
+**Task**: [LoCoMo](https://github.com/snap-research/locomo) (`locomo10.json`,
+10 conversations, 5,882 turns, 1,986 questions). Unlike the LongMemEval
+harness above, which calls the vector store directly, this one goes through the
+product path. Every turn is stored with `MemoryManager.add_memory`, which runs
+dedup and supersession, enrichment and contradiction detection. Every question
+is asked through `MemoryManager.search`, which applies the similarity
+threshold, graph expansion and temporal decay. Each run uses a fresh
+embedded-mode store in a temp dir, with one project per conversation and the
+embed daemon off. The memory text is
+`[<session date>] <speaker>: <turn text> [shares a photo: <caption>]`.
+
+**Metrics**: LoCoMo ships gold `evidence` turn ids (`D<session>:<turn>`).
+**hit@k** asks whether any evidence turn is among the top-k memories.
+**recall@k** is the fraction of the question's evidence turns that are among
+the top-k memories. These are retrieval-only metrics: no LLM is involved and no
+API key is needed.
+
+**Categories**: LoCoMo stores them as integers. They map as 1 multi-hop,
+2 temporal, 3 open-domain, 4 single-hop and 5 adversarial. The README does not
+define them; this mapping comes from the eval code, as worked out in
+[locomo#29](https://github.com/snap-research/locomo/issues/29). Category 5
+questions have no gold answer, only `adversarial_answer`, so they are reported
+on their own row and left out of "overall", which matches how Mem0 and Zep
+report.
+
+### Results (full run, bge-small-en-v1.5, base commit `eaeacbb`, 2026-11-23)
+
+| Category | Questions | hit@5 | recall@5 | hit@10 | recall@10 |
+|---|---|---|---|---|---|
+| single-hop | 841 | 61.1% | 59.8% | 71.1% | 69.7% |
+| multi-hop | 282 | 59.6% | 32.0% | 71.3% | 43.1% |
+| temporal | 321 | 62.3% | 59.5% | 72.3% | 69.6% |
+| open-domain | 92 | 40.2% | 28.1% | 48.9% | 38.2% |
+| **overall (1–4)** | **1,536** | **59.8%** | **52.7%** | **70.1%** | **62.9%** |
+| adversarial (5) | 446 | 37.2% | 36.5% | 51.8% | 51.1% |
+
+- The run took 229 s on an Apple-silicon laptop: 210 s of ingest, with local
+  embeddings and no network. Per-question rows are in
+  [`results_locomo.jsonl`](results_locomo.jsonl) and the summary is in
+  [`results_locomo_summary.json`](results_locomo_summary.json). The rows hold
+  ids and scores only: no dataset text, which is CC BY-NC.
+- Of the 1,986 questions, 4 have no evidence ids and are skipped, so 1,982 are
+  scored. Two more cite a turn id that does not exist; they are scored on the
+  ids that do resolve. Evidence ids are normalised before matching: one entry
+  lists several ids, and one is zero-padded (`D30:05`).
+- Dedup is part of what is measured. The 5,882 turns became 5,539 live
+  memories. The other 343 were rejected as exact duplicates or superseded a
+  near-duplicate. The harness follows each memory's `superseded_by` chain to
+  the live memory and checks that every one of the 5,882 turn ids is still
+  reachable from a live memory, so no evidence turn is lost to dedup.
+- Nothing benchmark-specific is stored. The harness keeps the
+  memory→turn map on its own side, so the embedded text is exactly what that
+  turn would produce for a user.
+- Every question returned the full 10 results, so the similarity threshold
+  never cut a result list short.
+- Smoke mode (`--limit 50`, the first 50 questions, all from the first
+  conversation) runs in about 20 s. It scores 48 questions, with hit@5 70.8%
+  and hit@10 77.1%. It is a regression check only, not a benchmark figure.
+
+### Why this is below the LongMemEval number
+
+The two harnesses differ in granularity and in pipeline: per session through
+the raw vector store, against per turn through the full engine. A free check
+separates the two. Map each of the top-k LoCoMo turns to its session, and the
+same run scores **84.6% at k=5 and 92.4% at k=10** (the session of an evidence
+turn is among the sessions of the top-k turns). Most of the gap is therefore
+the stricter turn-level target, not the engine. That figure is still not the
+same metric as LongMemEval's top-5-sessions R@5. The obvious ways to improve
+turn-level hit rate are a hybrid keyword channel, query-time date handling
+for temporal questions, and a session-summary memory stored next to the
+turns. None of them is in this run.
+
+### Caveats against published LoCoMo numbers
+
+Published LoCoMo figures are **QA accuracy**: Mem0's LLM-judge J score of
+66.9 (graph variant 68.4; [paper](https://arxiv.org/abs/2504.19413)), Zep's corrected 75.1
+([blog](https://www.getzep.com/blog/lies-damn-lies-statistics-is-mem0-really-sota-in-agent-memory/)),
+and Letta's filesystem agent at 74.0 ([blog](https://www.letta.com/blog/benchmarking-ai-agent-memory)). Those measure an answering model on top of retrieval, each with its
+own prompts, judge and reader model. **Retrieval hit@k is not comparable to
+them**, and we do not put the numbers side by side. The dataset also has known
+label noise: a [third-party audit](https://dev.to/penfieldlabs/we-audited-locomo-64-of-the-answer-key-is-wrong-and-the-judge-accepts-up-to-63-of-intentionally-33lg)
+found about 6% of the answer keys wrong.
+
+### Optional QA mode (not run)
+
+```bash
+uv pip install anthropic
+ANTHROPIC_API_KEY=... uv run python benchmarks/locomo_bench.py benchmarks/data/locomo10.json --qa [--judge-model claude-haiku-5-5]
+```
+
+For each non-adversarial question, QA mode sends the top-k retrieved turns to
+a Claude model for a short answer. A second call to the same model then grades
+that answer against the gold answer (CORRECT/WRONG), and the result is
+reported as `correct`. QA mode is off by default and has **not been run for
+this document**. With the default `claude-haiku-5-5` ($0.10/$0.50 per M
+tokens), a full run makes about 3,100 calls. At roughly 1.5k input and ≤0.5k
+output tokens per call, that is about **$1–2**. With `claude-opus-5-5` the
+same run would cost about $40–80. Even then, the prompts and the judge differ
+from Mem0's and Zep's, so the earlier caveat still applies.
+
+### Reproducing
+
+```bash
+mkdir -p benchmarks/data
+curl -L https://raw.githubusercontent.com/snap-research/locomo/main/data/locomo10.json \
+  -o benchmarks/data/locomo10.json          # 2.8 MB, CC BY-NC 4.0 (non-commercial)
+uv run --extra embedded python benchmarks/locomo_bench.py benchmarks/data/locomo10.json --limit 50   # smoke, ~20 s
+uv run --extra embedded python benchmarks/locomo_bench.py benchmarks/data/locomo10.json \
+  --summary benchmarks/results_locomo_summary.json                                                   # full, ~4 min
+```
+
+`benchmarks/data/` is gitignored. Because of the dataset licences, LoCoMo and
+LongMemEval data are never committed.
+
+## Which public memory benchmarks exist (2026-11 survey)
+
+| Benchmark | License | Size | Measures | Gold ids for retrieval | Official scoring |
+|---|---|---|---|---|---|
+| [LoCoMo](https://github.com/snap-research/locomo) | CC BY-NC 4.0 | 10 convs, ~600 turns each, 1,986 Qs (1,540 non-adversarial) | single-hop, multi-hop, temporal, open-domain, adversarial | yes, turn-level | LLM judge in published work (Mem0 J score) |
+| [LongMemEval](https://github.com/xiaowu0162/LongMemEval) | MIT | 500 Qs; S ≈115k tokens / ~40–50 sessions per Q, M ≈1.5M tokens | extraction, multi-session, temporal, knowledge update, abstention | yes, session-level (and `has_answer` turns) | GPT-4o judge |
+| [MemoryAgentBench](https://github.com/HUST-AI-HYZ/MemoryAgentBench) | MIT | 146 long-context rows, each with many queries (77 MB) | accurate retrieval, test-time learning, long-range understanding, conflict resolution | not documented | mostly EM / substring EM; LLM judge for some splits |
+| [BEAM](https://github.com/mohammadtavakoli78/BEAM) | data CC BY-SA 4.0, code MIT | 100 convs, 2,000 Qs, 128K–10M tokens | 10 abilities, including contradiction resolution, event ordering, knowledge update, abstention | the paper mentions source ids; not confirmed in the release | LLM-judged nugget scoring |
+| [HaluMem](https://github.com/MemTensor/HaluMem) | CC BY-NC-ND 4.0 | 20 users, 160k–1M tokens each, 3,467 Qs | extraction, update and QA hallucination/omission | yes, memory-point level | LLM judge |
+
+**Why LoCoMo and LongMemEval.** Both are short enough to run locally in
+minutes. Both ship gold evidence ids, so they can be scored with no LLM at
+all. Between them they cover the abilities a coding-agent memory needs:
+single-hop and multi-hop fact recall, temporal questions and knowledge
+updates. They are also the two that Mem0, Zep and Letta publish numbers on.
+
+**Why not the others, for now.** MemoryAgentBench feeds book-length contexts
+and scores answers, which tests a long-context reader more than a memory
+store. BEAM's 1M–10M-token conversations would take hours of local embedding,
+and its released files do not clearly include evidence ids. HaluMem's
+no-derivatives licence and its focus on LLM extraction quality make it a later
+step, once collivind's `extract` path is the thing under test. BEAM's
+contradiction-resolution and knowledge-update probes are the natural next
+addition, once the contradiction work in progress has landed.
 
 ## Search latency at 10k memories
 

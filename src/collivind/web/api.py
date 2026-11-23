@@ -25,9 +25,32 @@ def _memory_dict(node) -> Dict[str, Any]:
     return d
 
 
+def _memory_dict_value(m, field: str) -> Any:
+    value = getattr(m, "project_id" if field == "project" else field)
+    return value.value if hasattr(value, "value") else value
+
+
 MAX_ID = 512
 ALL_PROJECTS = "*"
 MAX_QUERY = 2000
+MAX_SEEDS = 200
+SORTS = {
+    "newest": lambda m: (-_ts(m),),
+    "oldest": lambda m: (_ts(m),),
+    "confidence": lambda m: (-(m.confidence or 0.0), -_ts(m)),
+}
+GROUPS = {"", "project", "category"}
+
+
+def _ts(m) -> float:
+    return m.created_at.timestamp() if m.created_at else 0.0
+
+
+def _csv(params: Dict[str, str], key: str, cap: int) -> list:
+    values = [v for v in (params.get(key) or "").split(",") if v]
+    if len(values) > cap:
+        raise ValueError(f"{key} takes at most {cap} values")
+    return values
 
 
 def _id(value: Any, name: str) -> str:
@@ -75,8 +98,17 @@ class MemoryAPI:
             return 404, {"error": f"No memory {memory_id}"}
         return 200, _memory_dict(node)
 
-    def graph(self, project: Optional[str], limit: int) -> Result:
-        return 200, build_graph(self.manager.graph_store, project=project, limit=limit)
+    def graph(
+        self,
+        project: Optional[str],
+        limit: int,
+        types: Optional[set] = None,
+        seeds: Optional[set] = None,
+        depth: int = 1,
+    ) -> Result:
+        return 200, build_graph(
+            self.manager.graph_store, project=project, limit=limit, types=types, seeds=seeds, depth=depth
+        )
 
     def projects(self) -> Result:
         return 200, {"projects": list_projects(self.manager.graph_store)}
@@ -87,8 +119,16 @@ class MemoryAPI:
         except ValueError as e:
             return 400, {"error": str(e)}
 
-    def list_memories(self, project: str = "default", query: str = "", limit: int = 50) -> Result:
-        """Search when given a query, otherwise the timeline.
+    def list_memories(
+        self,
+        project: str = "default",
+        query: str = "",
+        limit: int = 50,
+        offset: int = 0,
+        sort: str = "newest",
+        group: str = "",
+    ) -> Result:
+        """Search when given a query, otherwise a page of current memories.
 
         Searching costs an embedding round-trip; browsing must not, so an
         empty query deliberately takes the cheaper path.
@@ -101,13 +141,22 @@ class MemoryAPI:
                 "memories": [{**_memory_dict(r.memory), "score": r.score} for r in results],
                 "searched": True,
             }
-        if every:
-            # ponytail: full scan of the graph store; a cross-project timeline query if stores grow past ~100k
-            live = [m for m in self.manager.graph_store.iter_memories() if not m.superseded_by and not m.valid_to]
-            live.sort(key=lambda m: m.created_at.isoformat() if m.created_at else "", reverse=True)
-            return 200, {"memories": [_memory_dict(n) for n in live[:limit]], "searched": False}
-        nodes = self.manager.get_timeline(project, limit=limit)
-        return 200, {"memories": [_memory_dict(n) for n in nodes], "searched": False}
+        # ponytail: full scan of the graph store per page; the timeline query
+        # has no offset or sort, and stores of a few thousand scan in ms.
+        # A paged store query if stores grow past ~100k.
+        live = [
+            m
+            for m in self.manager.graph_store.iter_memories()
+            if (every or m.project_id == project) and not m.superseded_by and not m.valid_to
+        ]
+        order = SORTS[sort]
+        if group:
+            live.sort(key=lambda m: (str(_memory_dict_value(m, group)), *order(m)))
+        else:
+            live.sort(key=order)
+        page = live[offset : offset + limit]
+        memories = [_memory_dict(n) for n in page]
+        return 200, {"memories": memories, "searched": False, "total": len(live), "offset": offset}
 
     def get_versions(self, memory_id: str) -> Result:
         chain = self.manager.get_version_chain(memory_id)
@@ -256,7 +305,19 @@ def _dispatch(api: MemoryAPI, method: str, parts: list, params: Dict[str, str], 
         project = params.get("project") or None
         if project is not None:
             validate_project_id(project)
-        return api.graph(project, _int_param(params, "limit", DEFAULT_LIMIT, 1, MAX_LIMIT))
+        types = _csv(params, "types", len(RelType))
+        for t in types:
+            _rel_type(t)
+        seeds = _csv(params, "seeds", MAX_SEEDS)
+        for seed in seeds:
+            _id(seed, "seed")
+        return api.graph(
+            project,
+            _int_param(params, "limit", DEFAULT_LIMIT, 1, MAX_LIMIT),
+            types=set(types) if "types" in params else None,
+            seeds=set(seeds) or None,
+            depth=_int_param(params, "depth", 1, 1, 3),
+        )
 
     if parts == ["projects"] and method == "GET":
         return api.projects()
@@ -278,7 +339,20 @@ def _dispatch(api: MemoryAPI, method: str, parts: list, params: Dict[str, str], 
             project = params.get("project", "default")
             if project != ALL_PROJECTS:
                 validate_project_id(project)
-            return api.list_memories(project, query, _int_param(params, "limit", 50, 1, 500))
+            sort = params.get("sort", "newest")
+            if sort not in SORTS:
+                return 400, {"error": f"sort must be one of {', '.join(SORTS)}"}
+            group = params.get("group", "")
+            if group not in GROUPS:
+                return 400, {"error": "group must be project or category"}
+            return api.list_memories(
+                project,
+                query,
+                _int_param(params, "limit", 50, 1, 500),
+                offset=_int_param(params, "offset", 0, 0, 1_000_000),
+                sort=sort,
+                group=group,
+            )
         if method == "POST":
             return api.create(body)
 

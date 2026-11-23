@@ -28,7 +28,7 @@ def _manager():
 def test_invalid_item_stores_nothing(monkeypatch):
     manager = _manager()
     add = MagicMock()
-    monkeypatch.setattr(manager, "add_memory", add)
+    monkeypatch.setattr(manager, "add_memory_checked", add)
     with pytest.raises(ValueError, match=r"memory\[1\].*nothing in the batch was stored"):
         manager.batch_add_memories([GOOD, {**GOOD, "confidence": 42}])
     add.assert_not_called()
@@ -43,7 +43,7 @@ def test_missing_field_names_the_item(monkeypatch):
 
 def test_storage_failure_mid_batch_reports_what_landed(monkeypatch):
     manager = _manager()
-    calls = iter([MagicMock(id="m1"), CollivindError("neo4j down")])
+    calls = iter([(MagicMock(id="m1"), []), CollivindError("neo4j down")])
 
     def add(*a, **kw):
         r = next(calls)
@@ -51,7 +51,7 @@ def test_storage_failure_mid_batch_reports_what_landed(monkeypatch):
             raise r
         return r
 
-    monkeypatch.setattr(manager, "add_memory", add)
+    monkeypatch.setattr(manager, "add_memory_checked", add)
     with pytest.raises(BatchPartiallyStoredError) as exc:
         manager.batch_add_memories([GOOD, GOOD])
     assert exc.value.stored_ids == ["m1"] and exc.value.failed_index == 1
@@ -59,7 +59,7 @@ def test_storage_failure_mid_batch_reports_what_landed(monkeypatch):
 
 def test_batch_tool_returns_stored_ids_on_partial_failure():
     manager = MagicMock()
-    manager.batch_add_memories.side_effect = BatchPartiallyStoredError(["m1"], 1, RuntimeError("down"))
+    manager.batch_add_checked.side_effect = BatchPartiallyStoredError(["m1"], 1, RuntimeError("down"))
     res = json.loads(CollivindTools(manager).handle_call("collivind_batch_add", {"memories": [GOOD, GOOD]}))
     assert res["partial"] is True and res["stored_memory_ids"] == ["m1"] and res["failed_index"] == 1
 

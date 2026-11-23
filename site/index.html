@@ -94,7 +94,7 @@ Integration tests use a throwaway Neo4j 5.26 container, never the live stack.</d
         </li>
         <li>
           <h3>Graph plus vectors</h3>
-          <p>Memories are typed (fact, decision, pattern, error, architecture, preference, snippet) and linked to entities such as files, services and libraries. Search mixes vector similarity (70%) with graph proximity (30%). A newer version of a memory supersedes the old one and keeps the history; conflicting memories are linked as contradictions.</p>
+          <p>Memories are typed (fact, decision, pattern, error, architecture, preference, snippet) and linked to entities such as files, services and libraries. Search mixes vector similarity (70%) with graph proximity (30%). A newer version of a memory supersedes the old one and keeps the history; when a new memory conflicts with a stored one, the agent checks which is right and retires the other, or asks you.</p>
         </li>
       </ol>
       <dl class="facts">

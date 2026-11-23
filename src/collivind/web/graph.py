@@ -39,37 +39,85 @@ def _memory_node(m: MemoryNode) -> Dict[str, Any]:
     }
 
 
-def build_graph(graph: GraphStore, project: Optional[str] = None, limit: int = DEFAULT_LIMIT) -> Dict[str, Any]:
+def _reach(seeds: Set[str], pairs: List[Tuple[str, str]], depth: int) -> Dict[str, int]:
+    """Hop distance from the nearest seed, for every node within `depth` hops."""
+    adj: Dict[str, Set[str]] = {}
+    for s, t in pairs:
+        adj.setdefault(s, set()).add(t)
+        adj.setdefault(t, set()).add(s)
+    dist = {s: 0 for s in seeds}
+    frontier = list(seeds)
+    for hop in range(1, depth + 1):
+        nxt = []
+        for node in frontier:
+            for other in adj.get(node, ()):
+                if other not in dist:
+                    dist[other] = hop
+                    nxt.append(other)
+        frontier = nxt
+    return dist
+
+
+def build_graph(
+    graph: GraphStore,
+    project: Optional[str] = None,
+    limit: int = DEFAULT_LIMIT,
+    types: Optional[Set[str]] = None,
+    seeds: Optional[Set[str]] = None,
+    depth: int = 1,
+) -> Dict[str, Any]:
+    """The newest `limit` memories, or with `seeds`, the nodes within `depth` hops of them.
+
+    `types` keeps only those relationship types, for drawing and for the walk:
+    a neighbourhood reached through CONTRADICTS would be most of the store.
+    """
     memories = [m for m in graph.iter_memories() if project is None or m.project_id == project]
     memories.sort(key=lambda m: m.created_at.isoformat() if m.created_at else "", reverse=True)
-    kept = memories[:limit]
-    memory_ids = {m.id for m in kept}
-
     entities = {e.id: e for e in graph.iter_entities() if not is_meta_entity(e)}
-    seen: Set[Tuple[str, str, str]] = set()
-    edges: List[Dict[str, Any]] = []
 
-    def add_edge(source: str, rel: str, target: str, derived: bool = False) -> None:
-        key = (source, rel, target)
-        if key in seen or source == target:
-            return
-        seen.add(key)
-        edges.append({"source": source, "target": target, "type": rel, "derived": derived})
+    def allowed(rel: str) -> bool:
+        return types is None or rel in types
 
     raw = [(r.source_id, _enum(r.type), r.target_id) for r in graph.iter_relationships()]
-    # An entity is drawn only when a kept memory reaches it, so a project
-    # filter or the cap does not leave a cloud of orphan entities behind.
-    touching = [(s, t) for s, _, t in raw if s in memory_ids or t in memory_ids]
-    linked_entities = {end for pair in touching for end in pair if end in entities}
-    nodes_ok = memory_ids | linked_entities
-    for s, rel, t in raw:
-        if s in nodes_ok and t in nodes_ok:
-            add_edge(s, rel, t)
+    raw = [e for e in raw if allowed(e[1])]
     # SQLite records supersession only in the memory row; Neo4j also writes a
     # SUPERSEDES edge. Derive it from the row so both modes draw the chain.
-    for m in kept:
-        if m.superseded_by and m.superseded_by in memory_ids:
-            add_edge(m.superseded_by, RelType.SUPERSEDES.value, m.id, derived=True)
+    derived = (
+        [(m.superseded_by, RelType.SUPERSEDES.value, m.id) for m in memories if m.superseded_by]
+        if allowed(RelType.SUPERSEDES.value)
+        else []
+    )
+
+    if seeds:
+        known = {m.id for m in memories} | set(entities)
+        dist = _reach(seeds & known, [(s, t) for s, _, t in raw + derived if s in known and t in known], depth)
+        # nearest first, so the cap drops the far rim, never the seeds
+        reached = sorted(dist, key=lambda i: dist[i])[:limit]
+        reached_set = set(reached)
+        in_reach = [m for m in memories if m.id in dist]
+        kept = [m for m in in_reach if m.id in reached_set]
+        memory_ids = {m.id for m in kept}
+        linked_entities = {i for i in reached_set if i in entities}
+        total, truncated = len(in_reach), len(dist) > len(reached)
+    else:
+        kept = memories[:limit]
+        memory_ids = {m.id for m in kept}
+        # An entity is drawn only when a kept memory reaches it, so a project
+        # filter or the cap does not leave a cloud of orphan entities behind.
+        touching = [(s, t) for s, _, t in raw if s in memory_ids or t in memory_ids]
+        linked_entities = {end for pair in touching for end in pair if end in entities}
+        total, truncated = len(memories), len(memories) > len(kept)
+
+    nodes_ok = memory_ids | linked_entities
+    seen: Set[Tuple[str, str, str]] = set()
+    edges: List[Dict[str, Any]] = []
+    for is_derived, group in ((False, raw), (True, derived)):
+        for s, rel, t in group:
+            key = (s, rel, t)
+            if key in seen or s == t or s not in nodes_ok or t not in nodes_ok:
+                continue
+            seen.add(key)
+            edges.append({"source": s, "target": t, "type": rel, "derived": is_derived})
 
     nodes = [_memory_node(m) for m in kept] + [
         {"id": e.id, "kind": "entity", "label": e.name, "type": _enum(e.type)}
@@ -78,7 +126,7 @@ def build_graph(graph: GraphStore, project: Optional[str] = None, limit: int = D
     return {
         "nodes": nodes,
         "edges": edges,
-        "total_memories": len(memories),
-        "truncated": len(memories) > len(kept),
+        "total_memories": total,
+        "truncated": truncated,
         "limit": limit,
     }
