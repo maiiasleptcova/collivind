@@ -402,7 +402,10 @@ Collivind stores memories as nodes in a knowledge graph with vector embeddings f
 **LongMemEval-S session retrieval, Recall@5: 98.0%** (500/500 questions,
 standard split, raw mode — local embeddings, no LLM, no reranking, no API
 keys). Fully reproducible: methodology, per-question results, and honest
-caveats in [benchmarks/BENCHMARKS.md](benchmarks/BENCHMARKS.md). We publish
+caveats in [benchmarks/BENCHMARKS.md](benchmarks/BENCHMARKS.md).
+**LoCoMo turn-level retrieval through the full engine, hit@10: 70.1%**
+(1,536 non-adversarial questions; a much harder, turn-level task, same doc).
+We publish
 no side-by-side numbers against other memory tools — different projects
 measure different things on different splits.
 
