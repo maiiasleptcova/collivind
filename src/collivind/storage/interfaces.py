@@ -173,6 +173,13 @@ class GraphStore(ABC):
         """Delete every memory, entity and edge (collivind reset)."""
         pass
 
+    def edges_of(self, node_id: str) -> List[RelationshipEdge]:
+        """Every edge touching one node, either direction.
+
+        This default scans all edges; stores override it with one lookup.
+        """
+        return [e for e in self.iter_relationships() if node_id in (e.source_id, e.target_id)]
+
     def delete_relationship(self, source_id: str, target_id: str, rel_type: str) -> int:
         """Delete every edge matching the (source, type, target) triple; return how many.
 

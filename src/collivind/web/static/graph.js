@@ -8,8 +8,11 @@ const MIN_K = 0.04, MAX_K = 8;
 const EDGE_STYLE = {
   ABOUT: "entity", MENTIONS: "entity",
   CONTRADICTS: "contradicts", SUPERSEDES: "supersedes",
+  // how entities fit together: the structural edges, drawn heavier
+  USES: "relation", PART_OF: "relation", IMPLEMENTS: "relation", INTERACTS_WITH: "relation", RELATED_TO: "relation",
 };
 const LABEL_BUDGET = 220;
+const EDGE_LABEL_BUDGET = 24;
 
 const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
@@ -26,7 +29,7 @@ export class GraphView {
     this.adj = new Map();
     this.k = 1; this.tx = 0; this.ty = 0;
     this.alpha = 0;
-    this.hover = null; this.selected = null; this.highlight = null;
+    this.hover = null; this.selected = null; this.highlight = null; this.meanings = {};
     this.userMoved = false;
     this.pointer = null;
     this.reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -214,6 +217,7 @@ export class GraphView {
     const styles = {
       entity: [t.entityEdge, 0.8, []], memory: [t.line, 1.1, []],
       contradicts: [t.danger, 1.3, [4, 3]], supersedes: [t.steel, 1.2, [1.5, 2.5]],
+      relation: [t.ink, 1.5, []],
     };
     this.drawClusterLinks(focus);
     for (const pass of [false, true]) {
@@ -258,6 +262,35 @@ export class GraphView {
       ctx.strokeStyle = t.ink; ctx.lineWidth = 1.5 / k; ctx.setLineDash([5 / k, 4 / k]); ctx.stroke(); ctx.setLineDash([]);
     }
     this.drawLabels(focus);
+    this.drawEdgeLabels();
+  }
+
+  setMeanings(meanings) { this.meanings = meanings || {}; this.dirty = true; }
+
+  // What each edge of the hovered or selected node means, at its midpoint:
+  // "uses", "is part of", plus the note when one was given. Only for that
+  // node, so 13k edges never all speak at once.
+  drawEdgeLabels() {
+    const anchor = this.hover || this.selected;
+    if (!anchor || !this.links.length || this.nodes[0]?.data.kind === "cluster") return;
+    const { ctx, k, tx, ty, dpr, theme: t } = this;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.font = `500 11px "Instrument Sans", system-ui, sans-serif`;
+    ctx.textBaseline = "middle"; ctx.textAlign = "center";
+    const links = this.links.filter((l) => l.source.id === anchor || l.target.id === anchor).slice(0, EDGE_LABEL_BUDGET);
+    for (const l of links) {
+      const m = this.meanings?.[l.type];
+      let text = m ? m.forward : l.type.toLowerCase().replace(/_/g, " ");
+      if (l.data?.note) text += ` · ${l.data.note.length > 40 ? l.data.note.slice(0, 39) + "…" : l.data.note}`;
+      const sx = ((l.source.x + l.target.x) / 2) * k + tx, sy = ((l.source.y + l.target.y) / 2) * k + ty;
+      if (sx < -80 || sx > this.w + 80 || sy < -20 || sy > this.h + 20) continue;
+      const w = ctx.measureText(text).width + 10;
+      ctx.globalAlpha = 0.92; ctx.fillStyle = t.labelBg;
+      ctx.fillRect(sx - w / 2, sy - 8, w, 16);
+      ctx.globalAlpha = 1; ctx.fillStyle = l.style === "relation" ? t.ink : t.label;
+      ctx.fillText(text, sx, sy);
+    }
+    ctx.textAlign = "start";
   }
 
   drawClusterLinks(focus) {

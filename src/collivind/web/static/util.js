@@ -77,3 +77,10 @@ export const projectName = (projectId, meta) => meta?.[projectId]?.display_name 
 // Only http(s) URLs become links; the server already refuses other schemes,
 // this keeps a hand-edited store from turning into a javascript: href.
 export const safeHref = (url) => /^https?:\/\//i.test(url || "") ? url : null;
+
+// "uses" read from the source, "is used by" from the target (models/relations.py).
+export function relPhrase(meanings, type, outgoing = true) {
+  const m = meanings?.[type];
+  if (!m) return type.toLowerCase().replace(/_/g, " ");
+  return outgoing ? m.forward : m.inverse;
+}

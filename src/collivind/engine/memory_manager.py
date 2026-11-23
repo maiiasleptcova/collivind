@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 from collivind.config import CollivindConfig
 from collivind.engine.dedup import Deduplicator
@@ -17,6 +17,14 @@ from collivind.models import (
 )
 from collivind.models.entity import EntityType
 from collivind.models.memory import MemoryCategory, MemorySource, validate_confidence
+from collivind.models.relations import (
+    ENTITY_RELATIONS,
+    NOTE_KEY,
+    EntityRelation,
+    clean_note,
+    parse_relationship,
+    phrase,
+)
 from collivind.storage.interfaces import EmbeddingProvider, GraphStore, VectorStore
 
 logger = logging.getLogger(__name__)
@@ -31,9 +39,9 @@ DEGRADED_NOTE = (
 # Which edge types a person may draw between which kinds of node. SUPERSEDES
 # is written only by versioning, and session edges only by capture.
 LINKABLE = {
-    ("memory", "memory"): ("RELATES_TO", "CONTRADICTS", "CAUSED_BY", "DEPENDS_ON"),
+    ("memory", "memory"): ("RELATES_TO", "CAUSED_BY", "RESOLVES", "DEPENDS_ON", "CONTRADICTS"),
     ("memory", "entity"): ("ABOUT", "MENTIONS"),
-    ("entity", "entity"): ("RELATED_TO", "DEPENDS_ON", "PART_OF", "USES", "IMPLEMENTS"),
+    ("entity", "entity"): ENTITY_RELATIONS,
 }
 
 
@@ -63,7 +71,7 @@ class MemoryManager:
         self,
         memory_create: MemoryCreate,
         entities: Optional[List[EntityCreate]] = None,
-        relationships: Optional[List[RelationshipCreate]] = None,
+        relationships: Optional[Sequence[Union[RelationshipCreate, EntityRelation]]] = None,
     ) -> MemoryNode:
         return self.add_memory_checked(memory_create, entities, relationships)[0]
 
@@ -71,7 +79,7 @@ class MemoryManager:
         self,
         memory_create: MemoryCreate,
         entities: Optional[List[EntityCreate]] = None,
-        relationships: Optional[List[RelationshipCreate]] = None,
+        relationships: Optional[Sequence[Union[RelationshipCreate, EntityRelation]]] = None,
     ) -> Tuple[MemoryNode, List[SearchResult]]:
         """Store a memory and return it with the live memories it may conflict with.
 
@@ -124,11 +132,13 @@ class MemoryManager:
                     )
                 )
 
-        if relationships:
-            for rel_create in relationships:
-                if not rel_create.source_id:
-                    rel_create.source_id = memory_node.id
-                self.graph_store.create_relationship(rel_create)
+        for rel in relationships or []:
+            if isinstance(rel, EntityRelation):
+                self._relate_entities(rel)
+                continue
+            if not rel.source_id:
+                rel.source_id = memory_node.id
+            self.graph_store.create_relationship(rel)
 
         # No CONTRADICTS edge from similarity: on a real store it flagged
         # thousands of compatible pairs (see engine/conflicts.py).
@@ -283,7 +293,46 @@ class MemoryManager:
         # get_entity slugifies its argument, so it must round-trip to this id
         return "entity" if entity is not None and entity.id == node_id else None
 
-    def link(self, source_id: str, target_id: str, rel_type: RelType) -> RelationshipCreate:
+    def _relate_entities(self, rel: EntityRelation) -> None:
+        """Write '<source> <type> <target>' between two entities named by an agent."""
+        ends = []
+        for name in (rel.source, rel.target):
+            entity = self.graph_store.get_entity(name) or self.graph_store.create_entity(
+                EntityCreate(name=name, type=EntityType.CONCEPT)
+            )
+            ends.append(entity.id)
+        if ends[0] == ends[1]:
+            return
+        self.graph_store.create_relationship(
+            RelationshipCreate(
+                source_id=ends[0],
+                target_id=ends[1],
+                type=RelType(rel.type),
+                properties={NOTE_KEY: rel.note} if rel.note else {},
+                source="extraction",
+            )
+        )
+
+    def edges_explained(self, node_id: str) -> List[Dict[str, Any]]:
+        """A node's edges as readable sentences, for agents walking the graph."""
+        out = []
+        for e in self.graph_store.edges_of(node_id):
+            outgoing = e.source_id == node_id
+            other = e.target_id if outgoing else e.source_id
+            rel = e.type.value if hasattr(e.type, "value") else str(e.type)
+            out.append(
+                {
+                    "type": rel,
+                    "direction": "out" if outgoing else "in",
+                    "phrase": phrase(rel, outgoing),
+                    "other_id": other,
+                    "note": (e.properties or {}).get(NOTE_KEY, ""),
+                    "source": e.source,
+                }
+            )
+        return out
+
+    def link(self, source_id: str, target_id: str, rel_type: RelType, note: str = "") -> RelationshipCreate:
         """Create a manual edge after checking both ends exist and the type fits them.
 
         Idempotent: when the triple already exists it is left as it is (an
@@ -300,12 +349,22 @@ class MemoryManager:
         if rel_type.value not in allowed:
             choices = ", ".join(allowed) or "none"
             raise ValueError(f"{rel_type.value} cannot link {source_kind} -> {target_kind}; use one of {choices}")
-        edge = RelationshipCreate(source_id=source_id, target_id=target_id, type=rel_type, source="manual")
+        note = clean_note(note)
+        edge = RelationshipCreate(
+            source_id=source_id,
+            target_id=target_id,
+            type=rel_type,
+            source="manual",
+            properties={NOTE_KEY: note} if note else {},
+        )
         existing = self._graph_write(
             self.graph_store.get_neighbors, source_id, [rel_type.value], "OUT", outcome="nothing was linked"
         )
         if any(n.get("id") == target_id for n in existing):
-            return edge
+            if not note:
+                return edge
+            # a note on an existing edge: rewrite it (SQLite would otherwise stack a duplicate row)
+            self.graph_store.delete_relationship(source_id, target_id, rel_type.value)
         self.graph_store.create_relationship(edge)
         return edge
 
@@ -443,6 +502,8 @@ class MemoryManager:
                 "updated_at": entity.updated_at.isoformat() if entity.updated_at else None,
             },
             "related_memories": [m.to_dict() for m in related],
+            # how this entity fits with others: "uses Neo4j", "is part of collivind"
+            "relations": [r for r in self.edges_explained(entity.id) if r["type"] in ENTITY_RELATIONS],
         }
 
     def get_timeline(self, project_id: str, entity: Optional[str] = None, limit: int = 50) -> List[MemoryNode]:
@@ -505,15 +566,7 @@ class MemoryManager:
             EntityCreate(name=e["name"], type=EntityType(e["type"]), properties=e.get("properties", {}))
             for e in mem_data.get("entities", [])
         ]
-        relationships = [
-            RelationshipCreate(
-                source_id="",
-                target_id=r["target_id"],
-                type=RelType(r["type"]),
-                properties=r.get("properties", {}),
-            )
-            for r in mem_data.get("relationships", [])
-        ]
+        relationships = [parse_relationship(r) for r in mem_data.get("relationships", [])]
         mem_create = MemoryCreate(
             content=mem_data["content"],
             summary=mem_data["summary"],

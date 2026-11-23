@@ -184,7 +184,8 @@ class Neo4jGraphStore(GraphStore):
         {_node_by_id("source", "$source_id")}
         {_node_by_id("target", "$target_id")}
         MERGE (source)-[r:{data.type.value}]->(target)
-        ON CREATE SET r.confidence = $confidence, r.source = $source
+        ON CREATE SET r.confidence = $confidence, r.source = $source, r.properties = $props
+        ON MATCH SET r.properties = CASE WHEN $props = '{{}}' THEN r.properties ELSE $props END
         RETURN r
         """
         with self.driver.session(database=self.config.database) as session:
@@ -194,6 +195,7 @@ class Neo4jGraphStore(GraphStore):
                 target_id=data.target_id,
                 confidence=data.confidence,
                 source=data.source,
+                props=json.dumps(data.properties or {}),
             )
 
         return RelationshipEdge(
@@ -202,6 +204,7 @@ class Neo4jGraphStore(GraphStore):
             type=data.type,
             confidence=data.confidence,
             source=data.source,
+            properties=dict(data.properties or {}),
         )
 
     def delete_relationship(self, source_id: str, target_id: str, rel_type: str) -> int:
@@ -393,24 +396,38 @@ class Neo4jGraphStore(GraphStore):
         with self.driver.session(database=self.config.database) as session:
             rows = [r.data() for r in session.run(query)]
         for row in rows:
-            props = dict(row["props"])
-            rel_type = RelType(row["type"])
-            # edges written by create_relationship/invalidate_memory carry no
-            # id; derive one from the triple, which those writers MERGE on, so
-            # re-runs map to the same target row instead of duplicating it
-            edge_id = props.pop("id", None) or stable_edge_id(row["source_id"], rel_type.value, row["target_id"])
-            created_at = props.pop("created_at", None)
-            extra = self._parse_properties(props.pop("properties", None))
-            yield RelationshipEdge(
-                id=edge_id,
-                source_id=row["source_id"],
-                target_id=row["target_id"],
-                type=rel_type,
-                confidence=props.pop("confidence", 1.0),
-                source=props.pop("source", "manual"),
-                properties={**props, **extra},  # leftovers such as SUPERSEDES.reason
-                created_at=datetime.fromisoformat(created_at) if created_at else None,
-            )
+            yield self._row_to_edge(row)
+
+    def edges_of(self, node_id: str) -> List[RelationshipEdge]:
+        query = f"""
+        {_node_by_id("n", "$id")}
+        MATCH (n)-[r]-(m)
+        WHERE m:Memory OR m:Entity
+        RETURN startNode(r).id AS source_id, endNode(r).id AS target_id, type(r) AS type, properties(r) AS props
+        """
+        with self.driver.session(database=self.config.database) as session:
+            rows = [r.data() for r in session.run(query, id=node_id)]
+        return [self._row_to_edge(row) for row in rows]
+
+    def _row_to_edge(self, row: Dict[str, Any]) -> RelationshipEdge:
+        props = dict(row["props"])
+        rel_type = RelType(row["type"])
+        # edges written by create_relationship/invalidate_memory carry no
+        # id; derive one from the triple, which those writers MERGE on, so
+        # re-runs map to the same target row instead of duplicating it
+        edge_id = props.pop("id", None) or stable_edge_id(row["source_id"], rel_type.value, row["target_id"])
+        created_at = props.pop("created_at", None)
+        extra = self._parse_properties(props.pop("properties", None))
+        return RelationshipEdge(
+            id=edge_id,
+            source_id=row["source_id"],
+            target_id=row["target_id"],
+            type=rel_type,
+            confidence=props.pop("confidence", 1.0),
+            source=props.pop("source", "manual"),
+            properties={**props, **extra},  # leftovers such as SUPERSEDES.reason
+            created_at=datetime.fromisoformat(created_at) if created_at else None,
+        )
 
     def restore_memory(self, node: MemoryNode) -> None:
         with self.driver.session(database=self.config.database) as session:

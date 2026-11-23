@@ -1,6 +1,6 @@
 // The side panel: one memory or entity, read first, editable on demand.
 
-import { $, $$, api, esc, fmtDate, toast, showError, clearError, projectName } from "./util.js";
+import { $, $$, api, esc, fmtDate, relPhrase, toast, showError, clearError, projectName } from "./util.js";
 import { detailsMarkup, editorMarkup, readEditor } from "./memory.js";
 
 const panel = () => $("#panel");
@@ -58,11 +58,13 @@ function connectionsMarkup(id) {
   if (!edges.length) return `<p class="hint">No connections yet. Link this to another memory or entity below, or shift-drag between two nodes on the graph.</p>`;
   return `<ul class="connections">${edges.map((e) => {
     const removable = e.type !== "SUPERSEDES";
-    return `<li>
-      <span class="rel">${e.out ? "" : "← "}${esc(e.type.toLowerCase().replace(/_/g, " "))}${e.out ? " →" : ""}</span>
+    const meaning = ctx.meanings()[e.type];
+    return `<li class="${e.origin === "auto_detection" ? "is-auto" : ""}">
+      <span class="rel" title="${esc(meaning ? meaning.description : e.type)}">${esc(relPhrase(ctx.meanings(), e.type, e.out))}</span>
       <button class="link-like" data-goto="${esc(e.other)}">${esc(labelOf(e.other))}</button>
       ${createdOf(e.other) ? `<time class="when">${esc(fmtDate(createdOf(e.other)))}</time>` : ""}
       ${removable ? `<button class="icon" data-unlink="${esc(JSON.stringify({ source_id: e.source, target_id: e.target, type: e.type }))}" aria-label="Remove ${esc(e.type)} link to ${esc(labelOf(e.other))}" title="Remove link">×</button>` : ""}
+      ${e.note ? `<span class="note">${esc(e.note)}</span>` : ""}
     </li>`;
   }).join("")}</ul>`;
 }
@@ -74,8 +76,11 @@ function linkFormMarkup() {
     </label>
     <div class="suggestions" id="link-suggestions" role="listbox" aria-label="Matching nodes"></div>
     <div class="editor-row">
-      <label>As
+      <label>This
         <select id="link-type"></select>
+      </label>
+      <label class="grow">Why (optional)
+        <input id="link-note" maxlength="300" placeholder="e.g. stores every vector in docker mode">
       </label>
       <div class="form-actions"><button type="submit" class="primary" id="link-submit">Add link</button></div>
     </div>
@@ -178,7 +183,9 @@ function wireLinkForm() {
   const refreshTypes = () => {
     const plan = pendingTarget ? linkPlan(pendingTarget) : null;
     const types = plan ? plan.types : [];
-    select.innerHTML = types.map((t) => `<option value="${esc(t)}">${esc(t.toLowerCase().replace(/_/g, " "))}</option>`).join("");
+    // read from the open node: "Neo4j  is part of  …", or "… is used by" when the edge points here
+    const outgoing = !plan || plan.source === current.id;
+    select.innerHTML = types.map((t) => `<option value="${esc(t)}" title="${esc(ctx.meanings()[t]?.description || "")}">${esc(relPhrase(ctx.meanings(), t, outgoing))}</option>`).join("");
     select.disabled = submit.disabled = !types.length;
     select.closest(".editor-row").hidden = !types.length; // nothing to choose until a target is picked
   };
@@ -187,7 +194,13 @@ function wireLinkForm() {
     pendingTarget = null; refreshTypes();
     const q = input.value.trim().toLowerCase();
     if (q.length < 2) { list.innerHTML = ""; return; }
-    const hits = ctx.graph().nodes.filter((n) => n.id !== current.id && n.label.toLowerCase().includes(q)).slice(0, 7);
+    // every loaded node, not just what the current view draws; names that start
+    // with the text, then entities, come first ("collivind" before a memory about it)
+    const rank = (n) => (n.label.toLowerCase().startsWith(q) ? 0 : 2) + (n.kind === "entity" ? 0 : 1);
+    const hits = [...ctx.graph().byId.values()]
+      .filter((n) => n.id !== current.id && n.kind !== "cluster" && (n.label || "").toLowerCase().includes(q))
+      .sort((a, b) => rank(a) - rank(b) || a.label.length - b.label.length)
+      .slice(0, 7);
     list.innerHTML = hits.map((n) => `<button type="button" role="option" data-pick="${esc(n.id)}">
       <span class="kind">${n.kind === "entity" ? esc(n.type) : esc(n.category)}</span>${esc(n.label)}</button>`).join("")
       || `<p class="hint">Nothing loaded matches. Clear the filters to link across projects.</p>`;
@@ -201,7 +214,7 @@ function wireLinkForm() {
     if (!plan || !select.value) return;
     try {
       clearError();
-      await api("/api/links", { method: "POST", body: { source_id: plan.source, target_id: plan.target, type: select.value } });
+      await api("/api/links", { method: "POST", body: { source_id: plan.source, target_id: plan.target, type: select.value, note: $("#link-note").value.trim() } });
       pendingTarget = null;
       toast("Linked");
       await ctx.reload();
