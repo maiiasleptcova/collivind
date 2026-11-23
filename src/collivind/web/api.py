@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional, Tuple
 from collivind.engine.memory_manager import LINKABLE
 from collivind.engine.projects import list_projects, set_project_meta, validate_project_id
 from collivind.models import MemoryCategory, MemoryCreate, RelType, SearchQuery
+from collivind.models.entity import EntityType
 from collivind.web.graph import DEFAULT_LIMIT, MAX_LIMIT, build_graph
 
 Result = Tuple[int, Dict[str, Any]]
@@ -34,6 +35,7 @@ MAX_ID = 512
 ALL_PROJECTS = "*"
 MAX_QUERY = 2000
 MAX_SEEDS = 200
+MAX_TOPIC_MEMORIES = 200
 SORTS = {
     "newest": lambda m: (-_ts(m),),
     "oldest": lambda m: (_ts(m),),
@@ -262,6 +264,22 @@ class MemoryAPI:
             return 400, {"error": str(e)}
         return 201, {"source": source, "target": target, "type": rel.value}
 
+    def link_topic(self, body: Dict[str, Any]) -> Result:
+        ids = body.get("memory_ids")
+        if not isinstance(ids, list) or not ids or len(ids) > MAX_TOPIC_MEMORIES:
+            return 400, {"error": f"memory_ids must be a list of 1 to {MAX_TOPIC_MEMORIES} ids"}
+        name = body.get("name")
+        if not isinstance(name, str) or not name.strip() or len(name) > 200:
+            return 400, {"error": "name must be 1 to 200 characters"}
+        try:
+            entity_type = EntityType(body.get("type") or "concept")
+            result = self.manager.link_topic(name, entity_type, [_id(i, "memory id") for i in ids])
+        except LookupError as e:
+            return 404, {"error": str(e.args[0])}
+        except ValueError as e:
+            return 400, {"error": str(e)}
+        return 201, result
+
     def unlink(self, body: Dict[str, Any]) -> Result:
         try:
             source, target, rel = self._link_args(body)
@@ -330,6 +348,9 @@ def _dispatch(api: MemoryAPI, method: str, parts: list, params: Dict[str, str], 
             return api.link(body)
         if method == "DELETE":
             return api.unlink(body)
+
+    if parts == ["topics"] and method == "POST":
+        return api.link_topic(body)
 
     if parts == ["memories"]:
         if method == "GET":

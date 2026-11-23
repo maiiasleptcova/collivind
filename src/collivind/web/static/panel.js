@@ -50,14 +50,18 @@ function edgesOf(id) {
     .map((e) => ({ ...e, out: e.source === id, other: e.source === id ? e.target : e.source }));
 }
 
+// Newest first, dated: an entity's connections read as its history.
+const createdOf = (nodeId) => ctx.graph().byId.get(nodeId)?.created_at || "";
+
 function connectionsMarkup(id) {
-  const edges = edgesOf(id);
+  const edges = edgesOf(id).sort((a, b) => createdOf(b.other).localeCompare(createdOf(a.other)));
   if (!edges.length) return `<p class="hint">No connections yet. Link this to another memory or entity below, or shift-drag between two nodes on the graph.</p>`;
   return `<ul class="connections">${edges.map((e) => {
     const removable = e.type !== "SUPERSEDES";
     return `<li>
       <span class="rel">${e.out ? "" : "← "}${esc(e.type.toLowerCase().replace(/_/g, " "))}${e.out ? " →" : ""}</span>
       <button class="link-like" data-goto="${esc(e.other)}">${esc(labelOf(e.other))}</button>
+      ${createdOf(e.other) ? `<time class="when">${esc(fmtDate(createdOf(e.other)))}</time>` : ""}
       ${removable ? `<button class="icon" data-unlink="${esc(JSON.stringify({ source_id: e.source, target_id: e.target, type: e.type }))}" aria-label="Remove ${esc(e.type)} link to ${esc(labelOf(e.other))}" title="Remove link">×</button>` : ""}
     </li>`;
   }).join("")}</ul>`;
