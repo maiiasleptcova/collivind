@@ -275,9 +275,10 @@ class MemoryManager:
     def link(self, source_id: str, target_id: str, rel_type: RelType) -> RelationshipCreate:
         """Create a manual edge after checking both ends exist and the type fits them.
 
-        Idempotent: an existing edge with the same triple is replaced, so a
-        second click does not stack duplicate rows in SQLite. Linking does not
-        re-embed; the next content edit picks up new entity names.
+        Idempotent: when the triple already exists it is left as it is (an
+        extracted edge keeps its confidence and source), so a second click
+        does not stack duplicate rows in SQLite. Linking does not re-embed;
+        the next content edit picks up new entity names.
         """
         if source_id == target_id:
             raise ValueError("a node cannot link to itself")
@@ -289,9 +290,11 @@ class MemoryManager:
             choices = ", ".join(allowed) or "none"
             raise ValueError(f"{rel_type.value} cannot link {source_kind} -> {target_kind}; use one of {choices}")
         edge = RelationshipCreate(source_id=source_id, target_id=target_id, type=rel_type, source="manual")
-        self._graph_write(
-            self.graph_store.delete_relationship, source_id, target_id, rel_type.value, outcome="nothing was linked"
+        existing = self._graph_write(
+            self.graph_store.get_neighbors, source_id, [rel_type.value], "OUT", outcome="nothing was linked"
         )
+        if any(n.get("id") == target_id for n in existing):
+            return edge
         self.graph_store.create_relationship(edge)
         return edge
 

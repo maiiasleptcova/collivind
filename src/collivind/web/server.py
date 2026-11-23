@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Optional, Tuple
 from urllib.parse import parse_qs, unquote, urlparse
 
+from collivind.exceptions import CollivindError
 from collivind.web.api import MemoryAPI, route
 
 logger = logging.getLogger(__name__)
@@ -98,21 +99,36 @@ def _make_handler(api: MemoryAPI):
 
         def _static(self, path: str):
             name = "index.html" if path in ("/", "") else path.lstrip("/")
-            target = (STATIC / name).resolve()
+            try:
+                target = (STATIC / name).resolve()
+            except (ValueError, OSError):  # e.g. a NUL byte from %00
+                return self._json(404, {"error": "not found"})
             # Never serve outside the static dir, whatever the URL claims.
             if not target.is_relative_to(STATIC.resolve()) or not target.is_file():
                 return self._json(404, {"error": "not found"})
             self._send(200, target.read_bytes(), CONTENT_TYPES.get(target.suffix, "application/octet-stream"))
 
+        def _refuse(self, status: int, message: str):
+            # Close instead of keeping the connection alive: the body of a
+            # refused request is never read, and on keep-alive the server
+            # would parse it as the next request. A cross-site no-cors POST
+            # could then carry a forged same-origin write past check_request.
+            self.close_connection = True
+            return self._json(status, {"error": message})
+
         def _handle(self, method: str):
             parsed = urlparse(self.path)
             path = unquote(parsed.path)
+            if self.headers.get("Transfer-Encoding"):
+                return self._refuse(501, "chunked request bodies are not supported; send Content-Length")
             refused = check_request(method, self.headers)
             if refused:
-                return self._json(refused[0], {"error": refused[1]})
+                return self._refuse(*refused)
             if not path.startswith("/api"):
                 if method != "GET":
-                    return self._json(405, {"error": "method not allowed"})
+                    return self._refuse(405, "method not allowed")
+                if (self.headers.get("Content-Length") or "0").strip() != "0":
+                    self.close_connection = True  # an unread body must not become the next request
                 return self._static(path)
 
             body = {}
@@ -121,11 +137,9 @@ def _make_handler(api: MemoryAPI):
             except ValueError:
                 length = -1
             if length < 0:
-                self.close_connection = True
-                return self._json(400, {"error": "bad Content-Length"})
+                return self._refuse(400, "bad Content-Length")
             if length > MAX_BODY:
-                self.close_connection = True
-                return self._json(413, {"error": "request body too large"})
+                return self._refuse(413, "request body too large")
             if length:
                 try:
                     body = json.loads(self.rfile.read(length) or b"{}")
@@ -135,9 +149,12 @@ def _make_handler(api: MemoryAPI):
             params = {k: v[0] for k, v in parse_qs(parsed.query).items()}
             try:
                 status, payload = route(api, method, path, params, body)
-            except Exception as e:  # a UI action must not take the server down
+            except CollivindError as e:  # written for people, e.g. "the graph store is unavailable"
                 logger.exception("request failed")
-                status, payload = 500, {"error": f"{type(e).__name__}: {e}"}
+                status, payload = 503, {"error": str(e)}
+            except Exception:  # a UI action must not take the server down
+                logger.exception("request failed")
+                status, payload = 500, {"error": "internal error; the server log has the details"}
             self._json(status, payload)
 
         def do_GET(self):

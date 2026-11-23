@@ -21,6 +21,7 @@ const state = {
   depth: 1,
   visible: [],
   list: [], editingId: null, creating: false,
+  knownTypes: new Set(),
 };
 
 const colorOf = (projectId) => projectColor(projectId, state.meta);
@@ -54,12 +55,16 @@ initProjects({
 
 async function loadGraph() {
   try {
-    const g = await api("/api/graph");
+    // Scoped server-side, so a store past the cap shows a project's older
+    // memories too, not just its share of the newest few thousand.
+    const project = state.filters.project;
+    const g = await api(project ? `/api/graph?project=${encodeURIComponent(project)}` : "/api/graph");
     state.graph = g;
     state.byId = new Map(g.nodes.map((n) => [n.id, n]));
-    if (!state.filters.entityTypes) {
-      state.filters.entityTypes = new Set(g.nodes.filter((n) => n.kind === "entity").map((n) => n.type));
-    }
+    // Types never seen before arrive switched on; only an untick hides one.
+    const types = g.nodes.filter((n) => n.kind === "entity").map((n) => n.type);
+    state.filters.entityTypes ??= new Set();
+    for (const t of types) if (!state.knownTypes.has(t)) { state.knownTypes.add(t); state.filters.entityTypes.add(t); }
     renderEntityTypes();
     applyFilters();
     if (state.selected && !state.byId.has(state.selected)) select(null);
@@ -132,7 +137,11 @@ function renderNote() {
   const shownMem = state.visible.filter((n) => n.kind === "memory").length;
   const shownEnt = state.visible.length - shownMem;
   const parts = [`Showing ${shownMem} of ${g.total_memories} memories and ${shownEnt} entities.`];
-  if (g.truncated) parts.push(`Only the newest ${g.limit} memories are loaded; pick a project to see the rest.`);
+  if (g.truncated) {
+    parts.push(state.filters.project
+      ? `Only this project's newest ${g.limit} memories are loaded.`
+      : `Only the newest ${g.limit} memories are loaded; pick a project to see the rest.`);
+  }
   if (state.local) parts.push(`Local graph, ${state.depth} hop${state.depth > 1 ? "s" : ""} around the selection.`);
   $("#graph-note").textContent = parts.join(" ");
   const empty = !g.total_memories;
@@ -216,7 +225,7 @@ function setProject(id) {
   state.filters.project = id;
   $("#f-project").value = state.meta[id] ? id : "";
   view.userMoved = false;
-  applyFilters();
+  loadGraph();
 }
 
 // ---- list view --------------------------------------------------------
@@ -340,7 +349,7 @@ function wireControls() {
       entityTypes: new Set(state.graph.nodes.filter((n) => n.kind === "entity").map((n) => n.type)) };
     $("#f-project").value = ""; $("#f-from").value = ""; $("#f-to").value = ""; $("#f-superseded").checked = false; $("#f-entities").checked = true;
     $("#f-entity-types").hidden = false;
-    renderCategories(); renderEntityTypes(); applyFilters();
+    renderCategories(); loadGraph();
   };
 
   let timer;

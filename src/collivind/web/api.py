@@ -275,7 +275,9 @@ def _dispatch(api: MemoryAPI, method: str, parts: list, params: Dict[str, str], 
             query = params.get("q", "")
             if len(query) > MAX_QUERY:
                 return 400, {"error": f"query is longer than {MAX_QUERY} characters"}
-            project = validate_project_id(params.get("project", "default"))
+            project = params.get("project", "default")
+            if project != ALL_PROJECTS:
+                validate_project_id(project)
             return api.list_memories(project, query, _int_param(params, "limit", 50, 1, 500))
         if method == "POST":
             return api.create(body)

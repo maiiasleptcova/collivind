@@ -36,6 +36,8 @@ def is_meta_entity(entity: EntityNode) -> bool:
 def validate_project_id(project_id: Any) -> str:
     if not isinstance(project_id, str) or not project_id.strip():
         raise ValueError("project id must be a non-empty string")
+    if project_id == "*":
+        raise ValueError('"*" means every project and cannot be used as a project id')
     if len(project_id) > MAX_PROJECT_ID:
         raise ValueError(f"project id is longer than {MAX_PROJECT_ID} characters")
     return project_id

@@ -99,6 +99,14 @@ class TestLinks:
         assert (ids["new"], "RELATES_TO", ids["other"]) not in self._edges(api)
         assert call(api, "DELETE", "/api/links", body=body)[0] == 404
 
+    def test_relinking_keeps_an_extracted_edge(self, store):
+        stores, api, ids = store
+        before = [r for r in stores.graph.iter_relationships() if r.source_id == ids["new"] and r.target_id == "kafka"]
+        body = {"source_id": ids["new"], "target_id": "kafka", "type": "ABOUT"}
+        assert call(api, "POST", "/api/links", body=body)[0] == 201
+        after = [r for r in stores.graph.iter_relationships() if r.source_id == ids["new"] and r.target_id == "kafka"]
+        assert [(r.id, r.source) for r in after] == [(r.id, r.source) for r in before] == [(before[0].id, "extraction")]
+
     def test_link_memory_to_entity(self, store):
         _, api, ids = store
         body = {"source_id": ids["other"], "target_id": "kafka", "type": "MENTIONS"}
@@ -174,6 +182,10 @@ class TestProjects:
         assert restored["my-app"]["display_name"] == "My App" and restored["my-app"]["color"] == "#aa3300"
         assert "my_app" not in restored
 
+    def test_star_is_not_a_project_to_write_to(self, store):
+        assert call(store[1], "POST", "/api/memories", body={"content": "x", "project_id": "*"})[0] == 400
+        assert call(store[1], "GET", "/api/memories", {"project": "*"})[0] == 200  # but it reads every project
+
     def test_meta_entity_is_not_drawn(self, store):
         _, api, _ = store
         call(api, "PATCH", "/api/project", {"id": "alpha"}, {"display_name": "A"})
@@ -201,7 +213,7 @@ class TestProjects:
         for repo in ("/Users/me/code/app", "~/code/app", "C:\\code\\app", ""):
             assert call(store[1], "PATCH", "/api/project", {"id": "alpha"}, {"repo": repo})[0] == 200
 
-    @pytest.mark.parametrize("pid", ["", "x" * 201])
+    @pytest.mark.parametrize("pid", ["", "x" * 201, "*"])
     def test_bad_project_id(self, store, pid):
         assert call(store[1], "PATCH", "/api/project", {"id": pid}, {"display_name": "x"})[0] == 400
 
@@ -314,7 +326,7 @@ class TestOverTheWire:
 class TestContainerGuard:
     MOUNTS = """overlay / overlay rw 0 0
 proc /proc proc rw 0 0
-{src} /home/collivind/.collivind {fstype} rw 0 0
+{src} /data/collivind {fstype} rw 0 0
 """
 
     def _refusal(self, tmp_path, fstype, monkeypatch, allow=None):
@@ -326,14 +338,15 @@ proc /proc proc rw 0 0
             monkeypatch.setenv("COLLIVIND_WEB_ALLOW_EMBEDDED", allow)
         mounts = tmp_path / "mounts"
         mounts.write_text(self.MOUNTS.format(src="data", fstype=fstype))
-        return embedded_refusal(Path("/home/collivind/.collivind"), mounts)
+        # /data, not /home: realpath follows macOS's /home automount link
+        return embedded_refusal(Path("/data/collivind"), mounts)
 
     @pytest.mark.parametrize("fstype", ["virtiofs", "fuse.grpcfuse", "fakeowner", "fuse.sshfs", "9p", "nfs4"])
     def test_vm_shared_mounts_are_refused(self, tmp_path, fstype, monkeypatch):
         reason = self._refusal(tmp_path, fstype, monkeypatch)
         assert reason and fstype in reason and "collivind web" in reason
 
-    @pytest.mark.parametrize("fstype", ["ext4", "xfs", "btrfs"])
+    @pytest.mark.parametrize("fstype", ["ext4", "xfs", "btrfs", "fuseblk"])
     def test_same_kernel_mounts_are_allowed(self, tmp_path, fstype, monkeypatch):
         assert self._refusal(tmp_path, fstype, monkeypatch) is None
 
@@ -348,3 +361,72 @@ proc /proc proc rw 0 0
         mounts = "a / overlay rw 0 0\nb /data ext4 rw 0 0\nc /data/x virtiofs rw 0 0\n"
         assert mount_fstype(Path("/data/x/y"), mounts) == "virtiofs"
         assert mount_fstype(Path("/data/xy"), mounts) == "ext4"
+
+
+class TestSmuggling:
+    """A refused request's unread body must not be parsed as a second request
+    on the same keep-alive connection: that let any website forge a
+    same-origin write by wrapping it in a cross-origin no-cors POST."""
+
+    def _raw(self, port, payload: bytes) -> bytes:
+        import socket
+
+        with socket.create_connection(("127.0.0.1", port), timeout=5) as s:
+            s.sendall(payload)
+            chunks = []
+            try:
+                while True:
+                    data = s.recv(65536)
+                    if not data:
+                        break
+                    chunks.append(data)
+            except TimeoutError:
+                pass
+        return b"".join(chunks)
+
+    def _smuggle(self, port, outer_headers: str, victim: str) -> bytes:
+        inner = (
+            f"DELETE /api/memories/{victim} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n"
+            f"Origin: http://127.0.0.1:{port}\r\nContent-Type: application/json\r\nContent-Length: 0\r\n\r\n"
+        ).encode()
+        outer = f"POST /api/memories HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n{outer_headers}".encode()
+        return self._raw(port, outer + f"Content-Length: {len(inner)}\r\n\r\n".encode() + inner)
+
+    @pytest.mark.parametrize(
+        "outer",
+        [
+            "Origin: http://evil.example\r\nContent-Type: text/plain\r\n",  # 403
+            "Origin: http://127.0.0.1:{port}\r\nContent-Type: text/plain\r\n",  # 415
+        ],
+    )
+    def test_refused_body_is_not_a_second_request(self, server, store, outer):
+        _, _, ids = store
+        reply = self._smuggle(server, outer.format(port=server), ids["new"])
+        assert reply.count(b"HTTP/1.1 ") == 1, reply
+        assert _request(server, "GET", f"/api/memories/{ids['new']}")[0].status == 200
+
+    def test_non_api_write_body_is_not_a_second_request(self, server, store):
+        _, _, ids = store
+        port = server
+        inner = (
+            f"DELETE /api/memories/{ids['new']} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n"
+            f"Origin: http://127.0.0.1:{port}\r\nContent-Type: application/json\r\nContent-Length: 0\r\n\r\n"
+        ).encode()
+        head = (
+            f"POST /index.html HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nOrigin: http://127.0.0.1:{port}\r\n"
+            f"Content-Type: application/json\r\nContent-Length: {len(inner)}\r\n\r\n"
+        ).encode()
+        reply = self._raw(port, head + inner)
+        assert reply.count(b"HTTP/1.1 ") == 1, reply
+        assert _request(port, "GET", f"/api/memories/{ids['new']}")[0].status == 200
+
+    def test_chunked_bodies_are_refused(self, server):
+        reply = self._raw(
+            server,
+            f"POST /api/links HTTP/1.1\r\nHost: 127.0.0.1:{server}\r\nOrigin: http://127.0.0.1:{server}\r\n"
+            "Content-Type: application/json\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n".encode(),
+        )
+        assert reply.startswith(b"HTTP/1.1 501") and reply.count(b"HTTP/1.1 ") == 1
+
+    def test_nul_in_path_is_a_404_not_a_dropped_connection(self, server):
+        assert _request(server, "GET", "/%00")[0].status == 404
