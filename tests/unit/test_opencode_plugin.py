@@ -15,6 +15,7 @@ import sys
 
 import pytest
 
+from collivind import capture
 from collivind.cli.commands import hook as hook_mod
 
 NODE = shutil.which("node")
@@ -35,7 +36,10 @@ const $ = (strings, ...values) => {
 };
 const client = { session: {
   prompt: async (req) => prompts.push(req),
-  messages: async ({ path }) => ({ data: history[path.id] ?? [] }),
+  messages: async ({ path }) => {
+    if (history[path.id] === "throw") { delete history[path.id]; throw new Error("api down"); }
+    return { data: history[path.id] ?? [] };
+  },
 } };
 const hooks = await mod.CollivindCapture({ client, $ });
 """
@@ -59,28 +63,42 @@ RECALL_HARNESS = (
     STANDINS
     + r"""
 // The id opencode gives the prompt's own text part, generated just now.
-const ownID = () => "prt_" + (BigInt(Date.now()) * 0x1000n + 1n).toString(16).padStart(12, "0") + "zzzzzzzzzzzzzz";
-const send = async (sessionID, text, synthetic = false) => {
-  const own = { id: ownID(), type: "text", text, synthetic };
-  const output = { message: { id: "msg_1", sessionID, role: "user" }, parts: [own] };
+const ownID = () =>
+  "prt_" + ((BigInt(Date.now()) * 0x1000n + 1n) & 0xffffffffffffn).toString(16).padStart(12, "0") + "z".repeat(14);
+const send = async (sessionID, text, synthetic = false, { id = ownID(), extra = [] } = {}) => {
+  const own = { id, type: "text", text, synthetic };
+  const output = { message: { id: "msg_1", sessionID, role: "user" }, parts: [own, ...extra] };
   const started = Date.now();
   await hooks["chat.message"]({ sessionID }, output);
-  return { ms: Date.now() - started, own: own.id, added: output.parts.slice(1) };
+  const newest = [own, ...extra].map((p) => p.id).sort().pop();
+  return { ms: Date.now() - started, own: newest, added: output.parts.slice(1 + extra.length) };
 };
 const event = (type, properties) => hooks.event({ event: { type, properties } });
 const steps = [];
 const long = "how is the opencode plugin deployed";
 steps.push(await send("s1", long));
 steps.push(await send("s1", "and how does the recall timeout work"));
-steps.push(await send("s1", '<collivind_extraction checkpoint="ck1">save now</collivind_extraction>', true));
+const save = process.env.EXTRACTION;  // the real save prompt, as ask() sends it
+steps.push(await send("s1", save, true));
 steps.push(await send("s1", "ok"));
 await event("session.compacted", { sessionID: "s1" });
-steps.push(await send("s1", '<collivind_extraction checkpoint="ck2">save now</collivind_extraction>', true));
+steps.push(await send("s1", save, false));  // even if opencode drops the synthetic flag
 steps.push(await send("s1", long));
 history.s2 = [{ info: { role: "user" }, parts: [] }];  // opencode restarted mid-session
 steps.push(await send("s2", long));
 await event("session.deleted", { info: { id: "s1" } });
 steps.push(await send("s1", long));
+// A prompt part ahead of our clock, plus an @-attached file (synthetic) that
+// mentions collivind tags: recall still runs, on the typed text only.
+const file = {
+  id: "prt_ffffffffff00zzzzzzzzzzzzzz", type: "text", synthetic: true,
+  text: "file.py: <collivind_recall> " + "x".repeat(5000),
+};
+const ahead = { id: "prt_fffffffff000zzzzzzzzzzzzzz", extra: [file] };
+steps.push(await send("s1", "explain the attached deploy script", false, ahead));
+history.s3 = "throw";  // first-message check fails: no index now, retried next time
+steps.push(await send("s3", long));
+steps.push(await send("s3", long));
 console.log(JSON.stringify({ steps, prompts }));
 """
 )
@@ -123,6 +141,7 @@ def _install(tmp_path, monkeypatch, fake=False):
 
 
 def _run(tmp_path, script, *args, **env):
+    env.setdefault("EXTRACTION", capture.extraction_prompt("ck1", True))
     harness = tmp_path / "harness.mjs"
     harness.write_text(script)
     plugin = hook_mod.get_opencode_plugin_path().as_uri()
@@ -165,7 +184,7 @@ def test_reply_to_a_save_prompt_does_not_count(tmp_path, monkeypatch):
 def test_chat_message_injects_index_and_recall(tmp_path, monkeypatch):
     _install(tmp_path, monkeypatch, fake=True)
     steps = _run(tmp_path, RECALL_HARNESS)["steps"]
-    first, second, own_save, short, own_save2, after_compact, restarted, after_delete = steps
+    first, second, own_save, short, own_save2, after_compact, restarted, after_delete, attached, failed, retried = steps
 
     # First message of a session: index and recall, in one synthetic part.
     assert len(first["added"]) == 1
@@ -189,6 +208,12 @@ def test_chat_message_injects_index_and_recall(tmp_path, monkeypatch):
     assert "<collivind_memory_index>" not in restarted["added"][0]["text"]
     # session.deleted forgets the session.
     assert "<collivind_memory_index>" in after_delete["added"][0]["text"]
+
+    # Synthetic parts (attached files) neither suppress recall nor enter the query.
+    assert "recalled for: explain the attached deploy script\n" in attached["added"][0]["text"] + "\n"
+    # A failed first-message check skips the index once, then retries.
+    assert "<collivind_memory_index>" not in failed["added"][0]["text"]
+    assert "<collivind_memory_index>" in retried["added"][0]["text"]
 
     # Ids look like opencode's and sort after the prompt's own part.
     for step in steps:
@@ -221,5 +246,14 @@ def test_disabled_recall_is_not_installed(tmp_path, monkeypatch):
     (tmp_path / ".config" / "opencode").mkdir(parents=True)
     events = hook_mod.install_hooks(tool="opencode", enable_session_start=False, enable_user_prompt=False)
     assert events == ["Stop", "PreCompact"]
+    health = next(h for h in hook_mod.hook_health() if h["tool"] == "opencode")
+    assert health["events"] == ["Stop", "PreCompact"]
+
+
+def test_plugin_from_before_recall_reports_capture_only(tmp_path, monkeypatch):
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    plugin = hook_mod.get_opencode_plugin_path()
+    plugin.parent.mkdir(parents=True)
+    plugin.write_text('const BIN = "/usr/bin/collivind";\nexport const CollivindCapture = async () => ({});\n')
     health = next(h for h in hook_mod.hook_health() if h["tool"] == "opencode")
     assert health["events"] == ["Stop", "PreCompact"]

@@ -28,19 +28,20 @@ const RECALL_TIMEOUT_MS = Number(process.env.COLLIVIND_RECALL_TIMEOUT_MS) || 500
 const BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 let lastMs = 0;
 let counter = 0;
-const partID =(after = []) => {
+const MASK = 0xffffffffffffn; // opencode keeps the low 6 bytes
+const partID = (after = []) => {
   const ms = Date.now();
   if (ms !== lastMs) [lastMs, counter] = [ms, 0];
   counter++;
-  let n = BigInt(ms) * 0x1000n + BigInt(counter);
+  let n = (BigInt(ms) * 0x1000n + BigInt(counter)) & MASK;
   for (const id of after) {
     if (typeof id !== "string" || !id.startsWith("prt_")) continue;
     const prev = BigInt("0x" + (id.slice(4, 16).match(/^[0-9a-f]{12}$/)?.[0] ?? "0"));
-    if (prev >= n) n = prev + 1n;
+    if (prev >= n) n = prev < MASK ? prev + 1n : MASK;
   }
   let rand = "";
   for (let i = 0; i < 14; i++) rand += BASE62[Math.floor(Math.random() * 62)];
-  return "prt_" + n.toString(16).padStart(12, "0").slice(-12) + rand;
+  return "prt_" + n.toString(16).padStart(12, "0") + rand;
 };
 
 // Run a collivind hook with stdin; resolve its JSON, or null on any failure
@@ -117,10 +118,10 @@ export const CollivindCapture = async ({ client, $ }) => {
     try {
       const res = await before(client.session.messages({ path: { id: sessionID } }), deadline);
       const messages = res?.data ?? res;
-      return Array.isArray(messages) && !messages.some((m) => (m.info ?? m)?.role === "user");
-    } catch {
-      return false;
-    }
+      if (Array.isArray(messages)) return !messages.some((m) => (m.info ?? m)?.role === "user");
+    } catch {}
+    indexed.delete(sessionID); // unknown: skip the index now, check again next message
+    return false;
   };
 
   const hooks = {
@@ -157,12 +158,16 @@ export const CollivindCapture = async ({ client, $ }) => {
         const sessionID = input?.sessionID;
         const parts = output?.parts;
         if (!sessionID || !Array.isArray(parts)) return;
-        const prompt = parts
-          .filter((p) => p?.type === "text" && typeof p.text === "string")
+        const textParts = parts.filter((p) => p?.type === "text" && typeof p.text === "string");
+        // Our own save requests, and messages already carrying collivind context.
+        if (textParts.some((p) => p.text.trimStart().startsWith("<collivind_"))) return;
+        // What the user typed; synthetic parts are opencode's (e.g. @-attached
+        // file contents) or another plugin's, and would only blur the query.
+        const prompt = textParts
+          .filter((p) => !p.synthetic)
           .map((p) => p.text)
           .join("\n");
-        // Our own save requests, and anything already carrying collivind context.
-        if (prompt.includes("<collivind_")) return;
+        if (!prompt.trim()) return;
         const deadline = Date.now() + RECALL_TIMEOUT_MS;
         const jobs = [];
         if (ENABLED.sessionStart && (await wantsIndex(sessionID, deadline))) {
