@@ -34,7 +34,7 @@ def _checkpoint_id(block):
 
 def _save(checkpoint_id, memories=None):
     manager = MagicMock()
-    manager.batch_add_memories.return_value = ["m1"]
+    manager.batch_add_checked.return_value = (["m1"], {})
     tools = CollivindTools(manager, session_id="mcp-1")
     good = [{"content": "c", "summary": "s", "category": "fact"}]
     args = {"memories": good if memories is None else memories, "checkpoint_id": checkpoint_id}
@@ -71,7 +71,7 @@ def test_failed_write_does_not_confirm():
         _stop()
     cid = _checkpoint_id(_stop())
     manager = MagicMock()
-    manager.batch_add_memories.side_effect = RuntimeError("neo4j down")
+    manager.batch_add_checked.side_effect = RuntimeError("neo4j down")
     CollivindTools(manager).handle_call(
         "collivind_batch_add",
         {"memories": [{"content": "c", "summary": "s", "category": "fact"}], "checkpoint_id": cid},
