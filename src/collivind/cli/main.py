@@ -17,6 +17,7 @@ from collivind.cli.commands.memory import (
     update,
 )
 from collivind.cli.commands.migrate import migrate_cmd
+from collivind.cli.commands.projects import projects
 from collivind.cli.commands.reset import reset
 from collivind.cli.commands.search import search
 from collivind.cli.commands.status import status
@@ -64,6 +65,7 @@ cli.add_command(sync)
 cli.add_command(migrate_cmd)
 cli.add_command(commands)
 cli.add_command(embed_daemon)
+cli.add_command(projects)
 
 
 if __name__ == "__main__":

@@ -359,6 +359,8 @@ collivind export -o backup.jsonl  # Lossless backup: every project, ids kept
 collivind import backup.jsonl  # Restore by id; only adds what is missing
 collivind migrate --from embedded --to docker  # Copy everything between modes, ids kept
 collivind sync ./shared-memory  # Two-way team sync via a git-tracked dir
+collivind projects list     # Projects, counts, and which one this directory maps to
+collivind projects rename default my-app --match "my-app|billing"  # Relabel (dry run; --apply writes)
 collivind reset             # Wipe all data (with confirmation)
 collivind docker up|down|logs  # Container management (docker mode), including the web UI
 collivind web               # Local memory explorer on 127.0.0.1:8765
@@ -366,6 +368,10 @@ collivind hook install      # Register Claude Code hooks
 ```
 
 Memory verbs take `--json` for scripting and agent use.
+
+### Projects
+
+Memories are filed under the project of the directory the agent works in, so an agent never has to pass `project_id`. The first of these wins: the `COLLIVIND_PROJECT` environment variable, `project = "name"` in a `.collivind.toml` at or above the directory (up to the repo root), the repo name of the `origin` remote, the main checkout's folder name (worktrees count as their repo), the directory's own name outside git, then `default`. Recall searches the current project first and falls back to `default`, where memories saved before 0.15 sit until you relabel them with `collivind projects rename`. It is a dry run unless you add `--apply`; every version of a memory moves together, ids, links and vectors are kept, and an interrupted run finishes when you run it again.
 
 ### Backup and restore
 

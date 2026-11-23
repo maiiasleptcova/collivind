@@ -521,8 +521,22 @@ def _load_manager():
     return _manager()
 
 
+PROJECT = click.option(
+    "--project", "-p", default=None, help="Project id (default: resolved from the session's working directory)"
+)
+
+
+def _recall_projects(project: Optional[str], payload: dict) -> list:
+    """The project to recall from, then the unlabelled "default" bucket, unless one was named."""
+    from collivind.engine.project_labels import DEFAULT_PROJECT, resolve_project
+
+    if project:
+        return [project]
+    return list(dict.fromkeys([resolve_project(payload.get("cwd")), DEFAULT_PROJECT]))
+
+
 @hook.command(name="session-start")
-@click.option("--project", "-p", default="default")
+@PROJECT
 @click.option("--limit", "-l", default=8, help="Memories in the index")
 @AGENT
 def session_start(project, limit, agent):
@@ -543,7 +557,13 @@ def session_start(project, limit, agent):
         pass  # state is best-effort; recall still runs
 
     try:
-        memories = _load_manager().get_timeline(project, limit=limit)
+        manager = _load_manager()
+        memories = []
+        projects = _recall_projects(project, payload)
+        for project in projects:
+            memories = manager.get_timeline(project, limit=limit)
+            if memories:
+                break
     except Exception as e:
         # Never break session start, but never go silent either: an empty
         # recall looked identical to a dead store for 46 hours in #39.
@@ -561,7 +581,11 @@ def session_start(project, limit, agent):
     ]
     text = (
         "<collivind_memory_index>\n"
-        f"Stored knowledge for project '{project}' (most recent first):\n"
+        + (
+            f"Stored knowledge for project '{project}' (most recent first):\n"
+            if project == projects[0]
+            else f"Project '{projects[0]}' has no memories yet; older unlabelled ones (most recent first):\n"
+        )
         + "\n".join(lines)
         + "\nUse collivind_search or collivind_get_context to recall details.\n"
         "</collivind_memory_index>"
@@ -603,7 +627,7 @@ def _unavailable_warning(error: Exception) -> str:
 
 
 @hook.command(name="user-prompt")
-@click.option("--project", "-p", default="default")
+@PROJECT
 @click.option("--max-tokens", default=800, type=int, help="Recall context budget")
 @AGENT
 def user_prompt(project, max_tokens, agent):
@@ -628,17 +652,23 @@ def user_prompt(project, max_tokens, agent):
 
     try:
         manager = _load_manager()
-        # Nothing stored for this project means nothing to recall: skip the
-        # embedding, which in embedded mode is a cold model load that can blow
-        # the hook timeout on a first run (#16). A timeline read is plain SQL.
-        # If the graph cannot answer, carry on: search degrades to the vector
-        # store alone (#39) and says so.
-        try:
-            if not manager.get_timeline(project, limit=1):
-                return
-        except Exception:
-            pass
-        context = manager.get_context(prompt, project_id=project, limit=5, max_tokens=max_tokens)
+        context = ""
+        for project in _recall_projects(project, payload):
+            # Nothing stored for this project means nothing to recall: skip the
+            # embedding, which in embedded mode is a cold model load that can blow
+            # the hook timeout on a first run (#16). A timeline read is plain SQL.
+            # If the graph cannot answer, carry on: search degrades to the vector
+            # store alone (#39) and says so.
+            try:
+                if not manager.get_timeline(project, limit=1):
+                    continue
+            except Exception:
+                pass
+            context = manager.get_context(prompt, project_id=project, limit=5, max_tokens=max_tokens)
+            if "No relevant context found" not in context:
+                break
+        if not context:
+            return
     except Exception as e:
         # Recall must never break prompt submission — but say it failed.
         _emit_prompt_context(agent, payload, _unavailable_warning(e))

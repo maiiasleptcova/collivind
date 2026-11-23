@@ -10,6 +10,7 @@ import click
 
 from collivind.config import load_config
 from collivind.engine.memory_manager import MemoryManager
+from collivind.engine.project_labels import resolve_project
 from collivind.models.memory import MemoryCategory, MemoryCreate
 from collivind.storage.factory import create_all_backends
 
@@ -43,7 +44,7 @@ def _fail(message: str):
 @click.argument("content")
 @click.option("--summary", "-s", default=None, help="Short summary (defaults to content)")
 @click.option("--category", "-c", type=click.Choice(CATEGORIES), default="fact")
-@click.option("--project", "-p", default="default")
+@click.option("--project", "-p", default=None, help="Project (default: resolved from the current directory)")
 @click.option("--tags", "-t", default="", help="Comma-separated tags")
 @click.option("--confidence", default=1.0, type=float)
 @click.option("--json", "as_json", is_flag=True, help="JSON output")
@@ -56,7 +57,7 @@ def add(content, summary, category, project, tags, confidence, as_json):
                 content=content,
                 summary=summary or content[:120],
                 category=MemoryCategory(category),
-                project_id=project,
+                project_id=project or resolve_project(),
                 user_id=manager.config.user_id,
                 confidence=confidence,
                 tags=[t.strip() for t in tags.split(",") if t.strip()],
@@ -86,12 +87,13 @@ def get(memory_id, as_json):
 
 @click.command()
 @click.argument("query")
-@click.option("--project", "-p", default="default")
+@click.option("--project", "-p", default=None, help="Project (default: resolved from the current directory)")
 @click.option("--limit", "-l", default=10)
 @click.option("--max-tokens", default=None, type=int, help="Approximate token budget")
 def context(query, project, limit, max_tokens):
     """Formatted context block for a query (pipe into prompts/scripts)."""
     try:
+        project = project or resolve_project()
         click.echo(_manager().get_context(query, project_id=project, limit=limit, max_tokens=max_tokens))
     except Exception as e:
         _fail(f"Context failed: {e}")
@@ -153,7 +155,7 @@ def forget(memory_id):
 
 @click.command()
 @click.argument("directory", type=click.Path(file_okay=False))
-@click.option("--project", "-p", default="default")
+@click.option("--project", "-p", default=None, help="Project (default: resolved from the current directory)")
 def sync(directory, project):
     """Two-way sync with a shared directory — commit it to git to share.
 
@@ -162,6 +164,7 @@ def sync(directory, project):
     """
     from pathlib import Path
 
+    project = project or resolve_project()
     path = Path(directory) / f"{project}.jsonl"
     try:
         manager = _manager()
