@@ -346,7 +346,7 @@ function wireControls() {
   $("#f-depth").onchange = (e) => { state.depth = Number(e.target.value) || 1; if (state.local) applyFilters(); };
   $("#f-reset").onclick = () => {
     state.filters = { ...state.filters, project: "", categories: new Set(CATEGORIES), from: "", to: "", hideSuperseded: false, showEntities: true,
-      entityTypes: new Set(state.graph.nodes.filter((n) => n.kind === "entity").map((n) => n.type)) };
+      entityTypes: new Set(state.knownTypes) }; // every type seen, not just the current project's
     $("#f-project").value = ""; $("#f-from").value = ""; $("#f-to").value = ""; $("#f-superseded").checked = false; $("#f-entities").checked = true;
     $("#f-entity-types").hidden = false;
     renderCategories(); loadGraph();
