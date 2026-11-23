@@ -142,11 +142,11 @@ Integration tests use a throwaway Neo4j 5.26 container, never the live stack.</d
 uv tool install https://github.com/maiiasleptcova/collivind/releases/download/v0.12.0/collivind_memory-0.12.0-py3-none-any.whl
 collivind init</pre>
         </div>
-        <p class="muted small">No Docker? Embedded mode keeps everything in SQLite and loads the model in-process. It needs the <code>embedded</code> extra and <code>mode = "embedded"</code> in the config before <code>init</code>. The second line writes a new config, so on a machine that already has <code>~/.collivind/config.toml</code> add the line under <code>[collivind]</code> yourself instead:</p>
+        <p class="muted small">No Docker? Embedded mode keeps everything in SQLite and loads the model in-process. It needs the <code>embedded</code> extra and <code>mode = "embedded"</code> in the config before <code>init</code>. The second line only writes a config if there is none, so on a machine that already has <code>~/.collivind/config.toml</code> add the line under <code>[collivind]</code> yourself instead:</p>
         <div class="code" tabindex="0" role="region" aria-label="Install commands, embedded mode">
           <button class="copy" type="button" data-copy="install-embedded" aria-live="polite" hidden>Copy</button>
 <pre id="install-embedded">uv tool install "collivind-memory[embedded] @ https://github.com/maiiasleptcova/collivind/releases/download/v0.12.0/collivind_memory-0.12.0-py3-none-any.whl"
-mkdir -p ~/.collivind &amp;&amp; printf '[collivind]\nmode = "embedded"\n' &gt; ~/.collivind/config.toml
+mkdir -p ~/.collivind &amp;&amp; [ -e ~/.collivind/config.toml ] || printf '[collivind]\nmode = "embedded"\n' &gt; ~/.collivind/config.toml
 collivind init</pre>
         </div>
         </div>
@@ -216,7 +216,7 @@ collivind init</pre>
         <h2 id="oss-h">Open source, MIT licensed</h2>
       </div>
       <div class="prose">
-        <p>Everything on this page is in the MIT-licensed repository: the graph and vector memory, hooks for every agent, the MCP tools and CLI, the web UI, lossless <code>export</code> and <code>import</code>, <code>migrate</code> between modes, and <code>sync</code> through a git repo for sharing with a team.</p>
+        <p>Everything on this page is in the MIT-licensed repository: the graph and vector memory, hooks for Claude Code and Codex, the opencode capture plugin, the MCP tools and CLI, the web UI, lossless <code>export</code> and <code>import</code>, <code>migrate</code> between modes, and <code>sync</code> through a git repo for sharing with a team.</p>
         <p>The roadmap says single-user memory, export and sync stay free. A team edition with a shared server and permissions is in development; it is not available or for sale.</p>
       </div>
       <div class="row mt">
