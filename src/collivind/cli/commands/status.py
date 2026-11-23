@@ -190,11 +190,13 @@ def _status_hooks():
     The hooks fail silently by design, so without this a broken or missing
     registration looks identical to "nothing worth recalling".
     """
-    from collivind.cli.commands.hook import hook_health
+    from collivind.cli.commands.hook import COPILOT_PREVIEW, copilot_warnings, hook_health
 
     click.echo("\nRecall hooks:")
     for h in hook_health():
-        if not h["events"]:
+        if h["tool"] == "copilot":
+            _status_copilot_hooks(h, COPILOT_PREVIEW, copilot_warnings())
+        elif not h["events"]:
             why = "no collivind hooks registered" if h["config_exists"] else f"{h['path']} not found"
             click.secho(f"✗ {h['tool']}: {why} — run `collivind hook install`", fg="yellow")
         elif h["source"] == "both":
@@ -215,6 +217,26 @@ def _status_hooks():
             )
         else:
             click.secho(f"✓ {h['tool']}: {', '.join(h['events'])}", fg="green")
+
+
+def _status_copilot_hooks(h: dict, preview: str, warnings: list[str]) -> None:
+    if not h["events"]:
+        click.secho(
+            "✗ copilot: no collivind hooks registered — run `collivind hook install --tool copilot`", fg="yellow"
+        )
+    elif h["broken"]:
+        click.secho(
+            f"✗ copilot: {', '.join(h['broken'])} registered but the command no longer resolves"
+            " — re-run `collivind hook install --tool copilot`",
+            fg="red",
+        )
+    else:
+        where = {"workspace": " (workspace .github/hooks only)", "both": " (user and workspace)"}.get(h["source"], "")
+        click.secho(f"✓ copilot: {', '.join(h['events'])}{where}", fg="green")
+    for warning in warnings:
+        click.secho(f"✗ copilot: {warning}", fg="red")
+    if h["events"]:
+        click.echo(f"  note: {preview}")
 
 
 def _status_capture():
@@ -316,19 +338,22 @@ def _status_codex_mcp():
 
 
 def _status_other_agent_mcp():
-    """Report MCP registration for opencode and Copilot.
+    """Report MCP registration for opencode and Copilot (VS Code, CLI).
 
-    Neither has a hook system, so they get tools on demand but no automatic
-    recall — worth being explicit rather than implying parity with Claude
-    Code and Codex (#21).
+    Their hooks are reported under "Recall hooks"; this is only whether the
+    tools are visible, which is registered separately (#21).
     """
     import json
     from pathlib import Path
 
-    checks = (
+    from collivind.cli.commands.hook import copilot_home, copilot_present
+
+    checks: tuple[tuple[str, Path, Path, str], ...] = (
         ("opencode", Path.home() / ".config" / "opencode", Path.home() / ".config/opencode/opencode.json", "mcp"),
         ("copilot", Path.home() / ".vscode", Path.home() / ".vscode/mcp.json", "servers"),
     )
+    if copilot_present():  # read by the Copilot CLI/app and VS Code's Copilot harness
+        checks += (("copilot (~/.copilot)", Path.home(), copilot_home() / "mcp-config.json", "mcpServers"),)
     for label, agent_dir, config_path, container in checks:
         if not agent_dir.exists():
             continue  # agent not installed; stay quiet
@@ -340,6 +365,6 @@ def _status_other_agent_mcp():
                 click.secho(f"✗ {label} MCP: {config_path} is not valid JSON", fg="red")
                 continue
         if registered:
-            click.secho(f"✓ {label} MCP: registered (tools only — no recall hooks)", fg="green")
+            click.secho(f"✓ {label} MCP: registered", fg="green")
         else:
             click.secho(f"✗ {label} MCP: not registered — run `collivind init`", fg="yellow")
