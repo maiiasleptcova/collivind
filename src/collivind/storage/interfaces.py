@@ -173,6 +173,15 @@ class GraphStore(ABC):
         """Delete every memory, entity and edge (collivind reset)."""
         pass
 
+    def delete_relationship(self, source_id: str, target_id: str, rel_type: str) -> int:
+        """Delete every edge matching the (source, type, target) triple; return how many.
+
+        Keyed on the triple, not an edge id: Neo4j edges written by
+        create_relationship carry no id. Not abstract so stores outside this
+        package keep loading; they just cannot unlink until they implement it.
+        """
+        raise NotImplementedError(f"{type(self).__name__} cannot delete relationships")
+
     @abstractmethod
     def get_version_chain(self, memory_id: str) -> List[MemoryNode]:
         """Walk the supersession chain for a memory, returning all versions oldest-first."""
