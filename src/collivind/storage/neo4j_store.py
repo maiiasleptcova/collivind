@@ -50,7 +50,11 @@ class Neo4jGraphStore(GraphStore):
     def __init__(self, config: Neo4jConfig):
         self.config = config
         try:
-            self.driver = GraphDatabase.driver(config.uri, auth=(config.user, config.password))
+            # Server notices (e.g. "relationship type MENTIONS does not exist" on a
+            # store that has no such edge yet) were printed on every CLI call.
+            self.driver = GraphDatabase.driver(
+                config.uri, auth=(config.user, config.password), notifications_min_severity="OFF"
+            )
         except Exception as e:
             raise CollivindError(f"Failed to connect to Neo4j: {e}")
 

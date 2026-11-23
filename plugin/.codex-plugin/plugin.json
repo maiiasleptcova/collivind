@@ -1,6 +1,6 @@
 {
   "name": "collivind",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "description": "Graph-based memory for Codex: recall on every prompt, periodic and post-compaction capture checkpoints, and MCP tools for search and storage.",
   "author": { "name": "Maiia Sleptcova" },
   "repository": "https://github.com/maiiasleptcova/collivind",
