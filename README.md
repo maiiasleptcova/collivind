@@ -170,12 +170,12 @@ data dir first.)
 | Claude Code | yes | yes — SessionStart + UserPromptSubmit | yes — Stop hook | yes — PreCompact marks it, SessionStart (`compact`) asks |
 | Codex | yes | yes — after you trust the hooks | yes — Stop hook, after you trust it | yes — PreCompact marks it, SessionStart (`compact`) asks |
 | opencode | yes | yes — plugin on `chat.message` (index on a session's first message, recall on every prompt) | yes — plugin on `session.idle` | yes — plugin on `session.compacted` |
-| GitHub Copilot | yes | **no** — Copilot has no hook system | **no** | **no** |
+| GitHub Copilot (VS Code agent mode, CLI, app; hooks in preview in VS Code) | yes | yes — sessionStart index + userPromptTransformed | yes — agentStop hook | yes — preCompact marks it, the next agentStop asks |
 
 `collivind init` registers the MCP server for every agent it finds installed,
-plus the hooks (Claude Code, Codex) or the capture plugin (opencode,
-`~/.config/opencode/plugins/collivind-capture.js`). Copilot gets the memory
-tools only, so you search and save explicitly.
+plus the hooks (Claude Code, Codex, GitHub Copilot) or the capture plugin (opencode,
+`~/.config/opencode/plugins/collivind-capture.js`). See *GitHub Copilot* below
+for what its preview hooks can and cannot do.
 
 In opencode, recall runs before the message is sent, so it has a 5 s deadline
 (`COLLIVIND_RECALL_TIMEOUT_MS`) and the message goes without memory context
@@ -234,6 +234,38 @@ Collivind cannot read Codex's trust store, so `collivind status` reports each ho
 as *configured but never ran — trust unknown* until it has actually executed, and
 the last time it ran once it has.
 
+#### GitHub Copilot (preview)
+
+VS Code agent mode, the Copilot CLI and the Copilot app share one hook system,
+which VS Code still marks as **preview**; an organization policy can
+switch it off. When `~/.copilot` or `~/.vscode` exists, `collivind init` (or
+`collivind hook install --tool copilot`) writes `~/.copilot/hooks/collivind.json`
+(`$COPILOT_HOME/hooks/` if set) and registers the MCP server in
+`~/.copilot/mcp-config.json`, which the CLI, the app and VS Code's Copilot harness
+all read — checkpoints ask for `collivind_batch_add`, so the agent needs the tool,
+not just the hooks. Not yet verified in a live Copilot run. The file is collivind's own, so
+re-running rewrites it and leaves your other hook files alone.
+
+- **sessionStart** injects the memory index (or the "memory unavailable" warning).
+- **userPromptTransformed** prepends recalled context to the model-facing prompt.
+  Copilot ignores the output of `userPromptSubmitted` config hooks, so this is the
+  only per-prompt route; it keeps the prompt intact and, being stored in session
+  history, the recalled block stays in the transcript.
+- **agentStop** asks for periodic checkpoints (`decision: "block"`), and never
+  chains a block onto its own continuation (`stop_hook_active`).
+- **preCompact** cannot talk to the model and Copilot fires no sessionStart after
+  compaction, so it marks the checkpoint due and the *next* agentStop asks for it
+  right away instead of waiting for the interval.
+
+`collivind hook install --tool copilot --workspace` writes
+`.github/hooks/collivind.json` at the current git repo's root instead — the only location
+the Copilot cloud agent reads. It calls a plain `collivind` (an absolute path
+means nothing on another machine), so the cloud agent needs collivind installed
+and a reachable store; locally, having both files fires every hook twice and
+`collivind status` says so. VS Code's Copilot harness also runs hooks from the
+repo's `.claude/settings.json` / `.claude/settings.local.json`; collivind entries
+there fire under Copilot as well, and `status` flags them.
+
 `collivind status` reports what is registered where — including Claude Code's MCP server, flagging a dead or duplicated entry — and, in docker mode, each container's state, so a crash-looping container is named rather than showing up only as "connection refused". It exits 1 when anything is broken, so it can run from cron or a script.
 
 ### Manual setup
@@ -269,7 +301,7 @@ collivind init
 - **Stop** — every `save_interval` responses (default 15, per session), asks the agent to checkpoint
 - **PreCompact** — marks a compaction checkpoint due (see *Compaction* above)
 
-Registered for Claude Code (via the plugin, or `~/.claude/settings.json`) and for Codex in `~/.codex/hooks.json` when `~/.codex` exists. If any hook finds the store down it says so in the session instead of recalling nothing.
+Registered for Claude Code (via the plugin, or `~/.claude/settings.json`), for Codex in `~/.codex/hooks.json` when `~/.codex` exists, and for GitHub Copilot in `~/.copilot/hooks/collivind.json` (camelCase events: sessionStart, userPromptTransformed, agentStop, preCompact). If any hook finds the store down it says so in the session instead of recalling nothing.
 
 ### In-session commands
 

@@ -140,6 +140,10 @@ def stop_decision(state: dict, session_id: str, agent: str, threshold: int) -> O
         s.pop("pending")
         pending = None
 
+    if pending and pending.pop("due", False):
+        pending["since"] = 0  # requested now (Copilot compaction); backoff counts from here
+        return pending["id"]
+
     if pending:
         pending["since"] += 1
         retries = pending.get("retries", 0)

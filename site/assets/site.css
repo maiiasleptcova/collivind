@@ -111,7 +111,7 @@ thead th{font-size:.85rem;font-weight:600;color:var(--steel);background:var(--ti
 tbody th{font-weight:600;white-space:nowrap}
 .yes{color:var(--accent);font-weight:600}
 .no{color:var(--steel)}
-td small{display:block;color:var(--steel);font-size:.82rem;margin-top:2px}
+td small,th small{display:block;color:var(--steel);font-size:.82rem;font-weight:400;margin-top:2px}
 
 /* Install */
 .code{position:relative;background:var(--code-bg);color:var(--code-ink);border-radius:var(--radius);padding:52px 22px 20px;font:.88rem/1.7 var(--mono);overflow-x:auto}

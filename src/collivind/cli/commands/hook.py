@@ -2,8 +2,10 @@ import json
 import os
 import shlex
 import shutil
+import subprocess
 import sys
 from pathlib import Path
+from typing import Optional
 
 import click
 
@@ -61,6 +63,113 @@ OPENCODE_EVENTS = {
     "sessionStart": "SessionStart",
     "userPrompt": "UserPromptSubmit",
 }
+
+# GitHub Copilot (VS Code agent mode, Copilot CLI, Copilot app) event names for
+# the agent-neutral ones used in heartbeats and `status`. camelCase keys select
+# Copilot's camelCase payload (`sessionId`) and its top-level output contract.
+COPILOT_EVENTS = {
+    "SessionStart": "sessionStart",
+    "UserPromptSubmit": "userPromptTransformed",
+    "Stop": "agentStop",
+    "PreCompact": "preCompact",
+}
+COPILOT_TIMEOUTS = {"sessionStart": 30, "userPromptTransformed": 30, "agentStop": 10, "preCompact": 10}
+COPILOT_PREVIEW = "Copilot agent hooks are in preview; an organization policy can turn them off."
+
+
+def copilot_home() -> Path:
+    return Path(os.environ.get("COPILOT_HOME") or Path.home() / ".copilot")
+
+
+def get_copilot_hooks_path() -> Path:
+    return copilot_home() / "hooks" / "collivind.json"
+
+
+def copilot_present() -> bool:
+    """Copilot CLI/app (~/.copilot) or VS Code (~/.vscode) is installed."""
+    return copilot_home().exists() or (Path.home() / ".vscode").exists()
+
+
+def repo_root() -> Optional[Path]:
+    """The current git repo's root; None outside one, or for a dotfiles repo
+    at ~ (whose .claude/ is the user-level config, not a repo's)."""
+    try:
+        out = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    root = Path(out.stdout.strip()) if out.returncode == 0 and out.stdout.strip() else None
+    return None if root is None or root.resolve() == Path.home().resolve() else root
+
+
+def get_workspace_hooks_path() -> Optional[Path]:
+    root = repo_root()
+    return root / ".github" / "hooks" / "collivind.json" if root else None
+
+
+def write_copilot_hooks(path: Path, bin_path: str, subcommands: dict) -> None:
+    """Write Copilot's hooks file. collivind owns the whole file, so rewriting
+    it is idempotent and leaves the user's other hook files alone."""
+    quoted_ps = "& '" + bin_path.replace("'", "''") + "'"
+    hooks = {}
+    for event, sub in subcommands.items():
+        name = COPILOT_EVENTS[event]
+        args = f"hook {sub} --agent copilot"
+        hooks[name] = [
+            {
+                "type": "command",
+                "bash": f"{shlex.quote(bin_path)} {args}",
+                "powershell": f"{quoted_ps} {args}",
+                "timeoutSec": COPILOT_TIMEOUTS[name],
+            }
+        ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"version": 1, "hooks": hooks}, indent=2) + "\n")
+
+
+def _copilot_registered(path: Optional[Path]) -> dict:
+    """Collivind commands in a Copilot hooks file, keyed by agent-neutral event."""
+    if path is None:
+        return {}
+    try:
+        doc = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return {}
+    canonical = {v: k for k, v in COPILOT_EVENTS.items()}
+    found = {}
+    for event, entries in ((doc.get("hooks") or {}) if isinstance(doc, dict) else {}).items():
+        for entry in entries if isinstance(entries, list) else []:
+            cmd = (entry.get("bash") or entry.get("command") or "") if isinstance(entry, dict) else ""
+            if "--agent copilot" in cmd:
+                found[canonical.get(event, event)] = cmd
+    return found
+
+
+def _repo_claude_hooks() -> list[str]:
+    """Collivind events in the repo's .claude/settings*.json, which VS Code's
+    Copilot harness also runs — alongside the Copilot hooks, so twice."""
+    root = repo_root()
+    if root is None:
+        return []
+    return sorted(
+        {e for f in ("settings.json", "settings.local.json") for e in _registered_hooks(root / ".claude" / f)}
+    )
+
+
+def copilot_warnings() -> list[str]:
+    warnings = []
+    user, workspace = get_copilot_hooks_path(), get_workspace_hooks_path()
+    if _copilot_registered(user) and _copilot_registered(workspace):
+        warnings.append(
+            f"collivind hooks are in both {user} and {workspace}; locally every Copilot hook fires twice. "
+            "Keep the workspace file only for the cloud agent, or remove one."
+        )
+    repo = _repo_claude_hooks()
+    if repo:
+        warnings.append(
+            f"The repo's .claude/settings*.json registers collivind {', '.join(repo)} and VS Code's Copilot harness runs "
+            "those too, so these events fire twice under Copilot. Move them to ~/.claude/settings.json."
+        )
+    return warnings
 
 
 def install_opencode_plugin(enabled: dict) -> list[str]:
@@ -197,6 +306,27 @@ def hook_health() -> list[dict]:
                 "broken": sorted(e for e, cmd in registered.items() if not _command_resolves(cmd)),
             }
         )
+    user_path, workspace_path = get_copilot_hooks_path(), get_workspace_hooks_path()
+    user, workspace = _copilot_registered(user_path), _copilot_registered(workspace_path)
+    if copilot_present() or workspace:
+        report.append(
+            {
+                "tool": "copilot",
+                "path": str(user_path),
+                "config_exists": user_path.exists(),
+                "source": "both"
+                if user and workspace
+                else "settings"
+                if user
+                else "workspace"
+                if workspace
+                else "none",
+                "events": sorted(set(user) | set(workspace)),
+                "broken": sorted(
+                    {e for found in (user, workspace) for e, cmd in found.items() if not _command_resolves(cmd)}
+                ),
+            }
+        )
     plugin = get_opencode_plugin_path()
     if plugin.parent.parent.exists():
         report.append(
@@ -241,6 +371,7 @@ def install_hooks(
     enable_session_start: bool = True,
     tool: str = "claude",
     enable_user_prompt: bool = True,
+    workspace: bool = False,
 ) -> list[str]:
     """Register collivind hooks for a tool. Returns the events registered.
 
@@ -262,17 +393,27 @@ def install_hooks(
             "userPrompt": enable_user_prompt,
         }
         return install_opencode_plugin(enabled) if any(enabled.values()) else []
+    subcommands = {}
+    if enable_stop:
+        subcommands["Stop"] = "stop"
+    if enable_precompact:
+        subcommands["PreCompact"] = "precompact"
+    if enable_session_start:
+        subcommands["SessionStart"] = "session-start"
+    if enable_user_prompt:
+        subcommands["UserPromptSubmit"] = "user-prompt"
+    if tool == "copilot":
+        # A workspace file is committed and read by the cloud agent, where this
+        # machine's absolute path means nothing; there it is plain `collivind`.
+        if subcommands:
+            path = get_workspace_hooks_path() if workspace else get_copilot_hooks_path()
+            if path is None:
+                raise click.UsageError("--workspace must run inside a git repository")
+            write_copilot_hooks(path, "collivind" if workspace else collivind_bin(), subcommands)
+        return [COPILOT_EVENTS[e] for e in subcommands]
     bin_path = collivind_bin()
     agent = "" if tool == "claude" else f" --agent {tool}"
-    wanted = {}
-    if enable_stop:
-        wanted["Stop"] = f"{bin_path} hook stop{agent}"
-    if enable_precompact:
-        wanted["PreCompact"] = f"{bin_path} hook precompact{agent}"
-    if enable_session_start:
-        wanted["SessionStart"] = f"{bin_path} hook session-start{agent}"
-    if enable_user_prompt:
-        wanted["UserPromptSubmit"] = f"{bin_path} hook user-prompt{agent}"
+    wanted = {e: f"{bin_path} hook {sub}{agent}" for e, sub in subcommands.items()}
     settings_path = get_codex_hooks_path() if tool == "codex" else get_claude_settings_path()
 
     if wanted:
@@ -298,6 +439,8 @@ def install_all_hooks(cfg) -> dict:
         results["codex"] = _install("codex")
     if get_opencode_plugin_path().parent.parent.exists():
         results["opencode"] = _install("opencode")
+    if copilot_present():
+        results["copilot"] = _install("copilot")
     return results
 
 
@@ -331,7 +474,10 @@ def _hooks_config():
 
 
 AGENT = click.option(
-    "--agent", default="claude", type=click.Choice(["claude", "codex", "opencode"]), help="Which agent runs this hook"
+    "--agent",
+    default="claude",
+    type=click.Choice(["claude", "codex", "opencode", "copilot"]),
+    help="Which agent runs this hook",
 )
 
 
@@ -349,7 +495,7 @@ def stop(threshold, session_id, continuation, agent):
     # >= 2: a backstop should an agent ever report its own continuation
     # neither as stop_hook_active nor as --continuation.
     threshold = max(2, threshold or cfg.save_interval)
-    sid = session_id or payload.get("session_id") or "default"
+    sid = session_id or _session_id(payload)
     with capture.locked_state() as state:
         capture.heartbeat(state, agent, "Stop")
         if continuation or payload.get("stop_hook_active"):
@@ -361,6 +507,12 @@ def stop(threshold, session_id, continuation, agent):
         click.echo(
             json.dumps({"decision": "block", "reason": capture.extraction_prompt(checkpoint, cfg.quiet_capture)})
         )
+
+
+def _session_id(payload: dict) -> str:
+    # Claude Code, Codex and Copilot's PascalCase events send session_id;
+    # Copilot's camelCase events send sessionId.
+    return payload.get("session_id") or payload.get("sessionId") or "default"
 
 
 def _load_manager():
@@ -386,7 +538,7 @@ def session_start(project, limit, agent):
         with capture.locked_state() as state:
             capture.heartbeat(state, agent, "SessionStart")
             if payload.get("source") == "compact":
-                save_request = _compaction_request(state, payload.get("session_id") or "default", agent)
+                save_request = _compaction_request(state, _session_id(payload), agent)
     except OSError:
         pass  # state is best-effort; recall still runs
 
@@ -396,11 +548,11 @@ def session_start(project, limit, agent):
         # Never break session start, but never go silent either: an empty
         # recall looked identical to a dead store for 46 hours in #39.
         warning = _unavailable_warning(e)
-        _emit_context("SessionStart", f"{warning}\n{save_request}" if save_request else warning)
+        _emit_context("SessionStart", f"{warning}\n{save_request}" if save_request else warning, agent)
         return
     if not memories:
         if save_request:
-            _emit_context("SessionStart", save_request)
+            _emit_context("SessionStart", save_request, agent)
         return
 
     lines = [
@@ -414,7 +566,7 @@ def session_start(project, limit, agent):
         + "\nUse collivind_search or collivind_get_context to recall details.\n"
         "</collivind_memory_index>"
     )
-    _emit_context("SessionStart", f"{text}\n{save_request}" if save_request else text)
+    _emit_context("SessionStart", f"{text}\n{save_request}" if save_request else text, agent)
 
 
 def _compaction_request(state: dict, session_id: str, agent: str) -> str:
@@ -433,7 +585,10 @@ def compacted(session_id, agent):
         click.echo(json.dumps({"prompt": _compaction_request(state, session_id, agent)}))
 
 
-def _emit_context(event: str, text: str) -> None:
+def _emit_context(event: str, text: str, agent: str = "claude") -> None:
+    if agent == "copilot":  # Copilot reads only a top-level additionalContext
+        click.echo(json.dumps({"additionalContext": text}))
+        return
     click.echo(json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": text}}))
 
 
@@ -486,22 +641,41 @@ def user_prompt(project, max_tokens, agent):
         context = manager.get_context(prompt, project_id=project, limit=5, max_tokens=max_tokens)
     except Exception as e:
         # Recall must never break prompt submission — but say it failed.
-        _emit_context("UserPromptSubmit", _unavailable_warning(e))
+        _emit_prompt_context(agent, payload, _unavailable_warning(e))
         return
     if "No relevant context found" in context and "[DEGRADED]" not in context:
         return
-    _emit_context("UserPromptSubmit", f"<collivind_recall>\n{context}\n</collivind_recall>")
+    _emit_prompt_context(agent, payload, f"<collivind_recall>\n{context}\n</collivind_recall>")
+
+
+def _emit_prompt_context(agent: str, payload: dict, text: str) -> None:
+    """Copilot ignores config-hook output on userPromptSubmitted; its
+    userPromptTransformed hook may replace the model-facing content instead.
+    Prepend to that content and never emit a replacement without it."""
+    if agent != "copilot":
+        _emit_context("UserPromptSubmit", text)
+        return
+    base = payload.get("transformedPrompt")
+    if isinstance(base, str) and base.strip():
+        click.echo(json.dumps({"modifiedTransformedPrompt": f"{text}\n\n{base}"}))
 
 
 @hook.command()
 @click.option(
     "--tool",
-    type=click.Choice(["claude", "codex", "opencode", "auto"]),
+    type=click.Choice(["claude", "codex", "opencode", "copilot", "auto"]),
     default="auto",
-    help="Which agent to register hooks for (auto = Claude Code, plus Codex and opencode if present)",
+    help="Which agent to register hooks for (auto = Claude Code, plus Codex, opencode and Copilot if present)",
 )
-def install(tool):
-    """Register collivind hooks (Claude Code settings.json / Codex hooks.json)."""
+@click.option(
+    "--workspace",
+    is_flag=True,
+    help="Copilot only: write .github/hooks/collivind.json in this repo (what the cloud agent reads)",
+)
+def install(tool, workspace):
+    """Register collivind hooks (Claude Code settings.json / Codex hooks.json / Copilot hooks/collivind.json)."""
+    if workspace and tool != "copilot":
+        raise click.UsageError("--workspace applies to --tool copilot only")
     from collivind.config import load_config
 
     cfg = load_config().hooks
@@ -516,6 +690,7 @@ def install(tool):
                 cfg.enable_session_start,
                 tool=tool,
                 enable_user_prompt=cfg.enable_user_prompt,
+                workspace=workspace,
             )
         }
 
@@ -527,6 +702,10 @@ def install(tool):
         click.secho(f"{t}: registered {', '.join(events)}", fg="green")
     if "codex" in registered:
         click.secho(CODEX_REVIEW_NEXT_STEP, fg="yellow")
+    if "copilot" in registered:
+        click.secho(COPILOT_PREVIEW, fg="yellow")
+        for warning in copilot_warnings():
+            click.secho(f"Warning: {warning}", fg="red")
 
 
 @hook.command()
@@ -543,7 +722,11 @@ def precompact(session_id, agent):
     payload = _hook_input()
     with capture.locked_state() as state:
         capture.heartbeat(state, agent, "PreCompact")
-        s = capture.session(state, session_id or payload.get("session_id") or "default", agent)
+        s = capture.session(state, session_id or _session_id(payload), agent)
         if not s.get("pending"):
             capture.new_checkpoint(s, f"compaction:{payload.get('trigger') or 'unknown'}")
+        if agent == "copilot":
+            # Copilot never fires sessionStart after compaction, so the next
+            # agentStop must ask for this save at once, not after the interval.
+            s["pending"]["due"] = True
         s["count"] = 0
