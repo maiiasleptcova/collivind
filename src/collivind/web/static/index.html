@@ -33,11 +33,19 @@
 <main id="main">
   <section id="view-graph" class="view graph-view" aria-label="Graph">
     <aside class="rail" aria-label="Filters and matches">
+      <div class="views mode" role="group" aria-label="Graph mode">
+        <button data-mode="overview" aria-pressed="true" title="Clusters you can open (v)">Overview</button>
+        <button data-mode="all" aria-pressed="false" title="Every loaded node (e)">Everything</button>
+      </div>
       <div class="rail-group">
         <label for="f-project" class="rail-label">Project</label>
         <select id="f-project"><option value="">All projects</option></select>
       </div>
       <div id="results" class="results" aria-live="polite"></div>
+      <fieldset class="rail-group">
+        <legend class="rail-label">Links</legend>
+        <div id="f-edge-types" class="checks"></div>
+      </fieldset>
       <fieldset class="rail-group">
         <legend class="rail-label">Categories</legend>
         <div id="f-categories" class="checks"></div>
@@ -49,6 +57,8 @@
       </fieldset>
       <fieldset class="rail-group">
         <legend class="rail-label">Saved between</legend>
+        <label class="since" for="f-since"><span>Recent</span><output id="f-since-label">any time</output></label>
+        <input type="range" id="f-since" min="0" max="120" value="120" step="1" aria-describedby="f-since-label">
         <div class="dates">
           <label class="sr-only" for="f-from">From</label><input type="date" id="f-from">
           <span aria-hidden="true">and</span>
@@ -67,12 +77,14 @@
         <span><i class="lg-mem"></i>memory, in its project's colour</span>
         <span><i class="lg-old"></i>superseded version</span>
         <span><i class="lg-ent"></i>entity</span>
+        <span><i class="lg-cluster"></i>cluster; click to open</span>
         <span><i class="lg-contra"></i>contradicts</span>
         <span><i class="lg-ver"></i>supersedes</span>
       </div>
     </aside>
 
     <div class="stage" id="stage">
+      <nav class="crumbs" id="crumbs" aria-label="Where you are in the overview"></nav>
       <canvas id="canvas" tabindex="0" aria-label="Memory graph. Arrow keys pan, plus and minus zoom, 0 fits. Every node is also reachable from the filter box and the List view."></canvas>
       <div class="graph-empty" id="graph-empty" hidden>
         <h2>The graph is empty</h2>
@@ -97,6 +109,15 @@
     <div class="list-head">
       <h1 id="list-scope">Memories</h1>
       <button id="compact" class="quiet" aria-pressed="false" title="Denser list: hides bodies and details">Compact</button>
+    </div>
+    <div class="list-tools">
+      <label>Sort <select id="l-sort"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="confidence">Most confident</option></select></label>
+      <label>Group <select id="l-group"><option value="">None</option><option value="project">By project</option><option value="category">By category</option></select></label>
+      <span class="pager" id="pager">
+        <button class="quiet" id="l-prev" aria-label="Previous page">‹ Prev</button>
+        <span id="l-range" aria-live="polite"></span>
+        <button class="quiet" id="l-next" aria-label="Next page">Next ›</button>
+      </span>
     </div>
     <div id="list" aria-busy="true" aria-live="polite">
       <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>

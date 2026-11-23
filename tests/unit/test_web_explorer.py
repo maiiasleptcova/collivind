@@ -84,6 +84,95 @@ class TestGraph:
         assert call(api, "GET", "/api/memories/nope")[0] == 404
 
 
+class TestNeighbourhood:
+    """Search focus asks for the neighbourhood of its results, server-side,
+    so a hit outside the newest-N graph cap still gets drawn."""
+
+    def _ids(self, api, **params):
+        status, g = call(api, "GET", "/api/graph", params)
+        assert status == 200
+        return {n["id"] for n in g["nodes"]}, g
+
+    def test_one_hop_over_every_type(self, store):
+        _, api, ids = store
+        nodes, _ = self._ids(api, seeds=ids["new"])
+        assert nodes == {ids["new"], "kafka", ids["old"]}  # SUPERSEDES reaches the old version
+
+    def test_types_limit_the_walk_and_the_edges(self, store):
+        _, api, ids = store
+        nodes, g = self._ids(api, seeds=ids["new"], types="ABOUT")
+        assert nodes == {ids["new"], "kafka"}
+        assert {e["type"] for e in g["edges"]} == {"ABOUT"}
+
+    def test_depth_two_walks_through_the_old_version(self, store):
+        _, api, ids = store
+        nodes, g = self._ids(api, seeds=ids["new"], depth="2")
+        assert "postgres" in nodes and ids["other"] not in nodes
+        assert g["total_memories"] == 2
+
+    def test_cap_keeps_the_seed(self, store):
+        _, api, ids = store
+        nodes, g = self._ids(api, seeds=ids["new"], limit="1")
+        assert nodes == {ids["new"]} and g["truncated"] is True
+
+    def test_unknown_seed_is_an_empty_graph(self, store):
+        nodes, g = self._ids(store[1], seeds="nope")
+        assert nodes == set() and g["edges"] == []
+
+    def test_types_without_seeds_filter_the_full_graph(self, store):
+        _, g = self._ids(store[1], types="ABOUT")
+        assert {e["type"] for e in g["edges"]} == {"ABOUT"}
+
+    def test_empty_types_means_no_links(self, store):
+        _, g = self._ids(store[1], types="")
+        assert g["edges"] == []
+
+    @pytest.mark.parametrize(
+        "params",
+        [{"types": "NOPE"}, {"depth": "0"}, {"depth": "4"}, {"depth": "x"}, {"seeds": ",".join(["a"] * 201)}],
+    )
+    def test_bad_params(self, store, params):
+        assert call(store[1], "GET", "/api/graph", params)[0] == 400
+
+
+class TestListPaging:
+    def _list(self, api, **params):
+        status, payload = call(api, "GET", "/api/memories", {"project": "*", **params})
+        assert status == 200
+        return payload
+
+    def test_superseded_left_out_and_total_counted(self, store):
+        _, api, ids = store
+        page = self._list(api)
+        assert {m["id"] for m in page["memories"]} == {ids["new"], ids["other"]}
+        assert page["total"] == 2 and page["offset"] == 0 and page["searched"] is False
+
+    def test_offset_pages(self, store):
+        _, api, ids = store
+        first = self._list(api, limit="1")["memories"]
+        second = self._list(api, limit="1", offset="1")["memories"]
+        assert [first[0]["id"], second[0]["id"]] == [ids["other"], ids["new"]]  # newest first
+        assert self._list(api, offset="5")["memories"] == []
+
+    def test_oldest_reverses(self, store):
+        _, api, ids = store
+        assert [m["id"] for m in self._list(api, sort="oldest")["memories"]] == [ids["new"], ids["other"]]
+
+    def test_group_by_project_orders_by_project(self, store):
+        _, api, _ = store
+        projects = [m["project_id"] for m in self._list(api, group="project")["memories"]]
+        assert projects == sorted(projects) == ["alpha", "my-app"]
+
+    def test_single_project(self, store):
+        _, api, ids = store
+        status, page = call(api, "GET", "/api/memories", {"project": "alpha", "sort": "confidence"})
+        assert status == 200 and [m["id"] for m in page["memories"]] == [ids["new"]] and page["total"] == 1
+
+    @pytest.mark.parametrize("params", [{"sort": "random"}, {"group": "tags"}, {"offset": "-1"}, {"offset": "x"}])
+    def test_bad_params(self, store, params):
+        assert call(store[1], "GET", "/api/memories", params)[0] == 400
+
+
 class TestLinks:
     def _edges(self, api):
         return {(e["source"], e["type"], e["target"]) for e in call(api, "GET", "/api/graph")[1]["edges"]}
@@ -276,6 +365,8 @@ class TestOverTheWire:
             ("/app.css", "text/css"),
             ("/app.js", "text/javascript"),
             ("/graph.js", "text/javascript"),
+            ("/overview.js", "text/javascript"),
+            ("/layout-worker.js", "text/javascript"),
             ("/fonts/instrument-sans-latin-var.woff2", "font/woff2"),
             ("/fonts/OFL-instrument-sans.txt", "text/plain"),
         ],
@@ -291,6 +382,17 @@ class TestOverTheWire:
         _, html = _request(server, "GET", "/")
         for ref in re.findall(r'(?:src|href)="(/[^"]+)"', html.decode()):
             assert _request(server, "GET", ref)[0].status == 200, ref
+
+    def test_every_module_import_is_served(self, server):
+        """The modules and the layout worker load each other by path; a typo
+        there is a blank canvas, not an error anyone sees."""
+        import re
+
+        from collivind.web.server import STATIC
+
+        for js in STATIC.glob("*.js"):
+            for ref in re.findall(r'(?:from |import\(|new Worker\()"\.?(/[^"]+\.js)"', js.read_text()):
+                assert _request(server, "GET", ref)[0].status == 200, f"{js.name} -> {ref}"
 
     def test_traversal_refused(self, server):
         assert _request(server, "GET", "/../server.py")[0].status == 404
