@@ -1,0 +1,41 @@
+# Publishes site/ to GitHub Pages.
+#
+# Not active yet: Pages is disabled for this repository. The deploy job only runs
+# when the repository variable PAGES_ENABLED is "true", so until then every run
+# is a skipped job (not a failure). To go live:
+#   1. Settings > Pages > Source: "GitHub Actions".
+#   2. Settings > Secrets and variables > Actions > Variables: PAGES_ENABLED = true.
+#   3. Run this workflow from the Actions tab, or push a change under site/.
+# The site assumes https://maiiasleptcova.github.io/collivind/ (canonical URLs,
+# Open Graph, sitemap, 404 home link): grep for it if the address changes.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths: ["site/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: vars.PAGES_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v5

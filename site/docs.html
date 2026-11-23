@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Docs: how Collivind works</title>
+<meta name="description" content="How Collivind's hooks, MCP tools and storage fit together, with links to the README sections for installing, connecting agents, backups, team sync and configuration.">
+<link rel="canonical" href="https://maiiasleptcova.github.io/collivind/docs.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Collivind">
+<meta property="og:title" content="Docs: how Collivind works">
+<meta property="og:description" content="How Collivind's hooks, MCP tools and storage fit together, and where each topic is documented.">
+<meta property="og:url" content="https://maiiasleptcova.github.io/collivind/docs.html">
+<meta property="og:image" content="https://maiiasleptcova.github.io/collivind/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Collivind: memory for coding agents that carries over between sessions.">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<link rel="preload" href="assets/fonts/instrument-sans-latin-var.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/bricolage-grotesque-latin-var.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="nav">
+  <nav class="wrap" aria-label="Main">
+    <a class="brand" href="./"><img src="assets/logo.svg" alt="" width="28" height="28">collivind</a>
+    <ul>
+      <li class="hide-sm"><a href="./#how">How it works</a></li>
+      <li><a href="docs.html" aria-current="page">Docs</a></li>
+      <li><a href="https://github.com/maiiasleptcova/collivind">GitHub</a></li>
+      <li class="hide-sm"><a class="btn btn-primary btn-sm" href="./#install">Install</a></li>
+    </ul>
+  </nav>
+</header>
+
+<main id="main">
+  <section class="hero">
+    <div class="wrap">
+      <div class="sec-head flush">
+        <h1>How Collivind works</h1>
+        <p class="lead">The overview is below. The full documentation is the README on GitHub, and each topic here links to its section there, so there is one copy to keep current.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section band" aria-labelledby="arch-h">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2 id="arch-h">The pieces</h2>
+      </div>
+      <figure class="diagram-wrap" tabindex="0" aria-label="Architecture diagram">
+        <svg class="diagram" viewBox="0 0 880 250" role="img" aria-labelledby="diagram-title diagram-desc">
+          <title id="diagram-title">Collivind architecture</title>
+          <desc id="diagram-desc">Your agent talks to Collivind two ways: hooks that recall and ask for saves, and an MCP server with memory tools. Both use the same core library, which stores memories in a graph store and a vector store, either Neo4j and Qdrant in Docker or SQLite in embedded mode.</desc>
+          <g>
+            <rect class="box" x="1" y="85" width="170" height="80" rx="12"/>
+            <text x="86" y="120" text-anchor="middle" font-weight="600">Your agent</text>
+            <text class="sub" x="86" y="142" text-anchor="middle">Claude Code, Codex, …</text>
+          </g>
+          <g>
+            <rect class="box" x="236" y="20" width="200" height="80" rx="12"/>
+            <text x="336" y="55" text-anchor="middle" font-weight="600">Hooks</text>
+            <text class="sub" x="336" y="77" text-anchor="middle">recall, ask to checkpoint</text>
+            <rect class="box" x="236" y="150" width="200" height="80" rx="12"/>
+            <text x="336" y="185" text-anchor="middle" font-weight="600">MCP server</text>
+            <text class="sub" x="336" y="207" text-anchor="middle">13 memory tools, stdio</text>
+          </g>
+          <g>
+            <rect class="box" x="500" y="85" width="150" height="80" rx="12"/>
+            <text x="575" y="120" text-anchor="middle" font-weight="600">Core library</text>
+            <text class="sub" x="575" y="142" text-anchor="middle">search, dedup, versions</text>
+          </g>
+          <g>
+            <rect class="box" x="714" y="20" width="165" height="80" rx="12"/>
+            <text x="796" y="55" text-anchor="middle" font-weight="600">Graph store</text>
+            <text class="sub" x="796" y="77" text-anchor="middle">Neo4j or SQLite</text>
+            <rect class="box" x="714" y="150" width="165" height="80" rx="12"/>
+            <text x="796" y="185" text-anchor="middle" font-weight="600">Vector store</text>
+            <text class="sub" x="796" y="207" text-anchor="middle">Qdrant or SQLite</text>
+          </g>
+          <path class="edge" d="M171 110 C200 110 205 60 236 60 M171 140 C200 140 205 190 236 190 M436 60 C470 60 470 110 500 110 M436 190 C470 190 470 140 500 140 M650 110 C680 110 685 60 714 60 M650 140 C680 140 685 190 714 190" stroke-width="1.5"/>
+        </svg>
+      </figure>
+      <div class="prose mt">
+        <p>Hooks are short commands your agent runs at fixed moments: session start, each prompt, after responses, before compaction. They search memory and add what matches to the context, or ask the agent to save. A hook cannot write memories itself, because pulling knowledge out of a conversation needs the agent's model; the agent does it through the MCP tools.</p>
+        <p>The core library is the same in every mode; only the storage backends change. <code>docker</code> mode uses Qdrant, Neo4j and an embedding service in containers. <code>embedded</code> mode uses SQLite for both stores and loads the embedding model in-process, kept warm by a small background process. <code>remote</code> mode points at services you run yourself.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="topics-h">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2 id="topics-h">Where to read more</h2>
+        <p class="lead">Each link opens the matching section of the README.</p>
+      </div>
+      <ul class="doc-list">
+        <li><a href="https://github.com/maiiasleptcova/collivind#quick-start">Quick start</a><p>Docker mode, and what happens when Qdrant and Neo4j are already running.</p></li>
+        <li><a href="https://github.com/maiiasleptcova/collivind#embedded-mode-no-docker">Embedded mode</a><p>No Docker: SQLite stores, a resident embedding model, safe across concurrent sessions.</p></li>
+        <li><a href="https://github.com/maiiasleptcova/collivind#switching-modes">Switching modes</a><p><code>collivind migrate</code> copies everything between embedded and docker, ids kept.</p></li>
+        <li><a href="https://github.com/maiiasleptcova/collivind#as-a-claude-code-plugin-recommended">Claude Code plugin</a><p>Registers the MCP server, all four hooks and the slash commands in one step.</p></li>
+        <li><a href="https://github.com/maiiasleptcova/collivind#agent-support">Agent support</a><p>What Claude Code, Codex, opencode and Copilot each get, and what capture means precisely.</p></li>
+        <li><a href="https://github.com/maiiasleptcova/collivind#codex-trust-the-hooks-after-installing-or-upgrading">Codex hook trust</a><p>Codex runs hooks only after you review them, and again after an upgrade changes them.</p></li>
+        <li><a href="https://github.com/maiiasleptcova/collivind#hooks">Hooks</a><p>SessionStart, UserPromptSubmit, Stop and PreCompact, and what each one does.</p></li>
+        <li><a href="https://github.com/maiiasleptcova/collivind#web-ui">Web UI</a><p><code>collivind web</code>: search, read, edit and delete memories on localhost.</p></li>
+        <li><a href="https://github.com/maiiasleptcova/collivind#mcp-tools">MCP tools</a><p>The 13 tools agents call to search, save, invalidate and inspect memory.</p></li>
+        <li><a href="https://github.com/maiiasleptcova/collivind#cli-commands">CLI commands</a><p>Every verb, with <code>--json</code> for scripting.</p></li>
+        <li><a href="https://github.com/maiiasleptcova/collivind#backup-and-restore">Backup and restore</a><p>Lossless <code>export</code> and <code>import</code>: every project, ids and version history kept.</p></li>
+        <li><a href="https://github.com/maiiasleptcova/collivind#team-sharing">Team sharing</a><p><code>collivind sync</code> through any git repo, reviewable in pull requests.</p></li>
+        <li><a href="https://github.com/maiiasleptcova/collivind#how-it-works">Data model</a><p>Memory categories, entity types, relationships and how search is scored.</p></li>
+        <li><a href="https://github.com/maiiasleptcova/collivind#configuration">Configuration</a><p><code>~/.collivind/config.toml</code>: mode, search weights, checkpoint interval.</p></li>
+        <li><a href="https://github.com/maiiasleptcova/collivind/blob/main/benchmarks/BENCHMARKS.md">Benchmarks</a><p>LongMemEval-S retrieval and search latency, with method and caveats.</p></li>
+        <li><a href="https://github.com/maiiasleptcova/collivind/blob/main/ROADMAP.md">Roadmap</a><p>What is planned next, and what stays free.</p></li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Collivind · MIT licence</span>
+    <ul>
+      <li><a href="./">Home</a></li>
+      <li><a href="https://github.com/maiiasleptcova/collivind">GitHub</a></li>
+      <li><a href="https://github.com/maiiasleptcova/collivind/releases">Releases</a></li>
+      <li><a href="https://github.com/maiiasleptcova/collivind/issues">Issues</a></li>
+    </ul>
+  </div>
+</footer>
+</body>
+</html>

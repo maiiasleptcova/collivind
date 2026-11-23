@@ -1,5 +1,8 @@
 # Collivind
 
+<!-- TODO: link the website once GitHub Pages is enabled (see .github/workflows/pages.yml):
+     Website: https://maiiasleptcova.github.io/collivind/ -->
+
 Graph-based memory layer for AI coding assistants. Your AI assistant forgets everything between sessions — Collivind gives it persistent, structured memory.
 
 Collivind stores facts, decisions, patterns, errors, and architecture choices from your coding sessions in a graph database with vector search. It runs entirely local with no LLM API keys required.
