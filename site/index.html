@@ -138,14 +138,14 @@ Integration tests use a throwaway Neo4j 5.26 container, never the live stack.</d
         <div class="stack">
         <div class="code" tabindex="0" role="region" aria-label="Install commands, Docker mode">
           <button class="copy" type="button" data-copy="install-cmds" aria-live="polite" hidden>Copy</button>
-<pre id="install-cmds"><span class="dim"># v0.13.0, the latest release</span>
-uv tool install https://github.com/maiiasleptcova/collivind/releases/download/v0.13.0/collivind_memory-0.13.0-py3-none-any.whl
+<pre id="install-cmds"><span class="dim"># v0.14.0, the latest release</span>
+uv tool install https://github.com/maiiasleptcova/collivind/releases/download/v0.14.0/collivind_memory-0.14.0-py3-none-any.whl
 collivind init</pre>
         </div>
         <p class="muted small">No Docker? Embedded mode keeps everything in SQLite and loads the model in-process. It needs the <code>embedded</code> extra and <code>mode = "embedded"</code> in the config before <code>init</code>. The second line only writes a config if there is none, so on a machine that already has <code>~/.collivind/config.toml</code> add the line under <code>[collivind]</code> yourself instead:</p>
         <div class="code" tabindex="0" role="region" aria-label="Install commands, embedded mode">
           <button class="copy" type="button" data-copy="install-embedded" aria-live="polite" hidden>Copy</button>
-<pre id="install-embedded">uv tool install "collivind-memory[embedded] @ https://github.com/maiiasleptcova/collivind/releases/download/v0.13.0/collivind_memory-0.13.0-py3-none-any.whl"
+<pre id="install-embedded">uv tool install "collivind-memory[embedded] @ https://github.com/maiiasleptcova/collivind/releases/download/v0.14.0/collivind_memory-0.14.0-py3-none-any.whl"
 mkdir -p ~/.collivind &amp;&amp; [ -e ~/.collivind/config.toml ] || printf '[collivind]\nmode = "embedded"\n' &gt; ~/.collivind/config.toml
 collivind init</pre>
         </div>
