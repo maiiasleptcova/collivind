@@ -76,3 +76,4 @@ venv.bak/
 
 # Agent tooling — local only
 .claude/
+benchmarks/data/
