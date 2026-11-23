@@ -1,6 +1,6 @@
 services:
   qdrant:
-    image: qdrant/qdrant:v1.12.6
+    image: qdrant/qdrant:v1.19.2
     container_name: ${COMPOSE_PROJECT}-qdrant
     ports:
       - "6333:6333"
