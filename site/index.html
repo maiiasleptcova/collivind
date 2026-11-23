@@ -163,37 +163,18 @@ collivind init</pre>
   <section class="section band" id="explorer" aria-labelledby="explorer-h">
     <div class="wrap split">
       <div class="hero-copy">
-        <h2 id="explorer-h">Read and tidy your memory in the browser.</h2>
-        <p class="lead"><code>collivind web</code> opens a local UI on <code>127.0.0.1:8765</code> over the same store your hooks and agents use.</p>
+        <h2 id="explorer-h">Explore and tidy your memory in the browser.</h2>
+        <p class="lead"><code>collivind web</code> opens a local explorer on <code>127.0.0.1:8765</code> over the same store your hooks and agents use. In docker mode, <code>collivind docker up</code> runs it as a container too.</p>
         <div class="prose">
-          <p>Search or browse, create and edit memories inline, or forget one for good after a confirmation. Entity and tag chips are clickable and search for that name. Each memory has a Details disclosure with its project, source, confidence, tags, version chain, validity window and session. The header says which store you are reading, docker or embedded.</p>
+          <p>A graph shows memories with the entities they mention, their links, contradictions and version chains. Filter by project, category, entity type or date, or narrow to a few hops around one memory. Search by meaning and the matches light up on the graph.</p>
+          <p>Open a memory to edit it, read its history, link it to another memory or entity, or forget it after a confirmation. Each project gets a name, colour, description and repository link, stored with the memories so export and migrate carry them. The header says which store you are reading, docker or embedded.</p>
           <p class="small muted">Loopback only and without authentication: anything that can reach the port can read the whole store.</p>
         </div>
       </div>
       <figure>
-        <div class="frame ui" aria-hidden="true">
-          <div class="ui-head"><b>Collivind memory</b><span class="pill">embedded store</span></div>
-          <div class="ui-search">neo4j</div>
-          <div class="mem">
-            <span class="k">decision</span>
-            <p>Integration tests use a throwaway Neo4j 5.26 container, never the live stack.</p>
-            <div class="chips"><span class="chip">Neo4j</span><span class="chip">tests/integration</span></div>
-            <span class="details">Details</span>
-          </div>
-          <div class="mem">
-            <span class="k">pattern</span>
-            <p>Look up nodes through the Memory, Entity and Session id indexes rather than a full label scan.</p>
-            <div class="chips"><span class="chip">neo4j_store.py</span><span class="chip">search</span></div>
-            <span class="details">Details</span>
-          </div>
-          <div class="mem">
-            <span class="k">error</span>
-            <p>Two full test suites in one container get OOM-killed; run them one at a time.</p>
-            <div class="chips"><span class="chip">pytest</span></div>
-            <span class="details">Details</span>
-          </div>
-        </div>
-        <figcaption class="caption">Illustration of the list view, not a screenshot.</figcaption>
+        <img class="frame" src="assets/explorer-graph.jpg" width="1200" height="750" loading="lazy" decoding="async"
+          alt="The Collivind explorer: a graph of memories coloured by project, linked to the services, files and ideas they mention, with filters for project, category, entity type and date in a sidebar.">
+        <figcaption class="caption">Screenshot of the graph view, reading a docker store with demo data.</figcaption>
       </figure>
     </div>
   </section>
