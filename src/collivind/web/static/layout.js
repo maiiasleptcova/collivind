@@ -2,7 +2,7 @@
 // edges, and a weak pull to the origin so disconnected islands stay in view.
 // The same model as d3-force's manyBody/link/x/y, at a fraction of the size.
 
-const THETA2 = 1.44;        // Barnes-Hut opening criterion squared (theta 1.2): coarser far field, ~2x faster ticks at 4k nodes
+const THETA2 = 0.81;        // Barnes-Hut opening criterion squared (theta 0.9)
 const CHARGE = -38;
 const LINK_DIST = 34;
 const GRAVITY = 0.035;

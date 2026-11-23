@@ -9,6 +9,7 @@
 
 export const TOP_ENTITIES = 40;
 export const OTHER = "__other";
+export const CATEGORY = "cat:"; // path key prefix: memories of one category
 const STRONGEST = 3;      // links kept per bubble; more and the overview is a hairball again
 const MIN_SHARED = 2;     // an entity opened alongside must be shared by this many memories
 export const OPEN_LIMIT = 220; // more members than this and a bubble opens into bubbles
@@ -82,9 +83,7 @@ export function projectClusters(memories, links, nameOf) {
 // Level 2: the entities most memories are about, plus one bubble for the rest.
 // `exclude` are the entities already opened: every member links to them.
 export function entityClusters(memories, links, entityById, projectId, exclude = new Set(), restLabel = "Not about a top entity") {
-  const counts = new Map();
-  for (const m of memories) for (const x of links.get(m.id) || []) if (!exclude.has(x)) counts.set(x, (counts.get(x) || 0) + 1);
-  const top = [...counts].sort((a, b) => b[1] - a[1]).slice(0, TOP_ENTITIES);
+  const top = topCounts(memories, links, exclude);
   const topIds = new Set(top.map(([x]) => `e:${x}`));
   const weights = new Map();
   let rest = 0;
@@ -99,13 +98,24 @@ export function entityClusters(memories, links, entityById, projectId, exclude =
   return { nodes: pack(nodes), edges: strongest(weights) };
 }
 
+// Last resort for memories that share no entity left to split by: their
+// categories. Never linked: a memory has exactly one.
+export function categoryClusters(memories, projectId) {
+  const counts = new Map();
+  for (const m of memories) counts.set(m.category, (counts.get(m.category) || 0) + 1);
+  const nodes = [...counts].map(([c, n]) => cluster(`c:${c}`, c, n, { level: "category", key: CATEGORY + c, project_id: projectId }));
+  return { nodes: pack(nodes), edges: [] };
+}
+
 // Follow a path of opened bubbles down to the memories in the last one.
 // OTHER at a step means "about none of the bubbles shown at that step".
 export function membersAt(path, memories, links) {
   let members = memories;
   const opened = new Set();
   for (const key of path) {
-    if (key === OTHER) {
+    if (key.startsWith(CATEGORY)) {
+      members = members.filter((m) => m.category === key.slice(CATEGORY.length));
+    } else if (key === OTHER) {
       const top = topKeys(members, links, opened);
       members = members.filter((m) => ![...(links.get(m.id) || [])].some((x) => top.has(x)));
     } else {
@@ -116,11 +126,16 @@ export function membersAt(path, memories, links) {
   return { members, opened };
 }
 
-function topKeys(memories, links, exclude) {
+// The entities worth a bubble: the most-linked few, each holding at least 1%
+// of the memories (and two), so a big remainder does not split into specks.
+function topCounts(memories, links, exclude) {
   const counts = new Map();
   for (const m of memories) for (const x of links.get(m.id) || []) if (!exclude.has(x)) counts.set(x, (counts.get(x) || 0) + 1);
-  return new Set([...counts].sort((a, b) => b[1] - a[1]).slice(0, TOP_ENTITIES).map(([x]) => x));
+  const least = Math.max(MIN_SHARED, Math.ceil(memories.length * 0.01));
+  return [...counts].filter(([, n]) => n >= least).sort((a, b) => b[1] - a[1]).slice(0, TOP_ENTITIES);
 }
+
+const topKeys = (memories, links, exclude) => new Set(topCounts(memories, links, exclude).map(([x]) => x));
 
 // The ids to draw once a bubble is small enough: its memories and the
 // entities they share. Opened entities are left out: every member links to

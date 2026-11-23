@@ -5,7 +5,7 @@ import { CATEGORIES, card, editorMarkup, readEditor } from "./memory.js";
 import { GraphView } from "./graph.js";
 import { initPanel, openNode, closePanel, currentId, refreshPanel } from "./panel.js";
 import { initProjects, renderProjects } from "./projects.js";
-import { OPEN_LIMIT, OTHER, entityClusters, entityLinks, membersAt, openIds, projectClusters } from "./overview.js";
+import { CATEGORY, OPEN_LIMIT, OTHER, categoryClusters, entityClusters, entityLinks, membersAt, openIds, projectClusters } from "./overview.js";
 
 // Off until asked for: on a real store CONTRADICTS is ~40% of all edges, and
 // drawn by default it paints the whole graph red.
@@ -30,7 +30,7 @@ const state = {
   list: [], editingId: null, creating: false,
   knownTypes: new Set(),
   mode: "overview",      // "overview": bubbles that open; "all": every loaded node
-  path: [],              // opened overview bubbles, outermost first: entity ids, or OTHER
+  path: [],              // opened overview bubbles, outermost first: entity ids, OTHER, or CATEGORY + name
   edgeTypes: new Set(),  // relationship types drawn and walked
   knownEdgeTypes: new Set(),
   focusGraph: null,      // the neighbourhood of the search results, from the server
@@ -130,24 +130,36 @@ function overviewInputs(nodes, memIds, edges) {
   const entityById = new Map(f.showEntities
     ? nodes.filter((n) => n.kind === "entity" && f.entityTypes?.has(n.type)).map((n) => [n.id, n]) : []);
   const links = entityLinks(memIds, new Set(entityById.keys()), edges);
-  const projects = new Set(memories.map((m) => m.project_id));
-  const project = f.project || (projects.size === 1 ? [...projects][0] : "");
-  return { memories, entityById, links, byProject: projects.size > 1, project };
+  const sizes = new Map();
+  for (const m of memories) sizes.set(m.project_id, (sizes.get(m.project_id) || 0) + 1);
+  const [biggest, most = 0] = [...sizes].sort((a, b) => b[1] - a[1])[0] || [];
+  // A project level is only worth a click when no one project is nearly all
+  // of it; otherwise open on that project's entities, the rest via the picker.
+  const byProject = !f.project && sizes.size > 1 && most < memories.length * 0.9;
+  const project = f.project || (byProject ? "" : biggest || "");
+  return { memories, entityById, links, byProject, project };
 }
 
-const crumbLabel = (key, i) => key !== OTHER ? state.byId.get(key)?.label || key
-  : i ? `Only ${state.byId.get(state.path[i - 1])?.label || "that"}` : "Not about a top entity";
+function crumbLabel(key, i) {
+  if (key.startsWith(CATEGORY)) return key.slice(CATEGORY.length);
+  if (key !== OTHER) return state.byId.get(key)?.label || key;
+  const prev = state.path[i - 1];
+  return prev && prev !== OTHER && !prev.startsWith(CATEGORY) ? `Only ${state.byId.get(prev)?.label || prev}` : "Not about a top entity";
+}
 
 // The bubbles for where the reader is; null when the opened bubble is small
 // enough to draw node by node (or would only split into one bubble again).
 function overviewBubbles(o) {
   if (o.byProject) return projectClusters(o.memories, o.links, (pid) => projectName(pid, state.meta));
   const { members, opened } = membersAt(state.path, o.memories, o.links);
-  const last = state.path[state.path.length - 1];
-  if (state.path.length && (members.length <= OPEN_LIMIT || last === OTHER)) return null;
-  const restLabel = state.path.length ? `Only ${crumbLabel(last, state.path.length - 1)}` : "Not about a top entity";
+  if (state.path.length && members.length <= OPEN_LIMIT) return null;
+  const restLabel = crumbLabel(OTHER, state.path.length);
   const bubbles = entityClusters(members, o.links, o.entityById, o.project, opened, restLabel);
-  return bubbles.nodes.length > 1 || !state.path.length ? bubbles : null;
+  const rest = bubbles.nodes.find((n) => n.key === OTHER)?.count || 0;
+  if (!state.path.length || (bubbles.nodes.length > 1 && rest < members.length * 0.75)) return bubbles;
+  // little shared left to split by: categories, once
+  const byCategory = categoryClusters(members, o.project);
+  return byCategory.nodes.length > 1 && !state.path.some((k) => k.startsWith(CATEGORY)) ? byCategory : null;
 }
 
 function renderOverview(o, bubbles) {
@@ -183,9 +195,13 @@ function applyFilters() {
     (n.kind === "entity" && reached.has(n.id) && f.entityTypes?.has(n.type))).map((n) => n.id));
 
   // An opened bubble: its memories and the entities they share, nothing else.
+  // Still too many to read (nothing left to split by): the newest of them.
+  state.capped = 0;
   if (o) {
     const { members, opened } = membersAt(state.path, o.memories, o.links);
-    const open = openIds(members, o.links, opened);
+    const newest = [...members].sort((a, b) => (b.created_at || "").localeCompare(a.created_at || "")).slice(0, OPEN_LIMIT);
+    state.capped = members.length > newest.length ? members.length : 0;
+    const open = openIds(newest, o.links, opened);
     ids = new Set([...ids].filter((id) => open.has(id)));
   }
 
@@ -243,9 +259,9 @@ function renderCrumbs() {
     crumbs.push([`Around “${state.search.query.slice(0, 40)}”`, null], ["Clear search", "clear"]);
   } else if (state.mode === "overview") {
     const multi = state.projects.filter((p) => p.memories).length > 1;
-    if (multi) crumbs.push(["All projects", state.filters.project || state.path.length ? "root" : null]);
-    if (state.filters.project) crumbs.push([projectName(state.filters.project, state.meta), state.path.length ? "0" : null]);
-    else if (!multi) crumbs.push(["Overview", state.path.length ? "0" : null]);
+    if (multi && state.filters.project) crumbs.push(["All projects", "root"]);
+    crumbs.push([state.filters.project ? projectName(state.filters.project, state.meta) : multi ? "All projects" : "Overview",
+      state.path.length ? "0" : null]);
     state.path.forEach((key, i) => crumbs.push([crumbLabel(key, i), i < state.path.length - 1 ? String(i + 1) : null]));
     if (!crumbs.length) crumbs.push(["Overview", null]);
   }
@@ -271,6 +287,7 @@ function renderNote() {
   const shownMem = state.visible.filter((n) => n.kind === "memory").length;
   const shownEnt = state.visible.length - shownMem;
   const parts = [`Showing ${shownMem} of ${g.total_memories} memories and ${shownEnt} entities.`];
+  if (state.capped) parts.push(`Showing the newest ${OPEN_LIMIT} of ${state.capped} memories here; narrow with Recent or the List view.`);
   if (state.focusGraph) parts.push(`Search results and what is within ${state.depth} hop${state.depth > 1 ? "s" : ""} of them.`);
   else if (g.truncated) {
     parts.push(state.filters.project
@@ -298,7 +315,7 @@ function updateHighlight() {
       .map((n) => ({ id: n.id, label: n.label, sub: n.kind === "entity" ? n.type : n.category, kind: n.kind }));
     heading = `Matching “${state.text}”`;
   }
-  view.setHighlight(hits.length ? new Set(hits.map((h) => h.id)) : null);
+  view.setHighlight(hits.length && !state.overview ? new Set(hits.map((h) => h.id)) : null);
   if (!heading) { results.innerHTML = ""; return; }
   results.innerHTML = `<h3>${esc(heading)}</h3>` + (hits.length
     ? `<ul>${hits.map((h) => `<li><button class="result" data-node="${esc(h.id)}">
@@ -337,10 +354,13 @@ async function refocus({ apply = true } = {}) {
   if (apply) applyFilters();
 }
 
+// The words the reader searched for; a focused node is not a search.
+const searchText = () => (state.search && !state.search.focus ? state.search.query : "");
+
 // Show one node and its neighbourhood, wherever the view currently is.
 function focusOn(id) {
   const n = state.byId.get(id);
-  state.search = { query: n?.label || id, results: [{ id, label: n?.label || id, kind: n?.kind === "entity" ? n.type : n?.category }] };
+  state.search = { focus: true, query: n?.label || id, results: [{ id, label: n?.label || id, kind: n?.kind === "entity" ? n.type : n?.category }] };
   $("#q").value = "";
   // only once it is drawn: an unreachable id must not bounce back here
   refocus().then(() => { if (view.adj.has(id)) select(id, { center: true }); });
@@ -401,7 +421,7 @@ async function loadList() {
   try {
     clearError();
     const project = state.filters.project || "*";
-    const q = state.search?.query || "";
+    const q = searchText();
     const { sort, group, offset } = state.page;
     const params = new URLSearchParams({ limit: String(q ? 100 : PAGE), project, q, sort, group, offset: String(q ? 0 : offset) });
     const data = await api(`/api/memories?${params}`);
@@ -419,11 +439,11 @@ async function loadList() {
 function renderList() {
   const list = $("#list");
   const scope = state.filters.project ? projectName(state.filters.project, state.meta) : "every project";
-  $("#list-scope").textContent = state.search ? `Search results in ${scope}` : `Current memories in ${scope}`;
+  $("#list-scope").textContent = searchText() ? `Search results in ${scope}` : `Current memories in ${scope}`;
   const projectIds = [state.filters.project || "default", ...state.projects.map((p) => p.project_id)];
   if (!state.list.length && !state.creating) {
     // Empty state teaches the interface rather than saying "no results".
-    list.innerHTML = state.search ? `<div class="empty"><h2>No memory matches that</h2><p>Search compares meaning, not words. Try describing the idea, or widen the project.</p></div>`
+    list.innerHTML = searchText() ? `<div class="empty"><h2>No memory matches that</h2><p>Search compares meaning, not words. Try describing the idea, or widen the project.</p></div>`
       : `<div class="empty"><h2>Nothing stored yet</h2>
       <p>Memories arrive when your agent's session ends, or you can write one now.
       From a terminal: <code>collivind add "…"</code></p></div>`;
@@ -433,7 +453,7 @@ function renderList() {
   const { group } = state.page;
   const keyOf = (m) => group === "project" ? projectName(m.project_id, state.meta) : group === "category" ? m.category : "";
   // the server already orders a page by its group; search results are sorted here
-  const rows = group && state.search ? [...state.list].sort((a, b) => keyOf(a).localeCompare(keyOf(b))) : state.list;
+  const rows = group && searchText() ? [...state.list].sort((a, b) => keyOf(a).localeCompare(keyOf(b))) : state.list;
   let last = null;
   list.innerHTML = (state.creating ? `<article class="memory">${editorMarkup(null, [...new Set(projectIds)])}</article>` : "")
     + rows.map((m) => {
@@ -446,7 +466,7 @@ function renderList() {
 
 function renderPager() {
   const { offset, total } = state.page;
-  const paged = !state.search;
+  const paged = !searchText();
   $("#pager").hidden = !paged || !total;
   if (!paged) return;
   $("#l-range").textContent = `${(offset + 1).toLocaleString()}–${(offset + state.list.length).toLocaleString()} of ${total.toLocaleString()}`;
@@ -464,7 +484,7 @@ function wireList() {
     if (state.byId.has(id)) select(id, { center: true });
     else {
       const m = state.list.find((x) => x.id === id);
-      state.search = { query: m?.summary || id, results: [{ id, label: m?.summary }] };
+      state.search = { focus: true, query: m?.summary || id, results: [{ id, label: m?.summary }] };
       refocus().then(() => { if (view.adj.has(id)) select(id, { center: true }); });
     }
   });
@@ -678,5 +698,6 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => view
   try { await loadProjects(); } catch (e) { showError(e); }
   await loadGraph();
 })();
+
 
 
