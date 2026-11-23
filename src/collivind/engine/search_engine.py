@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Tuple
 
 from collivind.config import SearchConfig
+from collivind.engine.conflicts import CONFLICT_THRESHOLD, MAX_CANDIDATES, is_live, same_subject
 from collivind.engine.enrichment import build_enriched_query
 from collivind.engine.graph_engine import GraphEngine
 from collivind.models import MemoryNode, SearchQuery, SearchResult
@@ -197,22 +198,39 @@ class SearchEngine:
             )
         return candidates
 
-    def find_contradictions(self, memory: MemoryNode, threshold: float = 0.75) -> List[SearchResult]:
-        vector = self.embedding_provider.embed(memory.content)
+    def find_contradictions(self, memory: MemoryNode, threshold: float = CONFLICT_THRESHOLD) -> List[SearchResult]:
+        """Live memories a person or agent should check against `memory` (see engine/conflicts.py)."""
+        return self.conflict_candidates(memory, self.embedding_provider.embed(memory.content), threshold)
+
+    def conflict_candidates(
+        self,
+        memory: MemoryNode,
+        vector: List[float],
+        threshold: float = CONFLICT_THRESHOLD,
+        exclude: Tuple[str, ...] = (),
+    ) -> List[SearchResult]:
+        """Same-project, same-category live memories that are close to `memory` and about the same subject.
+
+        Pass the vector the memory was stored with, so scores are on the
+        same scale as the threshold. Similarity alone cannot tell an update
+        from a conflict from a neighbour, so these are candidates for the
+        caller to judge, never edges.
+        """
         similar = self.vector_store.search(
-            vector=vector, limit=5, filters={"project_id": memory.project_id}, threshold=threshold
+            vector=vector, limit=MAX_CANDIDATES + 3, filters={"project_id": memory.project_id}, threshold=threshold
         )
-
-        candidates = []
+        candidates: List[SearchResult] = []
         for res in similar:
+            if res["id"] == memory.id or res["id"] in exclude:
+                continue
             existing = self.graph_store.get_memory(res["id"])
-            if not existing or existing.id == memory.id:
+            if not is_live(existing) or existing is None:
                 continue
-            if existing.valid_to is not None:
+            if existing.category != memory.category or existing.content == memory.content:
                 continue
-            if existing.category == memory.category and existing.content != memory.content:
-                candidates.append(
-                    SearchResult(memory=existing, score=res["score"], vector_score=res["score"], graph_score=0.0)
-                )
-
-        return candidates
+            if not same_subject(existing.content, memory.content):
+                continue
+            candidates.append(
+                SearchResult(memory=existing, score=res["score"], vector_score=res["score"], graph_score=0.0)
+            )
+        return candidates[:MAX_CANDIDATES]

@@ -2,6 +2,7 @@ import click
 
 from collivind.cli.commands.agent_commands import commands
 from collivind.cli.commands.backup import export_cmd, import_cmd
+from collivind.cli.commands.contradictions import contradictions
 from collivind.cli.commands.docker import docker
 from collivind.cli.commands.embed_daemon import embed_daemon
 from collivind.cli.commands.hook import hook
@@ -55,6 +56,7 @@ cli.add_command(get)
 cli.add_command(context)
 cli.add_command(update)
 cli.add_command(invalidate)
+cli.add_command(contradictions)
 cli.add_command(forget)
 cli.add_command(export_cmd)
 cli.add_command(import_cmd)
