@@ -97,7 +97,7 @@ code{font-family:var(--mono);font-size:.88em;background:var(--tint);border:1px s
 .steps li{display:flex;flex-direction:column;gap:12px;padding-top:20px;border-top:1.5px solid var(--ink);counter-increment:s}
 .steps li::before{content:counter(s);font-family:var(--display);font-size:1rem;font-weight:700;color:var(--steel)}
 .steps p{color:var(--ink-2)}
-.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px 40px;margin-top:clamp(40px,6vw,64px);padding-top:28px;border-top:1px solid var(--line)}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:20px 40px;margin-top:clamp(40px,6vw,64px);padding-top:28px;border-top:1px solid var(--line)}
 .facts div{display:flex;flex-direction:column;gap:6px}
 .facts dt{font-weight:600}
 .facts dd{margin:0;color:var(--ink-2)}
@@ -119,6 +119,8 @@ td small{display:block;color:var(--steel);font-size:.82rem;margin-top:2px}
 .code .dim{color:var(--code-dim)}
 .code .copy{position:absolute;top:10px;right:10px;font:600 .78rem var(--sans);color:var(--code-ink);background:transparent;border:1px solid #3A3F49;border-radius:999px;padding:6px 12px;cursor:pointer}
 .code .copy:hover{background:#2A2E37}
+.code:focus-visible,.code .copy:focus-visible{outline-color:#9AA8FF}
+.stack{display:flex;flex-direction:column;gap:16px;min-width:0}
 .install{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:clamp(24px,4vw,56px);align-items:start}
 .notes{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px;color:var(--ink-2)}
 
@@ -136,7 +138,7 @@ td small{display:block;color:var(--steel);font-size:.82rem;margin-top:2px}
 .details{font-size:.78rem;color:var(--steel)}
 
 /* Docs page */
-.doc-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:0 48px}
+.doc-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:0 48px}
 .doc-list li{padding:18px 0;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
 .doc-list a{font-weight:600}
 .doc-list p{color:var(--ink-2);font-size:.95rem}
@@ -154,7 +156,7 @@ footer ul{display:flex;flex-wrap:wrap;gap:20px;list-style:none;margin:0;padding:
 footer a{color:var(--ink-2)}
 
 @media (max-width:900px){
-  .split,.install{grid-template-columns:1fr}
+  .split,.install{grid-template-columns:minmax(0,1fr)}
   .steps{grid-template-columns:1fr}
 }
 @media (max-width:560px){

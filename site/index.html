@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Collivind: local graph memory for AI coding agents</title>
-<meta name="description" content="Collivind gives Claude Code, Codex, opencode and GitHub Copilot a memory that carries over between sessions: a local knowledge graph with vector search, recalled on every prompt. Open source, MIT.">
+<meta name="description" content="Collivind gives Claude Code, Codex, opencode and GitHub Copilot a memory that carries over between sessions: a local knowledge graph with vector search, recalled on every prompt in Claude Code and Codex. Open source, MIT.">
 <link rel="canonical" href="https://maiiasleptcova.github.io/collivind/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Collivind">
 <meta property="og:title" content="Collivind: local graph memory for AI coding agents">
-<meta property="og:description" content="Your coding agent forgets everything between sessions. Collivind stores what it learns in a local knowledge graph and hands the relevant part back on every prompt.">
+<meta property="og:description" content="Your coding agent forgets everything between sessions. Collivind stores what it learns in a local knowledge graph and hands the relevant part back when you prompt.">
 <meta property="og:url" content="https://maiiasleptcova.github.io/collivind/">
 <meta property="og:image" content="https://maiiasleptcova.github.io/collivind/assets/og.png">
 <meta property="og:image:width" content="1200">
@@ -45,14 +45,14 @@
           <a class="btn btn-primary" href="#install">Install in two commands</a>
           <a class="btn btn-ghost" href="https://github.com/maiiasleptcova/collivind">View source on GitHub</a>
         </div>
-        <p class="hero-note">Works with Claude Code, Codex, opencode and GitHub Copilot. MIT licensed. Runs on your machine.</p>
+        <p class="hero-note">Automatic recall in Claude Code and Codex; the memory tools also work in opencode and GitHub Copilot. MIT licensed. Runs on your machine.</p>
       </div>
       <figure class="frame-fig">
         <div class="frame">
           <div class="frame-bar"><span>Claude Code session</span><span>UserPromptSubmit hook</span></div>
           <div class="frame-body">
             <p class="bubble">Why does the integration test hang on CI?</p>
-            <div class="inject" role="group" aria-label="Context Collivind added to the prompt">--- Collivind Context ---<br>
+            <div class="inject" tabindex="0" role="group" aria-label="Context Collivind added to the prompt">--- Collivind Context ---<br>
 <b>[ERROR]</b> (score: 0.61)<br>
 test_neo4j_batch hangs when COLLIVIND_TEST_NEO4J_URI points at a stack with no free bolt port; CI runs it only when the variable is set.<br>
 <b>[DECISION]</b> (score: 0.48)<br>
@@ -72,7 +72,7 @@ Integration tests use a throwaway Neo4j 5.26 container, never the live stack.</d
       </div>
       <div class="prose">
         <p>You explain the same storage decision on Monday and again on Thursday. The agent hits an error it already debugged last week and debugs it again. Context compaction drops the detail you needed an hour later. Switching from Claude Code to Codex loses all of it.</p>
-        <p>Collivind is a store outside the session. Each agent session reads from it and writes to it, so what one session learned is there for the next, in any of the supported agents.</p>
+        <p>Collivind is a store outside the session. Agent sessions read from it and write to it, so what one session learned is there for the next: automatically in Claude Code, Codex and opencode, and in Copilot when you ask it to search or save.</p>
       </div>
     </div>
   </section>
@@ -86,7 +86,7 @@ Integration tests use a throwaway Neo4j 5.26 container, never the live stack.</d
       <ol class="steps">
         <li>
           <h3>Recall on every prompt</h3>
-          <p>At session start a hook injects a short index of what is stored for the project (about 100 tokens). On each prompt you type, another hook searches memory with it and adds the matches, within a token budget, and adds nothing when nothing matches.</p>
+          <p>In Claude Code and Codex, a hook at session start injects a short index of what is stored for the project (about 100 tokens). On each prompt you type, another hook searches memory with it and adds the matches, within a token budget, and adds nothing when nothing matches.</p>
         </li>
         <li>
           <h3>Checkpointed capture</h3>
@@ -124,7 +124,7 @@ Integration tests use a throwaway Neo4j 5.26 container, never the live stack.</d
           </tbody>
         </table>
       </div>
-      <p class="muted small mt-s">Where recall is automatic, it is for those agents only; with opencode and Copilot you search and save through the tools. <a href="https://github.com/maiiasleptcova/collivind#agent-support">Details in the README</a>.</p>
+      <p class="muted small mt-s">opencode and Copilot have no automatic recall; there you search through the tools. <a href="https://github.com/maiiasleptcova/collivind#agent-support">Details in the README</a>.</p>
     </div>
   </section>
 
@@ -135,15 +135,24 @@ Integration tests use a throwaway Neo4j 5.26 container, never the live stack.</d
         <p class="lead">Collivind is not on PyPI yet, so you install the wheel from the GitHub release.</p>
       </div>
       <div class="install">
-        <div class="code">
-          <button class="copy" type="button" data-copy="install-cmds" hidden>Copy</button>
+        <div class="stack">
+        <div class="code" tabindex="0" role="region" aria-label="Install commands, Docker mode">
+          <button class="copy" type="button" data-copy="install-cmds" aria-live="polite" hidden>Copy</button>
 <pre id="install-cmds"><span class="dim"># v0.12.0, the latest release</span>
 uv tool install https://github.com/maiiasleptcova/collivind/releases/download/v0.12.0/collivind_memory-0.12.0-py3-none-any.whl
 collivind init</pre>
         </div>
+        <p class="muted small">No Docker? Embedded mode keeps everything in SQLite and loads the model in-process. It needs the <code>embedded</code> extra and <code>mode = "embedded"</code> in the config before <code>init</code>. The second line writes a new config, so on a machine that already has <code>~/.collivind/config.toml</code> add the line under <code>[collivind]</code> yourself instead:</p>
+        <div class="code" tabindex="0" role="region" aria-label="Install commands, embedded mode">
+          <button class="copy" type="button" data-copy="install-embedded" aria-live="polite" hidden>Copy</button>
+<pre id="install-embedded">uv tool install "collivind-memory[embedded] @ https://github.com/maiiasleptcova/collivind/releases/download/v0.12.0/collivind_memory-0.12.0-py3-none-any.whl"
+mkdir -p ~/.collivind &amp;&amp; printf '[collivind]\nmode = "embedded"\n' &gt; ~/.collivind/config.toml
+collivind init</pre>
+        </div>
+        </div>
         <ul class="notes">
-          <li><code>collivind init</code> starts the Docker services and registers the MCP server for every supported agent it finds installed, plus the hooks (Claude Code, Codex) or the capture plugin (opencode).</li>
-          <li>No Docker? Use <a href="https://github.com/maiiasleptcova/collivind#embedded-mode-no-docker">embedded mode</a> (SQLite, model in-process).</li>
+          <li>In docker mode, <code>collivind init</code> starts the containers (or uses Qdrant and Neo4j already running) and registers the MCP server for every supported agent it finds installed, plus the hooks (Claude Code, Codex) or the capture plugin (opencode).</li>
+          <li>More on <a href="https://github.com/maiiasleptcova/collivind#embedded-mode-no-docker">embedded mode</a> and <a href="https://github.com/maiiasleptcova/collivind#switching-modes">moving data between modes</a>.</li>
           <li>Codex runs hooks only after you <a href="https://github.com/maiiasleptcova/collivind#codex-trust-the-hooks-after-installing-or-upgrading">review and trust them</a>.</li>
           <li><code>collivind status</code> checks backends, containers, hooks and MCP registration, and exits 1 if anything is broken.</li>
         </ul>
@@ -195,8 +204,8 @@ collivind init</pre>
         <h2 id="measured-h">Measured, with the conditions attached</h2>
       </div>
       <div class="prose">
-        <p><strong>Retrieval.</strong> On LongMemEval-S session retrieval, Collivind finds the right session in the top 5 for 98.0% of the 500 questions (standard split, raw mode: local embeddings, no LLM, no reranking). Method, per-question results and caveats are in <a href="https://github.com/maiiasleptcova/collivind/blob/main/benchmarks/BENCHMARKS.md">BENCHMARKS.md</a>. We publish no comparisons with other memory tools, since they measure different things.</p>
-        <p><strong>Search latency.</strong> With 10,000 memories, median search takes 32 ms in embedded mode and 65 ms on Neo4j + Qdrant, measured with the repository's seeded benchmark, embedding time excluded.</p>
+        <p><strong>Retrieval.</strong> On LongMemEval-S session retrieval, Collivind finds the right session in the top 5 for 98.0% of the 500 questions (standard uncleaned split, raw mode: the default bge-small embedding model run locally, no LLM, no reranking). This is retrieval recall, not answer accuracy. Method, per-question results and caveats are in <a href="https://github.com/maiiasleptcova/collivind/blob/main/benchmarks/BENCHMARKS.md">BENCHMARKS.md</a>. We publish no comparisons with other memory tools, since they measure different things.</p>
+        <p><strong>Search latency.</strong> With 10,000 memories, median search takes 32 ms in embedded mode and 65 ms on Neo4j + Qdrant, median of the repository's seeded benchmark on an Apple-silicon laptop, embedding time excluded.</p>
       </div>
     </div>
   </section>
@@ -204,11 +213,11 @@ collivind init</pre>
   <section class="section band" id="open-source" aria-labelledby="oss-h">
     <div class="wrap">
       <div class="sec-head">
-        <h2 id="oss-h">Open source, and the useful parts stay free</h2>
+        <h2 id="oss-h">Open source, MIT licensed</h2>
       </div>
       <div class="prose">
         <p>Everything on this page is in the MIT-licensed repository: the graph and vector memory, hooks for every agent, the MCP tools and CLI, the web UI, lossless <code>export</code> and <code>import</code>, <code>migrate</code> between modes, and <code>sync</code> through a git repo for sharing with a team.</p>
-        <p>The roadmap commits to keeping single-user memory, export and sync free. A team edition with a shared server and permissions is in development; it is not available or for sale.</p>
+        <p>The roadmap says single-user memory, export and sync stay free. A team edition with a shared server and permissions is in development; it is not available or for sale.</p>
       </div>
       <div class="row mt">
         <a class="btn btn-primary" href="https://github.com/maiiasleptcova/collivind">View source on GitHub</a>
