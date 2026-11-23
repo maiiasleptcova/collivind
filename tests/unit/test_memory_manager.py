@@ -42,15 +42,15 @@ def test_add_memory_no_duplicate():
 
     # Asserts
     assert result == mock_memory
-    # embed is called twice: once for dedup, once for contradiction detection
-    assert embedding_provider.embed.call_count == 2
-    # search is called twice: once for dedup, once for contradiction detection
+    # embed once: the conflict check reuses the stored vector
+    assert embedding_provider.embed.call_count == 1
+    # search is called twice: once for dedup, once for conflict candidates
     assert vector_store.search.call_count == 2
     graph_store.create_memory.assert_called_once()
     vector_store.upsert.assert_called_once_with("mem-1", [0.1, 0.2, 0.3], mock_memory.to_dict())
     graph_store.create_entity.assert_called_once()
     # 2 relationships created: 1 automatic ABOUT, 1 manual RELATES_TO
-    # (no contradictions found since vector_store.search returns [])
+    # (similarity never writes a CONTRADICTS edge)
     assert graph_store.create_relationship.call_count == 2
 
 

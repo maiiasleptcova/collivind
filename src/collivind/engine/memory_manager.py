@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from collivind.config import CollivindConfig
 from collivind.engine.dedup import Deduplicator
@@ -65,6 +65,20 @@ class MemoryManager:
         entities: Optional[List[EntityCreate]] = None,
         relationships: Optional[List[RelationshipCreate]] = None,
     ) -> MemoryNode:
+        return self.add_memory_checked(memory_create, entities, relationships)[0]
+
+    def add_memory_checked(
+        self,
+        memory_create: MemoryCreate,
+        entities: Optional[List[EntityCreate]] = None,
+        relationships: Optional[List[RelationshipCreate]] = None,
+    ) -> Tuple[MemoryNode, List[SearchResult]]:
+        """Store a memory and return it with the live memories it may conflict with.
+
+        Nothing is linked or retired here below the dedup threshold: the
+        caller (an agent, via the MCP response) decides whether a candidate
+        is an older version, a real conflict or just a neighbour.
+        """
         entity_names = [e.name for e in entities] if entities else None
         enriched = build_enriched_text(memory_create, entity_names=entity_names)
         vector = self.embedding_provider.embed(enriched)
@@ -76,7 +90,7 @@ class MemoryManager:
             if existing:
                 if dup_match.is_exact:
                     # identical content resubmitted — reject, keep existing as-is
-                    return existing
+                    return existing, []
                 # near-duplicate with different content: the incoming memory is
                 # the fresh version — store it and retire the stale one below,
                 # instead of keeping old and new side by side
@@ -116,19 +130,16 @@ class MemoryManager:
                     rel_create.source_id = memory_node.id
                 self.graph_store.create_relationship(rel_create)
 
-        contradictions = self.search_engine.find_contradictions(memory_node)
-        for contra in contradictions:
-            self.graph_store.create_relationship(
-                RelationshipCreate(
-                    source_id=memory_node.id,
-                    target_id=contra.memory.id,
-                    type=RelType.CONTRADICTS,
-                    confidence=contra.vector_score,
-                    source="auto_detection",
-                )
-            )
-
-        return memory_node
+        # No CONTRADICTS edge from similarity: on a real store it flagged
+        # thousands of compatible pairs (see engine/conflicts.py).
+        exclude = (stale.id,) if stale else ()
+        try:
+            conflicts = self.search_engine.conflict_candidates(memory_node, vector, exclude=exclude)
+        except Exception:
+            # the memory is stored; a failed lookup must not turn that into an error
+            logger.warning("conflict check failed for %s", memory_node.id, exc_info=True)
+            conflicts = []
+        return memory_node, conflicts
 
     @staticmethod
     def _graph_write(fn, *args, outcome: str = "the memory was NOT saved"):
@@ -298,6 +309,18 @@ class MemoryManager:
         self.graph_store.create_relationship(edge)
         return edge
 
+    def find_conflicts(self, memory_id: str) -> Optional[List[SearchResult]]:
+        """Conflict candidates for a stored memory, scored on the vector it was stored with.
+
+        None when the memory does not exist.
+        """
+        memory = self.graph_store.get_memory(memory_id)
+        if memory is None:
+            return None
+        entity_names, _ = self._entity_names(memory_id)
+        vector = self.embedding_provider.embed(build_enriched_text(self._as_create(memory), entity_names=entity_names))
+        return self.search_engine.conflict_candidates(memory, vector)
+
     def unlink(self, source_id: str, target_id: str, rel_type: RelType) -> int:
         """Remove edges matching the triple. Version edges are history, not links."""
         if rel_type == RelType.SUPERSEDES:
@@ -411,6 +434,14 @@ class MemoryManager:
 
     def batch_add_memories(self, memories: List[Dict[str, Any]]) -> List[str]:
         """Batch insert memories, validating every item before writing any (#37)."""
+        return self.store_batch(self.prepare_batch(memories))
+
+    def batch_add_checked(self, memories: List[Dict[str, Any]]) -> Tuple[List[str], Dict[str, List[SearchResult]]]:
+        """batch_add_memories plus each new memory's conflict candidates (see add_memory_checked)."""
+        return self.store_batch_checked(self.prepare_batch(memories))
+
+    def prepare_batch(self, memories: List[Dict[str, Any]]) -> List[tuple]:
+        """Validate every item up front; one bad item stores nothing (#37)."""
         prepared = []
         for i, mem_data in enumerate(memories):
             try:
@@ -418,24 +449,34 @@ class MemoryManager:
             except (KeyError, ValueError, TypeError) as e:
                 detail = f"missing field {e}" if isinstance(e, KeyError) else str(e)
                 raise ValueError(f"memory[{i}]: {detail} — nothing in the batch was stored") from e
-        return self.store_batch(prepared)
+        return prepared
 
     def store_batch(self, prepared: List[tuple]) -> List[str]:
+        return self.store_batch_checked(prepared)[0]
+
+    def store_batch_checked(self, prepared: List[tuple]) -> Tuple[List[str], Dict[str, List[SearchResult]]]:
         """Store already-validated (MemoryCreate, entities, relationships) items.
 
-        A backend failure part-way raises BatchPartiallyStoredError carrying
-        the ids that did land, rather than discarding them.
+        Returns the stored ids and, per id, its conflict candidates (see
+        add_memory_checked). A backend failure part-way raises
+        BatchPartiallyStoredError carrying the ids that did land, rather
+        than discarding them.
         """
         ids: List[str] = []
+        conflicts: Dict[str, List[SearchResult]] = {}
         for i, (mem_create, entities, relationships) in enumerate(prepared):
             try:
-                node = self.add_memory(mem_create, entities=entities, relationships=relationships)
+                node, found = self.add_memory_checked(mem_create, entities=entities, relationships=relationships)
             except Exception as e:
                 if not ids:
                     raise
                 raise BatchPartiallyStoredError(ids, i, e) from e
             ids.append(node.id)
-        return ids
+            # a later item in the same batch is not a conflict of an earlier one's making
+            found = [c for c in found if c.memory.id not in ids]
+            if found:
+                conflicts[node.id] = found
+        return ids, conflicts
 
     @staticmethod
     def _prepare_batch_item(mem_data: Dict[str, Any]) -> tuple:

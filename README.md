@@ -335,7 +335,8 @@ Once connected, Claude Code gets these tools:
 | `collivind_get_timeline` | Chronological view of project knowledge |
 | `collivind_invalidate` | Mark a memory as outdated/superseded |
 | `collivind_forget` | Delete a memory permanently |
-| `collivind_find_contradictions` | Detect conflicting memories |
+| `collivind_find_contradictions` | List memories close enough to need checking against one (update, conflict or neighbour) |
+| `collivind_mark_conflict` | Flag two memories as a genuine, unresolved conflict for later review |
 | `collivind_get_version_chain` | Full supersession history of a memory |
 | `collivind_extract` | Get an extraction prompt for raw text |
 | `collivind_extract_save` | Parse and store an LLM extraction response |
@@ -395,14 +396,17 @@ Collivind stores memories as nodes in a knowledge graph with vector embeddings f
 
 **Search** combines vector similarity (70% weight) with graph proximity (30% weight) for results that understand both meaning and structure.
 
-**Deduplication and supersession** keep the store current: resubmitting identical knowledge is rejected, and storing an updated version of existing knowledge retires the stale memory (it leaves search results but stays in the version history) instead of keeping old and new side by side. **Contradiction detection** links genuinely conflicting memories with CONTRADICTS relationships.
+**Deduplication and supersession** keep the store current: resubmitting identical knowledge is rejected, and storing an updated version of existing knowledge retires the stale memory (it leaves search results but stays in the version history) instead of keeping old and new side by side. **Conflicts are resolved on write**: when a new memory is close to a live one about the same subject, `collivind_add_memory`/`collivind_batch_add` return it under `possible_conflicts` with an instruction. The agent checks the code, docs or the user's words, retires the stale or wrong one with `collivind_invalidate` (history kept), and asks the user one short question only when it cannot tell. Similarity alone no longer writes CONTRADICTS edges; `collivind contradictions review` triages the ones older versions wrote (dry run by default, `--apply` re-labels or invalidates, never deletes a memory).
 
 ## Benchmarks
 
 **LongMemEval-S session retrieval, Recall@5: 98.0%** (500/500 questions,
 standard split, raw mode — local embeddings, no LLM, no reranking, no API
 keys). Fully reproducible: methodology, per-question results, and honest
-caveats in [benchmarks/BENCHMARKS.md](benchmarks/BENCHMARKS.md). We publish
+caveats in [benchmarks/BENCHMARKS.md](benchmarks/BENCHMARKS.md).
+**LoCoMo turn-level retrieval through the full engine, hit@10: 70.1%**
+(1,536 non-adversarial questions; a much harder, turn-level task, same doc).
+We publish
 no side-by-side numbers against other memory tools — different projects
 measure different things on different splits.
 

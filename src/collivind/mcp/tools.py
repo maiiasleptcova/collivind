@@ -2,6 +2,7 @@ import json
 from typing import Any, Dict, List, Optional
 
 from collivind import capture
+from collivind.engine.conflicts import CONFLICT_INSTRUCTION
 from collivind.engine.extractor import build_extraction_prompt, parse_extraction_response
 from collivind.engine.memory_manager import DEGRADED_NOTE, MemoryManager
 from collivind.exceptions import BatchPartiallyStoredError, CollivindError
@@ -13,6 +14,7 @@ from collivind.models import (
     RelationshipCreate,
     RelType,
     SearchQuery,
+    SearchResult,
 )
 from collivind.storage.interfaces import EmbeddingProvider, GraphStore, VectorStore
 
@@ -20,6 +22,30 @@ BACKEND_HINT = (
     "A storage backend is failing. Run `collivind status` (or the collivind_status tool) "
     "to see which one; in docker mode check `docker ps` for a restarting container."
 )
+
+
+def _conflict_view(conflicts: List[SearchResult]) -> List[Dict[str, Any]]:
+    return [
+        {
+            "id": c.memory.id,
+            "summary": c.memory.summary,
+            "content": c.memory.content[:400],
+            "created_at": c.memory.created_at.isoformat() if c.memory.created_at else None,
+            "similarity": round(c.vector_score, 3),
+        }
+        for c in conflicts
+    ]
+
+
+def _with_conflicts(result: Dict[str, Any], conflicts: Dict[str, List[SearchResult]]) -> Dict[str, Any]:
+    """Attach conflict candidates, keyed by the new memory's id, plus what to do about them."""
+    if not conflicts:
+        return result
+    return {
+        **result,
+        "possible_conflicts": {mid: _conflict_view(found) for mid, found in conflicts.items()},
+        "conflict_instruction": CONFLICT_INSTRUCTION,
+    }
 
 
 class CollivindTools:
@@ -55,7 +81,7 @@ class CollivindTools:
                 normalized.setdefault("session_id", self.session_id)
             memories.append(normalized)
         try:
-            ids = self.memory_manager.batch_add_memories(memories) if memories else []
+            ids, conflicts = self.memory_manager.batch_add_checked(memories) if memories else ([], {})
         except BatchPartiallyStoredError as e:
             self._record(checkpoint_id, False, e.stored_ids, error=str(e), failed_index=e.failed_index)
             raise
@@ -67,7 +93,7 @@ class CollivindTools:
         if checkpoint_id:
             result["checkpoint_id"] = checkpoint_id
             result["checkpoint"] = "confirmed" if ids else "checked, nothing new"
-        return json.dumps(result)
+        return json.dumps(_with_conflicts(result, conflicts))
 
     def _record(self, checkpoint_id, ok, ids, **kw) -> None:
         try:
@@ -85,7 +111,11 @@ class CollivindTools:
             },
             {
                 "name": "collivind_add_memory",
-                "description": "Store a single extracted fact, decision, pattern, or error.",
+                "description": (
+                    "Store a single extracted fact, decision, pattern, or error. If the response has "
+                    "possible_conflicts, follow its conflict_instruction: retire the stale or wrong memory "
+                    "with collivind_invalidate, or ask the user when you cannot tell which is right."
+                ),
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -160,8 +190,25 @@ class CollivindTools:
                 },
             },
             {
+                "name": "collivind_mark_conflict",
+                "description": (
+                    "Flag two memories as genuinely contradicting each other when neither the source of truth "
+                    "nor the user can settle it now. Draws a CONTRADICTS edge for later review; resolve it "
+                    "afterwards with collivind_invalidate."
+                ),
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {"memory_id": {"type": "string"}, "other_id": {"type": "string"}},
+                    "required": ["memory_id", "other_id"],
+                },
+            },
+            {
                 "name": "collivind_invalidate",
-                "description": "Mark a memory as outdated/superseded.",
+                "description": (
+                    "Retire a memory that is outdated or wrong: it leaves search but stays in the version "
+                    "history, with superseded_by pointing at the memory that replaces or corrects it. Use this, "
+                    "not collivind_forget, to resolve a conflict."
+                ),
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -207,7 +254,11 @@ class CollivindTools:
             },
             {
                 "name": "collivind_find_contradictions",
-                "description": "Find memories that potentially contradict a given memory.",
+                "description": (
+                    "List live memories close enough to a given memory to need checking against it (a newer "
+                    "version, a real conflict, or just a neighbour). Similarity cannot tell these apart; read "
+                    "them and follow conflict_instruction."
+                ),
                 "inputSchema": {
                     "type": "object",
                     "properties": {"memory_id": {"type": "string", "description": "ID of the memory to check against"}},
@@ -216,7 +267,10 @@ class CollivindTools:
             },
             {
                 "name": "collivind_batch_add",
-                "description": "Add multiple memories in batch (all-or-nothing validation).",
+                "description": (
+                    "Add multiple memories in batch (all-or-nothing validation). possible_conflicts, when "
+                    "present, maps each new memory id to existing memories to check; follow conflict_instruction."
+                ),
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -351,8 +405,11 @@ class CollivindTools:
                     session_id=args.get("session_id", self.session_id),
                 )
 
-                memory = self.memory_manager.add_memory(mem_create, entities=entities, relationships=relationships)
-                return json.dumps({"status": "success", "memory_id": memory.id})
+                memory, found = self.memory_manager.add_memory_checked(
+                    mem_create, entities=entities, relationships=relationships
+                )
+                result: Dict[str, Any] = {"status": "success", "memory_id": memory.id}
+                return json.dumps(_with_conflicts(result, {memory.id: found} if found else {}))
 
             elif name == "collivind_search":
                 date_from = None
@@ -414,6 +471,13 @@ class CollivindTools:
                 )
                 return context
 
+            elif name == "collivind_mark_conflict":
+                try:
+                    self.memory_manager.link(args["memory_id"], args["other_id"], RelType.CONTRADICTS)
+                except LookupError as e:
+                    return json.dumps({"error": str(e)})
+                return json.dumps({"status": "success", "message": "Conflict flagged"})
+
             elif name == "collivind_invalidate":
                 self.memory_manager.invalidate(
                     memory_id=args["memory_id"], superseded_by=args["superseded_by"], reason=args["reason"]
@@ -454,20 +518,11 @@ class CollivindTools:
                 )
 
             elif name == "collivind_find_contradictions":
-                subject = self.memory_manager.graph_store.get_memory(args["memory_id"])
-                if not subject:
+                candidates = self.memory_manager.find_conflicts(args["memory_id"])
+                if candidates is None:
                     return json.dumps({"error": "Memory not found"})
-                contradictions = self.memory_manager.search_engine.find_contradictions(subject)
                 return json.dumps(
-                    [
-                        {
-                            "id": c.memory.id,
-                            "content": c.memory.content,
-                            "category": c.memory.category.value,
-                            "similarity": c.vector_score,
-                        }
-                        for c in contradictions
-                    ],
+                    {"possible_conflicts": _conflict_view(candidates), "conflict_instruction": CONFLICT_INSTRUCTION},
                     indent=2,
                 )
 
@@ -527,8 +582,9 @@ class CollivindTools:
                     )
                     prepared.append((mem_create, entities, []))
                 # Validate all, then store: same all-or-report contract as batch_add (#37).
-                ids = self.memory_manager.store_batch(prepared)
-                return json.dumps({"status": "success", "count": len(ids), "memory_ids": ids})
+                ids, conflicts = self.memory_manager.store_batch_checked(prepared)
+                result = {"status": "success", "count": len(ids), "memory_ids": ids}
+                return json.dumps(_with_conflicts(result, conflicts))
 
             else:
                 return json.dumps({"error": f"Unknown tool: {name}"})
