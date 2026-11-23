@@ -3,41 +3,124 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light">
-<title>Collivind — memory</title>
+<meta name="color-scheme" content="light dark">
+<title>Collivind memory</title>
+<link rel="preload" href="/fonts/instrument-sans-latin-var.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/app.css">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 </head>
 <body>
-<header class="masthead">
-  <h1><b>Collivind</b> memory</h1>
-  <span class="store-badge" id="store">reading …</span>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="brand"><span class="mark" aria-hidden="true"></span><span>Collivind</span></div>
+  <nav class="views" aria-label="Views">
+    <button data-view="graph" aria-current="page" title="Graph (g)">Graph</button>
+    <button data-view="list" aria-current="false" title="List (l)">List</button>
+    <button data-view="projects" aria-current="false" title="Projects (p)">Projects</button>
+  </nav>
+  <form class="search" id="search-form" role="search">
+    <label class="sr-only" for="q">Filter by text; press Enter to search by meaning</label>
+    <input id="q" type="search" placeholder="Filter, or press Enter to search by meaning" autocomplete="off" spellcheck="false" maxlength="2000">
+    <kbd aria-hidden="true">/</kbd>
+  </form>
+  <span class="store-badge" id="store" title="The store this UI reads and writes">reading…</span>
+  <button id="theme" class="quiet theme" aria-label="Change theme"><span class="theme-icon" aria-hidden="true"></span><span id="theme-label">Auto</span></button>
+  <button id="new" class="primary">New memory</button>
 </header>
 
-<div class="toolbar">
-  <div class="search">
-    <label class="sr-only" for="q">Search memories</label>
-    <input id="q" type="search" placeholder="Search your memories, or leave empty to browse" autocomplete="off" spellcheck="false">
-  </div>
-  <button id="compact" aria-pressed="false" title="Denser list — hides bodies and details">Compact</button>
-  <button id="new" class="primary">New memory</button>
-</div>
+<div id="error" class="error" hidden role="alert"><span id="error-text"></span><button id="error-close" class="icon" aria-label="Dismiss error">×</button></div>
 
-<main>
-  <div id="error" hidden class="error" role="alert"></div>
-  <div id="list" aria-busy="true" aria-live="polite">
-    <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
-  </div>
+<main id="main">
+  <section id="view-graph" class="view graph-view" aria-label="Graph">
+    <aside class="rail" aria-label="Filters and matches">
+      <div class="rail-group">
+        <label for="f-project" class="rail-label">Project</label>
+        <select id="f-project"><option value="">All projects</option></select>
+      </div>
+      <div id="results" class="results" aria-live="polite"></div>
+      <fieldset class="rail-group">
+        <legend class="rail-label">Categories</legend>
+        <div id="f-categories" class="checks"></div>
+      </fieldset>
+      <fieldset class="rail-group">
+        <legend class="rail-label">Entities</legend>
+        <label class="check"><input type="checkbox" id="f-entities" checked> Show entities</label>
+        <div id="f-entity-types" class="checks"></div>
+      </fieldset>
+      <fieldset class="rail-group">
+        <legend class="rail-label">Saved between</legend>
+        <div class="dates">
+          <label class="sr-only" for="f-from">From</label><input type="date" id="f-from">
+          <span aria-hidden="true">and</span>
+          <label class="sr-only" for="f-to">To</label><input type="date" id="f-to">
+        </div>
+      </fieldset>
+      <div class="rail-group">
+        <label class="check"><input type="checkbox" id="f-superseded"> Hide superseded versions</label>
+        <label class="check depth">Local graph reach
+          <select id="f-depth"><option value="1">1 hop</option><option value="2">2 hops</option><option value="3">3 hops</option></select>
+        </label>
+        <button class="quiet" id="f-reset">Reset filters</button>
+      </div>
+      <p id="graph-note" class="hint" aria-live="polite"></p>
+      <div class="legend" aria-label="Legend">
+        <span><i class="lg-mem"></i>memory, in its project's colour</span>
+        <span><i class="lg-old"></i>superseded version</span>
+        <span><i class="lg-ent"></i>entity</span>
+        <span><i class="lg-contra"></i>contradicts</span>
+        <span><i class="lg-ver"></i>supersedes</span>
+      </div>
+    </aside>
+
+    <div class="stage" id="stage">
+      <canvas id="canvas" tabindex="0" aria-label="Memory graph. Arrow keys pan, plus and minus zoom, 0 fits. Every node is also reachable from the filter box and the List view."></canvas>
+      <div class="graph-empty" id="graph-empty" hidden>
+        <h2>The graph is empty</h2>
+        <p>Memories appear here as your agents save them, linked to the files, services and ideas they mention.
+        Write one from the <b>New memory</b> button, or from a terminal: <code>collivind add "…"</code></p>
+      </div>
+      <div class="stage-controls">
+        <button class="icon" id="zoom-in" aria-label="Zoom in">+</button>
+        <button class="icon" id="zoom-out" aria-label="Zoom out">−</button>
+        <button class="icon" id="zoom-fit" aria-label="Fit graph to view">⤢</button>
+      </div>
+      <p class="stage-hint">Scroll to zoom, drag to pan, shift-drag from one node to another to link them.</p>
+    </div>
+
+    <aside id="panel" class="panel" hidden aria-label="Selected memory or entity">
+      <div class="panel-head"><button class="icon" id="panel-close" aria-label="Close panel (Esc)">×</button></div>
+      <div id="panel-body" class="panel-body"></div>
+    </aside>
+  </section>
+
+  <section id="view-list" class="view list-view" hidden aria-labelledby="list-scope">
+    <div class="list-head">
+      <h1 id="list-scope">Memories</h1>
+      <button id="compact" class="quiet" aria-pressed="false" title="Denser list: hides bodies and details">Compact</button>
+    </div>
+    <div id="list" aria-busy="true" aria-live="polite">
+      <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+    </div>
+  </section>
+
+  <section id="view-projects" class="view projects-view" hidden aria-labelledby="projects-title">
+    <div class="list-head"><h1 id="projects-title">Projects</h1></div>
+    <p class="hint lede">Names, colours and links for each project are stored with the memories, so export and migrate carry them along.</p>
+    <div id="projects-list"></div>
+  </section>
 </main>
 
-<dialog id="confirm">
+<dialog id="confirm" aria-labelledby="confirm-title">
   <h2 id="confirm-title">Forget this memory?</h2>
-  <p id="confirm-body">This cannot be undone. Invalidating instead keeps the version chain intact.</p>
+  <p id="confirm-body">This cannot be undone.</p>
   <div class="actions">
-    <button id="confirm-cancel" autofocus>Cancel</button>
-    <button id="confirm-ok" class="primary">Forget permanently</button>
+    <button id="confirm-cancel" autofocus>Keep it</button>
+    <button id="confirm-ok" class="danger-solid">Forget permanently</button>
   </div>
 </dialog>
 
-<script src="/app.js"></script>
+<div id="toast" class="toast" role="status" hidden></div>
+
+<script type="module" src="/app.js"></script>
 </body>
 </html>

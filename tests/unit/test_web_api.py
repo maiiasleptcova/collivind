@@ -85,17 +85,17 @@ class TestReading:
         """
         from collivind.web import server
 
-        js = (server.STATIC / "app.js").read_text()
+        js = (server.STATIC / "memory.js").read_text()
         missing = [f for f in UI_METADATA_FIELDS if f"m.{f}" not in js]
-        assert not missing, f"app.js no longer reads: {missing}"
+        assert not missing, f"memory.js no longer reads: {missing}"
 
     def test_the_card_actually_renders_the_disclosure(self):
         """Without this, deleting the call from card() keeps the test above
         green while the disclosure silently stops rendering."""
         from collivind.web import server
 
-        js = (server.STATIC / "app.js").read_text()
-        card = js.split("function card(")[1].split("\nfunction ")[0]
+        js = (server.STATIC / "memory.js").read_text()
+        card = js.split("function card(")[1].split("\nexport function ")[0]
         assert "detailsMarkup(m)" in card, "card() no longer renders the metadata disclosure"
 
 

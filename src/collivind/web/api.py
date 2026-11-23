@@ -26,6 +26,7 @@ def _memory_dict(node) -> Dict[str, Any]:
 
 
 MAX_ID = 512
+ALL_PROJECTS = "*"
 MAX_QUERY = 2000
 
 
@@ -92,12 +93,19 @@ class MemoryAPI:
         Searching costs an embedding round-trip; browsing must not, so an
         empty query deliberately takes the cheaper path.
         """
+        every = project == ALL_PROJECTS
         if query.strip():
-            results = self.manager.search(SearchQuery(query=query, project_id=project, limit=limit))
+            # An empty project_id is "no project filter" to the search engine.
+            results = self.manager.search(SearchQuery(query=query, project_id="" if every else project, limit=limit))
             return 200, {
                 "memories": [{**_memory_dict(r.memory), "score": r.score} for r in results],
                 "searched": True,
             }
+        if every:
+            # ponytail: full scan of the graph store; a cross-project timeline query if stores grow past ~100k
+            live = [m for m in self.manager.graph_store.iter_memories() if not m.superseded_by and not m.valid_to]
+            live.sort(key=lambda m: m.created_at.isoformat() if m.created_at else "", reverse=True)
+            return 200, {"memories": [_memory_dict(n) for n in live[:limit]], "searched": False}
         nodes = self.manager.get_timeline(project, limit=limit)
         return 200, {"memories": [_memory_dict(n) for n in nodes], "searched": False}
 
