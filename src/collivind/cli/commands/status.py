@@ -264,8 +264,9 @@ def _status_capture():
             )
         elif never:
             click.secho(f"? {h['tool']}: {', '.join(never)} configured but has not run yet", fg="yellow")
-        if "Stop" in h["events"] and ran.get("Stop"):
-            click.secho(f"✓ {h['tool']}: Stop last ran {ran['Stop']}", fg="green")
+        for event in ("Stop", "UserPromptSubmit"):  # capture, recall
+            if ran.get(event):
+                click.secho(f"✓ {h['tool']}: {event} last ran {ran[event]}", fg="green")
     if "codex" in {h["tool"] for h in hook_health() if h["events"]}:
         _warn_codex_inline_hooks()
 

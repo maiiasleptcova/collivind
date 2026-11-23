@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Collivind: local graph memory for AI coding agents</title>
-<meta name="description" content="Collivind gives Claude Code, Codex, opencode and GitHub Copilot a memory that carries over between sessions: a local knowledge graph with vector search, recalled on every prompt in Claude Code, Codex and GitHub Copilot. Open source, MIT.">
+<meta name="description" content="Collivind gives Claude Code, Codex, opencode and GitHub Copilot a memory that carries over between sessions: a local knowledge graph with vector search, recalled on every prompt in Claude Code, Codex, opencode and GitHub Copilot. Open source, MIT.">
 <link rel="canonical" href="https://maiiasleptcova.github.io/collivind/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Collivind">
@@ -45,7 +45,7 @@
           <a class="btn btn-primary" href="#install">Install in two commands</a>
           <a class="btn btn-ghost" href="https://github.com/maiiasleptcova/collivind">View source on GitHub</a>
         </div>
-        <p class="hero-note">Automatic recall in Claude Code, Codex and GitHub Copilot (preview hooks); the memory tools also work in opencode. MIT licensed. Runs on your machine.</p>
+        <p class="hero-note">Automatic recall in Claude Code, Codex, opencode and GitHub Copilot (preview hooks). MIT licensed. Runs on your machine.</p>
       </div>
       <figure class="frame-fig">
         <div class="frame">
@@ -119,12 +119,12 @@ Integration tests use a throwaway Neo4j 5.26 container, never the live stack.</d
           <tbody>
             <tr><th scope="row">Claude Code</th><td class="yes">Yes</td><td><span class="yes">Yes</span><small>SessionStart + UserPromptSubmit</small></td><td><span class="yes">Yes</span><small>Stop hook</small></td><td><span class="yes">Yes</span><small>PreCompact marks it, SessionStart asks</small></td></tr>
             <tr><th scope="row">Codex</th><td class="yes">Yes</td><td><span class="yes">Yes</span><small>after you trust the hooks</small></td><td><span class="yes">Yes</span><small>Stop hook, after you trust it</small></td><td><span class="yes">Yes</span><small>PreCompact marks it, SessionStart asks</small></td></tr>
-            <tr><th scope="row">opencode</th><td class="yes">Yes</td><td><span class="no">No</span><small>no prompt hook to inject into</small></td><td><span class="yes">Yes</span><small>plugin on session.idle</small></td><td><span class="yes">Yes</span><small>plugin on session.compacted</small></td></tr>
+            <tr><th scope="row">opencode</th><td class="yes">Yes</td><td><span class="yes">Yes</span><small>plugin on chat.message</small></td><td><span class="yes">Yes</span><small>plugin on session.idle</small></td><td><span class="yes">Yes</span><small>plugin on session.compacted</small></td></tr>
             <tr><th scope="row">GitHub Copilot<small>hooks in preview</small></th><td class="yes">Yes</td><td><span class="yes">Yes</span><small>sessionStart + userPromptTransformed</small></td><td><span class="yes">Yes</span><small>agentStop hook</small></td><td><span class="yes">Yes</span><small>preCompact marks it, next agentStop asks</small></td></tr>
           </tbody>
         </table>
       </div>
-      <p class="muted small mt-s">opencode has no automatic recall; there you search through the tools. Copilot's agent hooks are in preview in VS Code. <a href="https://github.com/maiiasleptcova/collivind#agent-support">Details in the README</a>.</p>
+      <p class="muted small mt-s">Copilot's agent hooks are in preview in VS Code. <a href="https://github.com/maiiasleptcova/collivind#agent-support">Details in the README</a>.</p>
     </div>
   </section>
 

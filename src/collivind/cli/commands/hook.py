@@ -56,7 +56,13 @@ def get_opencode_plugin_path() -> Path:
     return Path.home() / ".config" / "opencode" / "plugins" / "collivind-capture.js"
 
 
-OPENCODE_EVENTS = ["Stop", "PreCompact"]
+# Plugin flag -> the Claude Code event it stands in for (heartbeat names).
+OPENCODE_EVENTS = {
+    "stop": "Stop",
+    "precompact": "PreCompact",
+    "sessionStart": "SessionStart",
+    "userPrompt": "UserPromptSubmit",
+}
 
 # GitHub Copilot (VS Code agent mode, Copilot CLI, Copilot app) event names for
 # the agent-neutral ones used in heartbeats and `status`. camelCase keys select
@@ -166,15 +172,34 @@ def copilot_warnings() -> list[str]:
     return warnings
 
 
-def install_opencode_plugin() -> list[str]:
-    """Write the opencode capture plugin (opencode has no command hooks)."""
+def install_opencode_plugin(enabled: dict) -> list[str]:
+    """Write the opencode plugin (opencode has no command hooks).
+
+    The enabled events are baked into the file, as the hooks config gates
+    which commands Claude Code and Codex get registered.
+    """
     from importlib.resources import files
 
     source = files("collivind.integrations").joinpath("opencode-capture.js").read_text()
     path = get_opencode_plugin_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(source.replace("__COLLIVIND_BIN__", json.dumps(collivind_bin())))
-    return list(OPENCODE_EVENTS)
+    flags = {k: bool(enabled.get(k)) for k in OPENCODE_EVENTS}
+    path.write_text(
+        source.replace("__COLLIVIND_BIN__", json.dumps(collivind_bin())).replace(
+            "__COLLIVIND_ENABLED__", json.dumps(flags)
+        )
+    )
+    return [e for k, e in OPENCODE_EVENTS.items() if flags[k]]
+
+
+def _opencode_plugin_events(path: Path) -> list[str]:
+    """Events an installed opencode plugin runs; plugins from before 0.14 only capture."""
+    try:
+        line = next(ln for ln in path.read_text().splitlines() if ln.startswith("const ENABLED = "))
+        flags = json.loads(line.removeprefix("const ENABLED = ").rstrip(";"))
+        return [e for k, e in OPENCODE_EVENTS.items() if flags.get(k)]
+    except (OSError, StopIteration, ValueError, AttributeError):
+        return ["Stop", "PreCompact"]
 
 
 def collivind_bin() -> str:
@@ -310,7 +335,7 @@ def hook_health() -> list[dict]:
                 "path": str(plugin),
                 "config_exists": plugin.exists(),
                 "source": "plugin" if plugin.exists() else "none",
-                "events": list(OPENCODE_EVENTS) if plugin.exists() else [],
+                "events": _opencode_plugin_events(plugin) if plugin.exists() else [],
                 "broken": [],
             }
         )
@@ -361,7 +386,13 @@ def install_hooks(
     change to the string forces the user to re-review them.
     """
     if tool == "opencode":
-        return install_opencode_plugin() if (enable_stop or enable_precompact) else []
+        enabled = {
+            "stop": enable_stop,
+            "precompact": enable_precompact,
+            "sessionStart": enable_session_start,
+            "userPrompt": enable_user_prompt,
+        }
+        return install_opencode_plugin(enabled) if any(enabled.values()) else []
     subcommands = {}
     if enable_stop:
         subcommands["Stop"] = "stop"
