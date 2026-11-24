@@ -26,8 +26,11 @@ def _add(mgr, text):
 
 
 def _about(mgr, entity_id):
-    return sorted(e.source_id for e in mgr.graph_store.iter_relationships()
-                  if e.type == RelType.ABOUT and e.target_id == entity_id)
+    return sorted(
+        e.source_id
+        for e in mgr.graph_store.iter_relationships()
+        if e.type == RelType.ABOUT and e.target_id == entity_id
+    )
 
 
 def test_links_every_memory_and_is_idempotent(manager):

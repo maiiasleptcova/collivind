@@ -3,6 +3,13 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, Optional
 
+ALIASES_KEY = "aliases"  # properties["aliases"]: other names that mean this entity
+
+
+def entity_slug(name: str) -> str:
+    """An entity's id from its name; every store and the alias lookup share it."""
+    return name.lower().replace(" ", "_").replace("-", "_")
+
 
 class EntityType(str, Enum):
     PROJECT = "project"
@@ -27,7 +34,7 @@ class EntityNode:
 
     def __post_init__(self):
         if not self.id:
-            self.id = self.name.lower().replace(" ", "_").replace("-", "_")
+            self.id = entity_slug(self.name)
 
 
 @dataclass

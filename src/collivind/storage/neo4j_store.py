@@ -11,7 +11,7 @@ from neo4j import exceptions as neo4j_exceptions
 from collivind.config import Neo4jConfig
 from collivind.exceptions import CollivindError
 from collivind.models import EntityCreate, EntityNode, MemoryCreate, MemoryNode, RelationshipCreate, RelationshipEdge
-from collivind.models.entity import EntityType
+from collivind.models.entity import EntityType, entity_slug
 from collivind.models.memory import MemoryCategory, MemorySource, stored_timestamp
 from collivind.models.relationship import RelType, stable_edge_id
 from collivind.storage.interfaces import GraphStore
@@ -169,7 +169,7 @@ class Neo4jGraphStore(GraphStore):
         return entity
 
     def get_entity(self, name: str) -> Optional[EntityNode]:
-        entity_id = name.lower().replace(" ", "_").replace("-", "_")
+        entity_id = entity_slug(name)
         query = "MATCH (e:Entity {id: $id}) RETURN e"
         with self.driver.session(database=self.config.database) as session:
             record = session.run(query, id=entity_id).single()
@@ -255,7 +255,7 @@ class Neo4jGraphStore(GraphStore):
         return results
 
     def find_related_memories(self, entity_name: str, limit: int = 10) -> List[MemoryNode]:
-        entity_id = entity_name.lower().replace(" ", "_").replace("-", "_")
+        entity_id = entity_slug(entity_name)
         query = """
         MATCH (m:Memory)-[:ABOUT|MENTIONS]->(e:Entity {id: $entity_id})
         RETURN m LIMIT $limit
@@ -287,7 +287,7 @@ class Neo4jGraphStore(GraphStore):
 
     def find_related_memories_batch(self, entity_names: List[str], limit: int = 10) -> Dict[str, List[MemoryNode]]:
         names = list(dict.fromkeys(entity_names))
-        slugs = list(dict.fromkeys(n.lower().replace(" ", "_").replace("-", "_") for n in names))
+        slugs = list(dict.fromkeys(entity_slug(n) for n in names))
         # same pattern and per-entity LIMIT as find_related_memories (which has
         # no ORDER BY either, so which `limit` memories come back past the limit
         # is Neo4j's choice on both paths)
@@ -300,11 +300,11 @@ class Neo4jGraphStore(GraphStore):
         with self.driver.session(database=self.config.database) as session:
             for record in session.run(query, ids=slugs, limit=limit):
                 by_slug[record["eid"]] = [self._node_to_memory(m) for m in record["ms"]]
-        return {name: list(by_slug[name.lower().replace(" ", "_").replace("-", "_")]) for name in names}
+        return {name: list(by_slug[entity_slug(name)]) for name in names}
 
     def get_timeline(self, project_id: str, entity: Optional[str] = None, limit: int = 50) -> List[MemoryNode]:
         if entity:
-            entity_id = entity.lower().replace(" ", "_").replace("-", "_")
+            entity_id = entity_slug(entity)
             query = """
             MATCH (m:Memory {project_id: $project_id})-[:ABOUT|MENTIONS]->(e:Entity {id: $entity_id})
             RETURN m.id as id ORDER BY m.created_at DESC LIMIT $limit

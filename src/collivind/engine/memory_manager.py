@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 from collivind.config import CollivindConfig
@@ -15,7 +16,7 @@ from collivind.models import (
     SearchQuery,
     SearchResult,
 )
-from collivind.models.entity import EntityType
+from collivind.models.entity import ALIASES_KEY, EntityType, entity_slug
 from collivind.models.memory import MemoryCategory, MemorySource, validate_confidence
 from collivind.models.relations import (
     ENTITY_RELATIONS,
@@ -28,6 +29,10 @@ from collivind.models.relations import (
 from collivind.storage.interfaces import EmbeddingProvider, GraphStore, VectorStore
 
 logger = logging.getLogger(__name__)
+
+# How long a process trusts its alias table before reading it again, so an
+# alias set by another process (a merge from the CLI) reaches a running server.
+ALIAS_TTL_SECONDS = 60.0
 
 DEGRADED_NOTE = (
     "[DEGRADED] The graph store is unavailable: these are vector-only results with no "
@@ -59,6 +64,8 @@ class MemoryManager:
         self.config = config
         self.deduplicator = Deduplicator(vector_store, config.search)
         self.search_engine = SearchEngine(vector_store, graph_store, embedding_provider, config.search)
+        self._aliases: Dict[str, str] = {}
+        self._aliases_read_at = float("-inf")
 
     def _merge_tags(self, existing: MemoryNode, new_tags: List[str]) -> List[str]:
         merged = list(existing.tags)
@@ -121,6 +128,9 @@ class MemoryManager:
 
         if entities:
             for ent_create in entities:
+                canonical = self.canonical_entity_name(ent_create.name)
+                if canonical != ent_create.name:
+                    ent_create = EntityCreate(name=canonical, type=ent_create.type, properties=ent_create.properties)
                 ent_node = self.graph_store.create_entity(ent_create)
                 self.graph_store.create_relationship(
                     RelationshipCreate(
@@ -293,10 +303,24 @@ class MemoryManager:
         # get_entity slugifies its argument, so it must round-trip to this id
         return "entity" if entity is not None and entity.id == node_id else None
 
+    def canonical_entity_name(self, name: str) -> str:
+        """The entity a name means: an alias listed on another entity wins over the name itself."""
+        now = time.monotonic()
+        if now - self._aliases_read_at > ALIAS_TTL_SECONDS:
+            # ponytail: one scan of all entities per minute; index aliases in the store if that gets slow
+            self._aliases = {
+                entity_slug(alias): e.name
+                for e in self.graph_store.iter_entities()
+                for alias in (e.properties or {}).get(ALIASES_KEY) or []
+                if isinstance(alias, str) and alias.strip()
+            }
+            self._aliases_read_at = now
+        return self._aliases.get(entity_slug(name), name)
+
     def _relate_entities(self, rel: EntityRelation) -> None:
         """Write '<source> <type> <target>' between two entities named by an agent."""
         ends = []
-        for name in (rel.source, rel.target):
+        for name in (self.canonical_entity_name(rel.source), self.canonical_entity_name(rel.target)):
             entity = self.graph_store.get_entity(name) or self.graph_store.create_entity(
                 EntityCreate(name=name, type=EntityType.CONCEPT)
             )
@@ -378,6 +402,7 @@ class MemoryManager:
         name = name.strip()
         if not name:
             raise ValueError("topic name is required")
+        name = self.canonical_entity_name(name)
         ids = list(dict.fromkeys(memory_ids))
         missing = [i for i in ids if self._node_kind(i) != "memory"]
         if missing:
@@ -487,6 +512,7 @@ class MemoryManager:
 
     def get_entity(self, name: str) -> Optional[Dict[str, Any]]:
         """Retrieve an entity and its related memories."""
+        name = self.canonical_entity_name(name)
         entity = self.graph_store.get_entity(name)
         if not entity:
             return None
@@ -508,6 +534,8 @@ class MemoryManager:
 
     def get_timeline(self, project_id: str, entity: Optional[str] = None, limit: int = 50) -> List[MemoryNode]:
         """Get timeline of memories for a project."""
+        if entity:
+            entity = self.canonical_entity_name(entity)
         return self.graph_store.get_timeline(project_id, entity, limit)
 
     def get_version_chain(self, memory_id: str) -> List[MemoryNode]:

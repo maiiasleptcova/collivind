@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 
-from collivind.models.entity import EntityCreate, EntityNode, EntityType
+from collivind.models.entity import EntityCreate, EntityNode, EntityType, entity_slug
 from collivind.models.memory import MemoryCategory, MemoryCreate, MemoryNode, MemorySource, stored_timestamp
 from collivind.models.relationship import RelationshipCreate, RelationshipEdge, RelType
 from collivind.storage.interfaces import GraphStore
@@ -26,10 +26,6 @@ def _chunks(items: List[str]) -> Iterator[List[str]]:
 
 def _placeholders(items: List[str]) -> str:
     return ", ".join("?" for _ in items)
-
-
-def _entity_slug(name: str) -> str:
-    return name.lower().replace(" ", "_").replace("-", "_")
 
 
 class SqliteGraphStore(GraphStore):
@@ -174,7 +170,7 @@ class SqliteGraphStore(GraphStore):
 
     def create_entity(self, data: EntityCreate) -> EntityNode:
         now = datetime.now(timezone.utc)
-        entity_id = data.name.lower().replace(" ", "_").replace("-", "_")
+        entity_id = entity_slug(data.name)
         existing = self.conn.execute("SELECT * FROM entities WHERE id = ?", (entity_id,)).fetchone()
         if existing:
             return self._row_to_entity(existing)
@@ -195,7 +191,7 @@ class SqliteGraphStore(GraphStore):
         return node
 
     def get_entity(self, name: str) -> Optional[EntityNode]:
-        entity_id = name.lower().replace(" ", "_").replace("-", "_")
+        entity_id = entity_slug(name)
         row = self.conn.execute("SELECT * FROM entities WHERE id = ?", (entity_id,)).fetchone()
         if not row:
             return None
@@ -259,7 +255,7 @@ class SqliteGraphStore(GraphStore):
         return results
 
     def find_related_memories(self, entity_name: str, limit: int = 10) -> List[MemoryNode]:
-        entity_id = entity_name.lower().replace(" ", "_").replace("-", "_")
+        entity_id = entity_slug(entity_name)
         rows = self.conn.execute(
             """SELECT m.* FROM memories m
                JOIN relationships r ON r.source_id = m.id
@@ -291,7 +287,7 @@ class SqliteGraphStore(GraphStore):
 
     def find_related_memories_batch(self, entity_names: List[str], limit: int = 10) -> Dict[str, List[MemoryNode]]:
         names = list(dict.fromkeys(entity_names))
-        slugs = list(dict.fromkeys(_entity_slug(n) for n in names))
+        slugs = list(dict.fromkeys(entity_slug(n) for n in names))
         by_slug: Dict[str, List[MemoryNode]] = {s: [] for s in slugs}
         for chunk in _chunks(slugs):
             # per-entity top `limit` in find_related_memories' order: same join
@@ -310,11 +306,11 @@ class SqliteGraphStore(GraphStore):
             ).fetchall()
             for row in rows:
                 by_slug[row["_eid"]].append(self._row_to_memory(row))
-        return {name: list(by_slug[_entity_slug(name)]) for name in names}
+        return {name: list(by_slug[entity_slug(name)]) for name in names}
 
     def get_timeline(self, project_id: str, entity: Optional[str] = None, limit: int = 50) -> List[MemoryNode]:
         if entity:
-            entity_id = entity.lower().replace(" ", "_").replace("-", "_")
+            entity_id = entity_slug(entity)
             rows = self.conn.execute(
                 """SELECT m.* FROM memories m
                    JOIN relationships r ON r.source_id = m.id
