@@ -426,6 +426,11 @@ caveats in [benchmarks/BENCHMARKS.md](benchmarks/BENCHMARKS.md).
 hit@10 77.5%** with the 0.19 hybrid keyword + cross-encoder rerank stage
 (0.18: 57.6% / 67.2%; 1,536 non-adversarial questions, a much harder,
 turn-level task, same doc).
+**Summary memories (0.20)** lift LoCoMo QA through the engine from 76.7% to
+83.0% at about 1,800 words of context (300 questions, Claude Sonnet 5.5
+reader and judge, p = 0.007), and the prompt hook's default 800-token recall
+from 74.3% to 81.3%; multi-hop did not improve measurably. Summaries cost one
+agent call per session at save time.
 We publish
 no side-by-side numbers against other memory tools — different projects
 measure different things on different splits.

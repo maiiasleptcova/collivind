@@ -157,7 +157,7 @@ class Claude:
         if cache_path.exists():
             for line in cache_path.read_text().splitlines():
                 row = json.loads(line)
-                self.cache[row["k"]] = row["v"]
+                self.cache.setdefault(row["k"], row["v"])  # first answer wins, as it did in the run
         self.file = cache_path.open("a")
 
     def __call__(self, prompt: str) -> str:
@@ -173,6 +173,8 @@ class Claude:
             )  # fmt: skip
             if p.returncode == 0 and p.stdout.strip():
                 with self.lock:
+                    if key in self.cache:  # another thread asked the same prompt first: one verdict per prompt
+                        return self.cache[key]
                     self.cache[key] = p.stdout.strip()
                     self.file.write(json.dumps({"k": key, "v": self.cache[key]}) + "\n")
                     self.file.flush()
@@ -211,6 +213,8 @@ def run_qa(data, sample, contexts, model, cache_path: Path, arms) -> dict:
             if n % 200 == 0:
                 print(f"{n}/{len(jobs)}", flush=True)
     report: dict = {"n": len(sample), "model": model, "arms": {}, "mcnemar": {}}
+    # ids and verdicts only, no dataset text
+    report["per_question"] = {f"{sid}:{i}": {arm: correct[arm][(sid, i)] for arm in arms} for sid, i in sample}
     for arm in arms:
         words = [sum(len(t.split()) for t in contexts[f"{sid}:{i}"][arm]) for sid, i in sample]
         row = {"words": round(sum(words) / len(words)), "overall": 100 * sum(correct[arm].values()) / len(sample)}
