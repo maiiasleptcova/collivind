@@ -13,6 +13,7 @@ from collivind.models.entity import EntityType
 from collivind.models.relations import MEANINGS
 from collivind.web.graph import DEFAULT_LIMIT, MAX_LIMIT, build_graph
 from collivind.web.local import LOCAL_LIMIT, MAX_LOCAL_LIMIT, chain, neighbourhood
+from collivind.web.overlap import overlapping
 
 Result = Tuple[int, Dict[str, Any]]
 
@@ -135,22 +136,15 @@ class MemoryAPI:
         return 200, found
 
     def duplicates(self, memory_id: str) -> Result:
-        """Live memories close enough to this one to be the same fact said twice, or an older version of it.
+        """Live memories that likely duplicate this one or overlap it (web/overlap.py says how).
 
-        The engine's write-time conflict candidates (same project and
-        category, cosine >= 0.85, same subject): a reader decides, nothing
-        is merged here.
+        A reader decides; nothing is merged here.
         """
-        found = self.manager.find_conflicts(memory_id)
+        found = overlapping(self.manager, memory_id)
         if found is None:
             return 404, {"error": f"No memory {memory_id}"}
-        # at or above the threshold add_memory itself merges at, call it likely
-        likely = self.manager.config.search.dedup_threshold
         return 200, {
-            "duplicates": [
-                {**_memory_dict(r.memory), "similarity": round(r.vector_score, 3), "likely": r.vector_score >= likely}
-                for r in sorted(found, key=lambda r: -r.vector_score)
-            ]
+            "duplicates": [{**_memory_dict(row.pop("memory")), "similarity": row["score"], **row} for row in found]
         }
 
     def supersede(self, memory_id: str, body: Dict[str, Any]) -> Result:

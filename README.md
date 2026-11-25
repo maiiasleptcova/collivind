@@ -148,12 +148,16 @@ selection's local graph, `Esc` to deselect):
   to its cause and its fix. Agents are asked to write these links when they
   save a fix (`collivind_batch_add` takes `target_index` for an error saved in
   the same batch).
-- **Likely duplicates**: a memory's panel lists live memories in the same
-  project and category that are close in meaning and about the same subject
-  (the check `add_memory` runs on write), and marks them in the search results.
-  **Keep this, retire that** supersedes one with the other after a
-  confirmation; the retired one stays in its version history. Nothing is
-  merged automatically.
+- **Likely duplicates**: a memory's panel lists up to three live memories in
+  the same project and category that say the same thing, and marks them in the
+  search results. A candidate is scored on the mean of two cosines, its saved
+  text and its summary against the open memory's (agents put the shared fact
+  in the summary and wrap it in different detail): a **likely duplicate** at or
+  above the dedup threshold (0.92), **overlapping** from 0.85 when the two were
+  saved the same day or share an entity. **Keep this, retire that** supersedes
+  one with the other after a confirmation (with a caution for overlapping
+  ones); the retired one stays in its version history. Nothing is merged
+  automatically.
 - **Edit and link**: the side panel edits content, summary, category, tags and
   confidence (same id, re-embedded like `collivind update`), forgets with a
   confirmation, walks the version chain, and adds or removes links between two

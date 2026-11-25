@@ -9,6 +9,7 @@ memory links outrank shared entities, and the cap says what it left out.
 import hashlib
 import math
 import re
+from datetime import datetime, timezone
 
 import pytest
 
@@ -272,3 +273,57 @@ def test_the_cap_never_keeps_a_node_without_its_path_to_the_centre(mgr):
     linked = {e["source"] for e in g["edges"]} | {e["target"] for e in g["edges"]}
     assert kept - {center.id} <= linked  # every kept node is drawn connected
     assert [n["hop"] for n in g["nodes"]] == sorted(n["hop"] for n in g["nodes"])
+
+
+class TestOverlap:
+    """Shaped like the real pair the first rule missed: one fact in the summary, different detail around it."""
+
+    FACT = "Build VM disk enlarged to 77GB on 2026-11-13"
+    PAIR = (
+        "Build VM disk enlarged to 76GB on 2026-11-13",
+        "The build VM disk was enlarged to 77GB on 2026-11-13 after image builds kept failing; the old size was 60GB "
+        "and dangling layers were pruned in the same step, freeing another 9GB on the runner host.",
+        "Build VM disk enlarged to 76GB on 2026-11-13. Checked with the vm list command afterwards; the worker "
+        "stack restarted cleanly and shell access into the containers works again.",
+    )
+
+    @pytest.fixture
+    def shaped(self, mgr):
+        mgr.deduplicator.find_duplicate_detailed = lambda *a, **k: None
+
+        def add(summary, content, entities=("buildvm",)):
+            return mgr.add_memory(
+                MemoryCreate(content=content, summary=summary, category=MemoryCategory.FACT, project_id="p"),
+                entities=[EntityCreate(name=n, type=EntityType.TOOL) for n in entities],
+            )
+
+        a = add(self.FACT, self.PAIR[1])
+        b = add(self.PAIR[0], self.PAIR[2])
+        near = add("Build VM runs with 4 CPUs and 8GB of memory", "The build VM is started with 4 CPUs and 8GB.")
+        return mgr, a.id, b.id, near.id
+
+    def test_the_old_rule_misses_it_and_this_one_flags_it_as_overlapping(self, shaped):
+        mgr, a, b, near = shaped
+        assert [r.memory.id for r in mgr.find_conflicts(a)] == []  # the write-time rule: contents too far apart
+        status, payload = route(MemoryAPI(mgr), "GET", f"/api/memories/{a}/duplicates", {}, {})
+        rows = payload["duplicates"]
+        assert status == 200 and [r["id"] for r in rows] == [b]
+        assert rows[0]["likely"] is False  # overlapping, offered with caution
+        assert rows[0]["summary_similarity"] > rows[0]["text_similarity"]
+
+    def test_a_same_topic_neighbour_is_not_flagged(self, shaped):
+        mgr, _, _, near = shaped
+        assert route(MemoryAPI(mgr), "GET", f"/api/memories/{near}/duplicates", {}, {})[1] == {"duplicates": []}
+
+    def test_without_the_same_day_or_a_shared_entity_an_overlap_is_not_shown(self, mgr):
+        mgr.deduplicator.find_duplicate_detailed = lambda *a, **k: None
+        a, b = (
+            mgr.add_memory(MemoryCreate(content=c, summary=s, category=MemoryCategory.FACT, project_id="p"))
+            for s, c in ((self.FACT, self.PAIR[1]), (self.PAIR[0], self.PAIR[2]))
+        )
+        api = MemoryAPI(mgr)
+        assert [r["id"] for r in route(api, "GET", f"/api/memories/{a.id}/duplicates", {}, {})[1]["duplicates"]] == [
+            b.id
+        ]  # saved the same day
+        mgr.graph_store.update_memory(b.id, created_at=datetime(2026, 1, 1, tzinfo=timezone.utc))
+        assert route(api, "GET", f"/api/memories/{a.id}/duplicates", {}, {})[1]["duplicates"] == []

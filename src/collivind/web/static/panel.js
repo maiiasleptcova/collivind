@@ -206,11 +206,11 @@ function renderDuplicates(m, dups) {
   box.hidden = !list.length;
   if (!list.length) return;
   box.innerHTML = `<h3>Possible duplicates</h3>
-    <p class="hint">Close in meaning and about the same thing: the same fact said twice, an older version, or a neighbour.
-    If one says it all, keep it and retire the other; the retired one stays in Versions.</p>
+    <p class="hint">A <b>likely duplicate</b> says the same thing; an <b>overlapping</b> one shares a fact but may add
+    detail of its own. If one says it all, keep it and retire the other; the retired one stays in Versions.</p>
     <ul class="dups">${list.map((d) => `<li>
       <button class="link-like" data-goto="${esc(d.id)}">${esc(d.summary || d.content.slice(0, 100))}</button>
-      <span class="when">${d.likely ? "likely duplicate · " : ""}similarity ${Number(d.similarity).toFixed(2)}${d.created_at ? ` · ${esc(fmtDate(d.created_at))}` : ""}</span>
+      <span class="when">${d.likely ? "likely duplicate" : "overlapping"} · similarity ${Number(d.similarity).toFixed(2)}${d.created_at ? ` · ${esc(fmtDate(d.created_at))}` : ""}</span>
       ${live ? `<span class="dup-actions">
         <button class="quiet" data-keep="${esc(m.id)}" data-retire="${esc(d.id)}">Keep this, retire that</button>
         <button class="quiet" data-keep="${esc(d.id)}" data-retire="${esc(m.id)}">Keep that one</button></span>` : ""}
@@ -224,9 +224,11 @@ function confirmSupersede(retire, keep, list) {
     const d = id === current.id ? current.data : list.find((x) => x.id === id);
     return (d?.summary || d?.content || labelOf(id)).slice(0, 120);
   };
+  const other = list.find((x) => x.id === retire || x.id === keep);
+  const caution = other && !other.likely ? " They only overlap: check that the one you keep says everything the other does." : "";
   ctx.confirm({
     title: "Retire the duplicate?",
-    body: `“${text(retire)}” will be marked as superseded by “${text(keep)}”. It stays in the version history, and search and recall stop returning it.`,
+    body: `“${text(retire)}” will be marked as superseded by “${text(keep)}”. It stays in the version history, and search and recall stop returning it.${caution}`,
     ok: "Retire it",
     danger: false,
     run: async () => {

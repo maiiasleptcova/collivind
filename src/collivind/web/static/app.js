@@ -434,7 +434,7 @@ function updateHighlight() {
   }
   const dup = state.duplicates;
   if (dup) {
-    const flag = (id) => (dup.likely.get(id) ? "likely duplicate of the open memory" : "similar to the open memory");
+    const flag = (id) => (dup.likely.get(id) ? "likely duplicate of the open memory" : "overlaps the open memory");
     hits = hits.map((h) => (dup.likely.has(h.id) ? { ...h, dup: flag(h.id) } : h));
   }
   if (!heading && state.mode === "summaries" && !state.focusGraph) {
