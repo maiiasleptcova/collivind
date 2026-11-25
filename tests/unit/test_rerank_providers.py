@@ -66,17 +66,36 @@ def test_reranker_that_fails_to_load_leaves_embeddings_up(data_dir, daemon_on): 
         stop(path, t)
 
 
-def test_rerank_model_mismatch_restarts_the_daemon(data_dir, daemon_on):  # noqa: F811
-    path, t = start(data_dir, rerank_model="")  # an older config: no reranker
+def test_other_rerank_model_does_not_kill_the_daemon(data_dir, daemon_on):  # noqa: F811
+    """Processes with different [search] rerank settings must not restart each other's daemon."""
+    path, t = start(data_dir, rerank_model="")  # started by a process with rerank off
     try:
+        p = provider(data_dir)
         with patch.object(embed_daemon, "spawn") as spawn:
-            assert provider(data_dir).rerank("q", ["a"]) is None
-        spawn.assert_called_once()
-        assert spawn.call_args.args[3] == RERANK
-        t.join(5)
-        assert not t.is_alive(), "mismatched daemon kept running"
+            assert p.rerank("q", ["a"]) is None
+            assert p.embed("ab") == [2.0, 1.0]  # embeddings still served
+        spawn.assert_not_called()
+        assert t.is_alive()
+        assert p.can_rerank is False  # backs off instead of building pools for nothing
     finally:
         stop(path, t)
+
+
+def test_hook_processes_never_load_a_cross_encoder(data_dir, monkeypatch):  # noqa: F811
+    monkeypatch.setenv(embed_daemon.ENV_DISABLE, "0")
+    p = provider(data_dir)
+    p.allow_in_process_rerank = False
+    with patch.object(embed_daemon, "load_cross_encoder", side_effect=AssertionError("loaded in a hook")):
+        assert p.rerank("q", ["a"]) is None
+
+
+def test_hook_manager_disallows_in_process_rerank():
+    from collivind.cli.commands import hook
+
+    manager = MagicMock()
+    manager.embedding_provider = LocalEmbeddingProvider(EmbeddingsConfig(), rerank_model=RERANK)
+    with patch("collivind.cli.commands.memory._manager", return_value=manager):
+        assert hook._load_manager().embedding_provider.allow_in_process_rerank is False
 
 
 def test_no_daemon_means_no_rerank_and_no_in_process_load(data_dir, daemon_on):  # noqa: F811
@@ -147,10 +166,11 @@ def test_http_rerank_problems_return_none(response):
     assert p.rerank("q", ["a", "b"]) is None
 
 
-def test_http_rerank_timeout_returns_none_without_retry():
+def test_http_rerank_timeout_returns_none_without_retry_then_backs_off():
     handler = MagicMock(side_effect=httpx.ReadTimeout("slow"))
     p = _http(handler)
     assert p.rerank("q", ["a"]) is None
+    assert p.can_rerank is False and p.rerank("q", ["a"]) is None  # a slow service is not asked on every prompt
     assert handler.call_count == 1
 
 

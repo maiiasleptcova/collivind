@@ -65,6 +65,18 @@ class SearchConfig:
     rerank_pool: int = 50  # candidates scored per search (at least the requested limit)
     lexical: bool = True  # add keyword (BM25) candidates to the rerank pool
 
+    def __post_init__(self):
+        # on the prompt path: a typo must fail at config load, not mid-search
+        if (
+            isinstance(self.rerank_pool, bool)
+            or not isinstance(self.rerank_pool, int)
+            or not 1 <= self.rerank_pool <= 200
+        ):
+            raise ConfigurationError(f"[search] rerank_pool must be an integer from 1 to 200, got {self.rerank_pool!r}")
+        for name in ("rerank", "lexical"):
+            if not isinstance(getattr(self, name), bool):
+                raise ConfigurationError(f"[search] {name} must be true or false, got {getattr(self, name)!r}")
+
 
 @dataclass
 class HooksConfig:

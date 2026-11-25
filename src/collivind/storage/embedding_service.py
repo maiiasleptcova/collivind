@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 # On the prompt path: one try, short, never the 30 s / 3-retry embed budget.
 RERANK_TIMEOUT = 3.0
+RERANK_BACKOFF = 60.0  # seconds without rerank after a failed call: a slow service must not tax every prompt
 
 
 def _retry(fn, max_retries=3, base_delay=0.5):
@@ -36,14 +37,15 @@ class HttpEmbeddingProvider(EmbeddingProvider):
         self.client = httpx.Client(base_url=config.service_url, timeout=30.0)
         self._rerank = rerank
         self._rerank_missing = False  # an embeddings image built before 0.19 has no /rerank
+        self._rerank_off_until = 0.0  # monotonic
 
     @property
     def can_rerank(self) -> bool:
-        return self._rerank and not self._rerank_missing
+        return self._rerank and not self._rerank_missing and time.monotonic() >= self._rerank_off_until
 
     def rerank(self, query: str, texts: List[str]) -> Optional[List[float]]:
         """POST /rerank on the embeddings service; None on any problem (search keeps its ranking)."""
-        if not self._rerank or self._rerank_missing or not texts:
+        if not self.can_rerank or not texts:
             return None
         try:
             resp = self.client.post("/rerank", json={"query": query, "texts": texts}, timeout=RERANK_TIMEOUT)
@@ -57,7 +59,8 @@ class HttpEmbeddingProvider(EmbeddingProvider):
                 return None
             return [float(x) for x in scores]
         except Exception as e:
-            logger.warning(f"reranker unavailable, keeping first-stage ranking: {e}")
+            self._rerank_off_until = time.monotonic() + RERANK_BACKOFF
+            logger.warning(f"reranker unavailable for {RERANK_BACKOFF:.0f}s, keeping first-stage ranking: {e}")
             return None
 
     def embed(self, text: str) -> List[float]:

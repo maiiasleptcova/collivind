@@ -242,7 +242,10 @@ def parse_search_overrides(pairs: Sequence[str]) -> Dict[str, Any]:
     out: Dict[str, Any] = {}
     for pair in pairs:
         key, _, raw = pair.partition("=")
-        out[key] = json.loads(raw.lower()) if raw.lower() in ("true", "false") or raw.isdigit() else raw
+        try:
+            out[key] = json.loads(raw.lower() if raw.lower() in ("true", "false") else raw)
+        except json.JSONDecodeError:
+            out[key] = raw  # a plain string, e.g. a model name
     return out
 
 

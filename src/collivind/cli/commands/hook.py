@@ -518,7 +518,12 @@ def _session_id(payload: dict) -> str:
 def _load_manager():
     from collivind.cli.commands.memory import _manager
 
-    return _manager()
+    manager = _manager()
+    # A hook is a short-lived process: rerank through the resident daemon or
+    # not at all, never a cross-encoder load (or first download) in here.
+    if hasattr(manager.embedding_provider, "allow_in_process_rerank"):
+        manager.embedding_provider.allow_in_process_rerank = False
+    return manager
 
 
 PROJECT = click.option(

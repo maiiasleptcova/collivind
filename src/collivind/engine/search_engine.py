@@ -161,7 +161,10 @@ class SearchEngine:
         return results[: query.limit], degraded
 
     def _can_rerank(self) -> bool:
-        return bool(self.config.rerank) and getattr(self.embedding_provider, "can_rerank", False) is True
+        try:
+            return bool(self.config.rerank) and getattr(self.embedding_provider, "can_rerank", False) is True
+        except Exception:
+            return False
 
     def _pool_size(self, query: SearchQuery) -> int:
         return max(self.config.rerank_pool, query.limit)
@@ -178,6 +181,8 @@ class SearchEngine:
             logits = self.embedding_provider.rerank(query.query[:RERANK_QUERY_CHARS], texts)
             if not isinstance(logits, list) or len(logits) != len(pool):
                 return None
+            if not all(isinstance(x, (int, float)) and math.isfinite(x) for x in logits):
+                return None  # a NaN would squash to 1.0 and rank first
             out = []
             for res, logit in zip(pool, logits):
                 rerank_score = _sigmoid(float(logit))

@@ -1,6 +1,7 @@
 import importlib.util
 import logging
 import sys
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -10,6 +11,8 @@ from collivind.storage import embed_daemon
 from collivind.storage.interfaces import EmbeddingProvider
 
 logger = logging.getLogger(__name__)
+
+RERANK_BACKOFF = 300.0  # seconds without rerank after the daemon reports no reranker
 
 
 class LocalEmbeddingProvider(EmbeddingProvider):
@@ -26,6 +29,10 @@ class LocalEmbeddingProvider(EmbeddingProvider):
         self.rerank_model = rerank_model
         self._reranker: Any = None  # CrossEncoder, in-process mode only
         self._reranker_failed = False
+        # Short-lived processes (hooks) set this False: without a daemon they
+        # skip rerank rather than pay a cross-encoder load (or first download).
+        self.allow_in_process_rerank = True
+        self._rerank_off_until = 0.0  # monotonic; the daemon said it has no reranker
 
     def _daemon_owns_models(self) -> bool:
         """True when models belong in the daemon, not in this process."""
@@ -35,7 +42,7 @@ class LocalEmbeddingProvider(EmbeddingProvider):
 
     @property
     def can_rerank(self) -> bool:
-        return bool(self.rerank_model) and not self._reranker_failed
+        return bool(self.rerank_model) and not self._reranker_failed and time.monotonic() >= self._rerank_off_until
 
     def rerank(self, query: str, texts: List[str]) -> Optional[List[float]]:
         """Scores from the resident daemon, or in-process when there is no daemon.
@@ -45,14 +52,22 @@ class LocalEmbeddingProvider(EmbeddingProvider):
         (it is started here) means this search keeps its first-stage ranking.
         Never raises.
         """
-        if not self.rerank_model or not texts:
+        if not self.can_rerank or not texts:
             return None
         try:
             if self._daemon_owns_models():
                 socket_path = embed_daemon.socket_path_for(self._data_dir)  # type: ignore[arg-type]
-                return embed_daemon.rerank_via_daemon(
-                    socket_path, self.config.model, self.rerank_model, query, texts, self.config.daemon_idle_timeout
-                )
+                try:
+                    return embed_daemon.rerank_via_daemon(
+                        socket_path, self.config.model, self.rerank_model, query, texts, self.config.daemon_idle_timeout
+                    )
+                except embed_daemon.RerankerUnavailable:
+                    # this daemon runs without our reranker until it idles out
+                    # (or `collivind embed-daemon stop`): stop building pools
+                    self._rerank_off_until = time.monotonic() + RERANK_BACKOFF
+                    return None
+            if not self.allow_in_process_rerank:
+                return None
             if self._reranker is None:
                 if self._reranker_failed:
                     return None

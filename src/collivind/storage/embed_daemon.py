@@ -13,9 +13,13 @@ Protocol, one request per connection:
   <- {"ok": true, "scores": [...]}
   -> {"op": "info"}       <- {"ok": true, "version": "...", "model": "...", "rerank_model": "...", "pid": N}
   -> {"op": "shutdown"}   <- {"ok": true}
-A request whose version/model/rerank_model differ from the daemon's gets
+A request whose version/model differ from the daemon's gets
 {"ok": false, "error": "mismatch"} and the daemon shuts down, so the client
-can start a matching one. rerank_model "" means no cross-encoder is loaded.
+can start a matching one. A rerank request for a cross-encoder the daemon did
+not load gets {"ok": false, "error": "no reranker loaded"} and the daemon
+keeps running: processes with different [search] rerank settings must not
+keep killing each other's daemon. The daemon loads the rerank_model of the
+client that started it ("" = none) until it exits.
 
 Single instance: the daemon holds an exclusive flock on `embed.lock` for its
 whole life, taken before it touches the socket. Whoever holds the lock owns
@@ -171,9 +175,7 @@ class EmbedServer(_ServerBase):
             self.stopping = True
             return {"ok": True}
         if op in ("embed", "rerank") and (
-            request.get("version") != self.version
-            or request.get("model") != self.model_name
-            or request.get("rerank_model", "") != self.rerank_model
+            request.get("version") != self.version or request.get("model") != self.model_name
         ):
             self.stopping = True
             return {"ok": False, "error": "mismatch", "version": self.version, "model": self.model_name}
@@ -181,8 +183,8 @@ class EmbedServer(_ServerBase):
             query, texts = request.get("query"), request.get("texts")
             if not isinstance(query, str) or not isinstance(texts, list) or not all(isinstance(t, str) for t in texts):
                 return {"ok": False, "error": "query must be a string and texts a list of strings"}
-            if self.reranker is None:
-                return {"ok": False, "error": "no reranker loaded"}
+            if self.reranker is None or request.get("rerank_model") != self.rerank_model:
+                return {"ok": False, "error": "no reranker loaded", "rerank_model": self.rerank_model}
             scores = self.reranker.predict([(query, t) for t in texts], batch_size=64, show_progress_bar=False)
             return {"ok": True, "scores": [float(x) for x in scores]}
         if op == "embed":
@@ -352,7 +354,13 @@ def _call(
         return reply
     if reply.get("error") == "mismatch":  # the old daemon is already exiting
         _spawn_quietly(socket_path, model_name, idle_timeout, rerank_model)
+    elif reply.get("error") == "no reranker loaded":
+        raise RerankerUnavailable(reply.get("rerank_model", ""))
     return None
+
+
+class RerankerUnavailable(Exception):
+    """The daemon is up but serves no (or another) cross-encoder."""
 
 
 def embed_via_daemon(socket_path: Path, model_name: str, texts: List[str], idle_timeout: float, rerank_model: str = ""):
@@ -372,7 +380,10 @@ def embed_via_daemon(socket_path: Path, model_name: str, texts: List[str], idle_
 def rerank_via_daemon(
     socket_path: Path, model_name: str, rerank_model: str, query: str, texts: List[str], idle_timeout: float
 ) -> Optional[List[float]]:
-    """Cross-encoder scores from the daemon, or None (caller keeps its first-stage ranking)."""
+    """Cross-encoder scores from the daemon, or None (caller keeps its first-stage ranking).
+
+    Raises RerankerUnavailable when the daemon answers but has no matching
+    reranker, so the caller can stop asking for a while."""
     payload = {"op": "rerank", "query": query, "texts": texts}
     timeout = REPLY_TIMEOUT_BASE + REPLY_TIMEOUT_PER_TEXT * len(texts)
     reply = _call(socket_path, payload, timeout, model_name, idle_timeout, rerank_model)

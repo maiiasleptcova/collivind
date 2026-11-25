@@ -273,11 +273,11 @@ class Neo4jGraphStore(GraphStore):
     ) -> List[Tuple[MemoryNode, float]]:
         """Keyword candidates from a Lucene full-text index on Memory.content.
 
-        Stores created before 0.19 have no index: the first search in a
-        process creates it (idempotent), and Neo4j populates it from the
-        existing nodes in the background. Until it is ONLINE, and on any
-        error, this returns [] and search stays dense-only. No retries: this
-        sits on the prompt path.
+        Stores created before 0.19 have no index: a search that finds it
+        missing creates it (idempotent; `initialize()` does too), and Neo4j
+        populates it from the existing nodes in the background. Until it is
+        ONLINE, and on any error, this returns [] and search stays
+        dense-only. No retries: this sits on the prompt path.
         """
         terms = query_terms(query)
         if not terms or limit <= 0:
@@ -292,14 +292,27 @@ class Neo4jGraphStore(GraphStore):
         lucene = " OR ".join(f'"{t}"' for t in terms)
         try:
             with self.driver.session(database=self.config.database) as session:
-                if not getattr(self, "_fulltext_ready", False):
-                    session.run(_CREATE_FULLTEXT).consume()
-                    self._fulltext_ready = True
                 records = session.run(cypher, q=lucene, project_id=project_id or None, limit=limit)
                 return [(self._node_to_memory(r["node"]), float(r["score"])) for r in records]
+        except neo4j_exceptions.ClientError as e:
+            if FULLTEXT_INDEX in str(e.message or ""):  # no such index yet: a pre-0.19 store
+                self._create_fulltext_index()
+            else:
+                logger.warning("keyword search failed, using dense candidates only: %s", e)
+            return []
         except Exception as e:
             logger.warning("keyword search failed, using dense candidates only: %s", e)
             return []
+
+    def _create_fulltext_index(self) -> None:
+        try:
+            with self.driver.session(database=self.config.database) as session:
+                session.run(_CREATE_FULLTEXT).consume()
+            logger.info(
+                "created the %s keyword index; it fills from existing memories in the background", FULLTEXT_INDEX
+            )
+        except Exception as e:
+            logger.warning("could not create the keyword index, search stays dense-only: %s", e)
 
     def get_neighbors_batch(
         self, node_ids: List[str], rel_types: List[str], direction: str = "OUT"

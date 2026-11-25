@@ -270,3 +270,24 @@ def test_graph_only_candidates_stay_in_the_pool(stores):
     results = _engine(graph, vector, emb).search(SearchQuery(query="deploy", project_id="p"))
     by_id = {r.memory.id: r for r in results}
     assert linked.id in by_id and by_id[linked.id].graph_score > 0 and by_id[linked.id].rerank_score is not None
+
+
+@pytest.mark.parametrize("bad", [[float("nan"), 1.0], [float("inf"), 1.0], ["x", 1.0]])
+def test_non_finite_logits_fall_back_to_first_stage(stores, bad):
+    graph, vector = stores
+    emb = WordEmbedder()
+    for text in ("deploy helm", "deploy kubectl"):
+        _store(graph, vector, emb, text)
+    query = SearchQuery(query="deploy", project_id="p")
+    off = [r.memory.id for r in _engine(graph, vector, emb, rerank=False).search(query)]
+    emb.rerank = lambda q, texts: bad
+    results = _engine(graph, vector, emb).search(query)
+    assert [r.memory.id for r in results] == off and all(r.rerank_score is None for r in results)
+
+
+@pytest.mark.parametrize("pool", [0, 201, "50", True])
+def test_rerank_pool_is_validated(pool):
+    from collivind.exceptions import ConfigurationError
+
+    with pytest.raises(ConfigurationError):
+        SearchConfig(rerank_pool=pool)
