@@ -17,6 +17,11 @@ RRF_K = 60  # reciprocal rank fusion constant (Cormack et al.)
 # ponytail: the cross-encoder reads 256 tokens of query + memory; a long
 # prompt is cut to its opening so the memory keeps most of the budget.
 RERANK_QUERY_CHARS = 1000
+# The cross-encoder's own relevance boundary. When no candidate in the pool
+# clears it, the model is saying "none of these answer the query" and its
+# order among them is noise (indirect prompts: preferences, "what should I
+# do about X"), so the first-stage ranking is served instead.
+RERANK_GATE_LOGIT = 0.0
 
 
 def _sigmoid(logit: float) -> float:
@@ -53,8 +58,9 @@ class SearchEngine:
     top rerank_pool and the keyword (BM25) top rerank_pool, plus the best
     `limit` graph/entity-only candidates, is scored by the cross-encoder.
     The squashed score sigmoid(logit) takes the cosine's place in the same
-    formula, so graph links and temporal decay keep their weight. Any
-    reranker problem returns the first-stage ranking unchanged.
+    formula, so graph links and temporal decay keep their weight. When no
+    pool candidate clears the model's relevance boundary (logit 0), and on
+    any reranker problem, the first-stage ranking is returned unchanged.
     """
 
     def __init__(
@@ -183,6 +189,8 @@ class SearchEngine:
                 return None
             if not all(isinstance(x, (int, float)) and math.isfinite(x) for x in logits):
                 return None  # a NaN would squash to 1.0 and rank first
+            if max(logits) < RERANK_GATE_LOGIT:
+                return None
             out = []
             for res, logit in zip(pool, logits):
                 rerank_score = _sigmoid(float(logit))

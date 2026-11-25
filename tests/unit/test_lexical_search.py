@@ -267,6 +267,7 @@ def test_graph_only_candidates_stay_in_the_pool(stores):
     graph.create_entity(EntityCreate(name="Infra", type=EntityType.CONCEPT))
     for m in (seed, linked):
         graph.create_relationship(RelationshipCreate(source_id=m.id, target_id="infra", type=RelType.ABOUT))
+    emb.rerank = lambda q, texts: [1.0] * len(texts)  # clears the gate
     results = _engine(graph, vector, emb).search(SearchQuery(query="deploy", project_id="p"))
     by_id = {r.memory.id: r for r in results}
     assert linked.id in by_id and by_id[linked.id].graph_score > 0 and by_id[linked.id].rerank_score is not None
@@ -291,3 +292,18 @@ def test_rerank_pool_is_validated(pool):
 
     with pytest.raises(ConfigurationError):
         SearchConfig(rerank_pool=pool)
+
+
+def test_no_confident_candidate_serves_the_first_stage(stores):
+    """All logits below the model's relevance boundary: its order is noise, keep dense + graph."""
+    graph, vector = stores
+    emb = WordEmbedder()
+    for text in ("deploy helm", "deploy helm kubectl", "deploy postgres"):
+        _store(graph, vector, emb, text)
+    query = SearchQuery(query="deploy helm", project_id="p")
+    off = [r.memory.id for r in _engine(graph, vector, emb, rerank=False).search(query)]
+    emb.rerank = lambda q, texts: [-1.0 - i for i in range(len(texts))][::-1]  # reversed order, all negative
+    gated = _engine(graph, vector, emb).search(query)
+    assert [r.memory.id for r in gated] == off and all(r.rerank_score is None for r in gated)
+    emb.rerank = lambda q, texts: [0.5] + [-3.0] * (len(texts) - 1)  # one confident candidate: rerank applies
+    assert _engine(graph, vector, emb).search(query)[0].rerank_score is not None
