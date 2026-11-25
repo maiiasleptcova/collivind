@@ -34,6 +34,7 @@ const state = {
   local: false,
   localGraph: null,      // the selection's neighbourhood, ranked and capped server-side
   localLimit: LOCAL_LIMIT,
+  localSeq: 0,           // only the newest local graph request is drawn
   openHubs: new Set(),   // hub entities the reader opened in the local graph
   duplicates: null,      // { of, likely: Map id -> bool } near-duplicates of the open memory
   depth: 1,
@@ -124,13 +125,18 @@ function rebuildById() {
 async function loadLocal({ apply = true } = {}) {
   const id = state.selected;
   if (!id) return;
+  const seq = ++state.localSeq;
   const params = new URLSearchParams({ id, depth: String(state.depth), types: [...state.edgeTypes].join(","), limit: String(state.localLimit) });
   if (state.openHubs.size) params.set("expand", [...state.openHubs].join(","));
+  // scoped server-side, so the cap is spent on what the project filter shows
+  if (state.filters.project) params.set("project", state.filters.project);
   try {
-    const g = await api(`/api/local?${params}`);
-    if (state.selected !== id || !state.local) return; // the reader moved on while this was in flight
+    // every link type unticked: nothing to walk (an empty types= would read as "all")
+    const g = state.edgeTypes.size ? await api(`/api/local?${params}`)
+      : { nodes: [state.byId.get(id)].filter(Boolean), edges: [], more: 0, total_memories: 1, center: id };
+    if (seq !== state.localSeq || state.selected !== id || !state.local) return; // superseded while in flight
     state.localGraph = g;
-  } catch (e) { showError(e); return; }
+  } catch (e) { if (seq === state.localSeq) showError(e); return; }
   rebuildById();
   view.userMoved = false;
   if (apply) applyFilters();
@@ -305,7 +311,7 @@ function renderLocalTools() {
   const box = $("#local-tools");
   const g = state.local && state.localGraph;
   if (!g) { box.hidden = true; box.innerHTML = ""; return; }
-  const hubs = g.nodes.filter((n) => n.hub);
+  const hubs = g.nodes.filter((n) => n.hub && n.id !== g.center);
   box.hidden = !hubs.length && !g.more;
   box.innerHTML = (hubs.length ? `<p class="hint">Shared by many memories, so the local graph does not walk through:</p><ul class="hubs">${hubs.map((n) =>
     `<li><button class="quiet" data-hub="${esc(n.id)}" title="Add the memories about it that are most related to the selection">Open ${esc(n.label)} <span class="count">${n.count.toLocaleString()}</span></button></li>`).join("")}</ul>` : "")

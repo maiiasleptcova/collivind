@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from collivind.config import CollivindConfig
+from collivind.engine.dedup import DuplicateMatch
 from collivind.engine.memory_manager import LINKABLE, MemoryManager
 from collivind.models import MemoryCreate, RelationshipCreate, RelType
 from collivind.models.memory import MemoryCategory
@@ -161,3 +162,26 @@ def test_target_index_must_point_earlier_in_the_batch(manager, index):
 def test_target_index_outside_a_batch_is_refused():
     with pytest.raises(ValueError, match="batch"):
         parse_relationship({"target_index": 0, "type": "RESOLVES"})
+
+
+def test_a_duplicate_fix_still_records_its_link(manager):
+    """The fix text was saved before; the RESOLVES edge stated now must not vanish with the duplicate."""
+    fix = manager.batch_add_memories([_item("resized the colima disk to 80 GB", "decision")])[0]
+    manager.deduplicator.find_duplicate_detailed = lambda vector, project: (
+        DuplicateMatch(fix, 0.99, True) if vector == "dup" else None
+    )
+    manager.embedding_provider.embed.side_effect = lambda text: "dup" if "colima" in text else [0.1]
+    ids = manager.batch_add_memories(
+        [
+            _item("docker exec fails: no space left on device"),
+            _item("resized the colima disk to 80 GB", "decision", [{"target_index": 0, "type": "RESOLVES"}]),
+        ]
+    )
+    assert ids[1] == fix
+    edges = {(r.source_id, r.type.value, r.target_id) for r in manager.graph_store.iter_relationships()}
+    assert (fix, "RESOLVES", ids[0]) in edges
+
+
+def test_a_target_id_cannot_pose_as_a_batch_reference():
+    with pytest.raises(ValueError, match="target_index"):
+        parse_relationship({"target_id": "batch-index:0", "type": "RESOLVES"}, in_batch=True)

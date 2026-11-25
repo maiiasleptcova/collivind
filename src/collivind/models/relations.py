@@ -118,4 +118,7 @@ def parse_relationship(raw: Dict[str, Any], in_batch: bool = False) -> Union[Rel
         if isinstance(index, bool) or not isinstance(index, int) or index < 0:
             raise ValueError("target_index must be the position (0, 1, ...) of an earlier memory in this batch")
         return RelationshipCreate(source_id="", target_id=f"{BATCH_REF}{index}", type=rel_type, properties=properties)
-    return RelationshipCreate(source_id="", target_id=raw["target_id"], type=rel_type, properties=properties)
+    target_id = raw["target_id"]
+    if isinstance(target_id, str) and target_id.startswith(BATCH_REF):
+        raise ValueError(f"target_id cannot start with {BATCH_REF!r}; use target_index for this batch")
+    return RelationshipCreate(source_id="", target_id=target_id, type=rel_type, properties=properties)

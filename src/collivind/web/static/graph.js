@@ -111,7 +111,9 @@ export class GraphView {
     }
     this.scaleNodes(true);
     if (this.selected && !visible.has(this.selected)) this.selected = null;
-    if (this.hover && !visible.has(this.hover)) this.hover = null; // a stale hover would hold the layout
+    // A click that re-centres leaves the pointer resting on a node of the new
+    // graph; that hover would hold the fresh layout still. The next move re-hits.
+    if (!fixed) this.hover = null;
     this.alpha = fixed ? 0 : Math.max(this.alpha, reheat);
     // Thousands of edges at full strength are a solid smear; the more there
     // are, the fainter each one, so structure shows through the density.
@@ -181,7 +183,8 @@ export class GraphView {
     const n = this.byId.get(id);
     // while the view still fits itself it keeps every node in sight; moving it
     // here would mark it user-moved and freeze a half-settled layout off-fit
-    if (!n || !this.w || !this.userMoved) return;
+    if (!n || !this.w) return;
+    if (!this.userMoved) { if (this.alpha <= 0.004) this.fit(); return; }
     const sx = n.x * this.k + this.tx, sy = n.y * this.k + this.ty;
     if (sx < margin || sx > this.w - margin || sy < margin || sy > this.h - margin) this.centerOn(id, false);
   }

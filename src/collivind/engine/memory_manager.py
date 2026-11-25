@@ -115,7 +115,10 @@ class MemoryManager:
             existing = self._graph_write(self.graph_store.get_memory, dup_match.memory_id)
             if existing:
                 if dup_match.is_exact:
-                    # identical content resubmitted — reject, keep existing as-is
+                    # identical content resubmitted — keep existing as-is, but the
+                    # links the save states are new knowledge ("this fix resolves
+                    # that error") and must not vanish with the duplicate text
+                    self._write_relationships(existing.id, relationships)
                     return existing, []
                 # near-duplicate with different content: the incoming memory is
                 # the fresh version — store it and retire the stale one below,
@@ -153,13 +156,7 @@ class MemoryManager:
                     )
                 )
 
-        for rel in relationships or []:
-            if isinstance(rel, EntityRelation):
-                self._relate_entities(rel)
-                continue
-            if not rel.source_id:
-                rel.source_id = memory_node.id
-            self.graph_store.create_relationship(rel)
+        self._write_relationships(memory_node.id, relationships)
 
         # No CONTRADICTS edge from similarity: on a real store it flagged
         # thousands of compatible pairs (see engine/conflicts.py).
@@ -171,6 +168,15 @@ class MemoryManager:
             logger.warning("conflict check failed for %s", memory_node.id, exc_info=True)
             conflicts = []
         return memory_node, conflicts
+
+    def _write_relationships(
+        self, memory_id: str, relationships: Optional[Sequence[Union[RelationshipCreate, EntityRelation]]]
+    ) -> None:
+        for rel in relationships or []:
+            if isinstance(rel, EntityRelation):
+                self._relate_entities(rel)
+            else:
+                self.graph_store.create_relationship(replace(rel, source_id=rel.source_id or memory_id))
 
     @staticmethod
     def _graph_write(fn, *args, outcome: str = "the memory was NOT saved"):

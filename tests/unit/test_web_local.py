@@ -258,3 +258,17 @@ class TestLocalRoute:
     )
     def test_bad_params(self, hubbed, params):
         assert route(MemoryAPI(hubbed[0]), "GET", "/api/local", params, {})[0] == 400
+
+
+def test_the_cap_never_keeps_a_node_without_its_path_to_the_centre(mgr):
+    """Review finding: strongly linked hop-3 nodes used to outrank the hop-2 nodes that reach them."""
+    center = _add(mgr, "the centre memory", ["topic"])
+    for i in range(20):
+        mid = _add(mgr, f"mid memory {i} on topic {i * 13}", ["topic"])
+        far = _add(mgr, f"far fix {i} for mid {i * 17}")
+        mgr.link(far.id, mid.id, RelType.RESOLVES)
+    g = neighbourhood(mgr.graph_store, center.id, depth=3, limit=25)
+    kept = set(_ids(g))
+    linked = {e["source"] for e in g["edges"]} | {e["target"] for e in g["edges"]}
+    assert kept - {center.id} <= linked  # every kept node is drawn connected
+    assert [n["hop"] for n in g["nodes"]] == sorted(n["hop"] for n in g["nodes"])

@@ -160,7 +160,11 @@ async function loadExtras(m) {
     ctx.duplicatesFound(id, dups.duplicates || []);
   }
   if (current?.id !== id || !extras.chain) return;
-  renderChain(m, extras.chain);
+  if (extras.chain.error) {
+    const box = $("#p-chain");
+    box.hidden = false;
+    box.innerHTML = `<h3>Cause and fix</h3><p class="hint">Could not load: ${esc(extras.chain.error)}</p>`;
+  } else renderChain(m, extras.chain);
   renderDuplicates(m, extras.dups);
 }
 

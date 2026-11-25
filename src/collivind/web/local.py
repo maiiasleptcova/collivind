@@ -101,10 +101,12 @@ def neighbourhood(
         m = memory_by_id.get(i)
         return m.created_at.isoformat() if m and m.created_at else ""
 
-    # newest first among equals, then nearest first, then best first (stable sorts)
+    # Nearest first, then best first, then newest (stable sorts). Ranking only
+    # within a hop keeps the graph connected: every kept node at hop n has the
+    # node that reached it at hop n-1, which sorted earlier.
     ranked = sorted((i for i in dist if i != center), key=newest, reverse=True)
     ranked.sort(key=lambda i: -score.get(i, 0.0))
-    ranked.sort(key=lambda i: min(dist[i], 2))  # the centre's own neighbours always come first
+    ranked.sort(key=lambda i: dist[i])
     kept = [center, *ranked[: max(0, limit - 1)]]
     kept_set = set(kept)
     nodes = [
