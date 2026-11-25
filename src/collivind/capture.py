@@ -255,14 +255,18 @@ Call `collivind_batch_add` ONCE with `checkpoint_id: "{checkpoint_id}"` and the 
 2. Corrections: if something stored earlier is now wrong, save the corrected version and say what it replaces.
 3. Categories: fact, decision, pattern, error, architecture, preference, snippet. Add entities, and say how they
    connect: in `relationships`, {{source, type, target}} between entity names (DEPENDS_ON, USES, PART_OF, IMPLEMENTS,
-   INTERACTS_WITH, RELATED_TO) and {{target_id, type: RESOLVES|CAUSED_BY}} to an existing memory, each with a short
-   `note` on why it holds. A typed edge with a note is what lets the next reader follow the graph.
-4. Skip trivial chatter, secrets/credentials, and raw transcript dumps.
-5. If the response lists `possible_conflicts`, check each against the source of truth (code, docs, git
+   INTERACTS_WITH, RELATED_TO), each with a short `note` on why it holds.
+4. Cause and fix: a fix or decision that settles an error or problem gets {{type: RESOLVES, note}} pointing at that
+   error, and an error gets {{type: CAUSED_BY, note}} pointing at its cause. If the error is in this same batch, point
+   with `target_index` (its position in `memories`, counting from 0; it must come earlier in the list). If it was
+   saved before, find its id with `collivind_search` (recalled context shows no ids) and use `target_id`. Without
+   this edge the next reader finds the error and never learns it was fixed.
+5. Skip trivial chatter, secrets/credentials, and raw transcript dumps.
+6. If the response lists `possible_conflicts`, check each against the source of truth (code, docs, git
    history, the user's words). Retire the stale or wrong memory with `collivind_invalidate` (superseded_by =
    the one that is right). Ignore compatible ones. Only if you still cannot tell, ask the user one short
    question (even when saving quietly), then invalidate the wrong one and save their answer.
-6. If the response has `summary_due`, this session has enough memories for a summary: call
+7. If the response has `summary_due`, this session has enough memories for a summary: call
    `collivind_summarize` (no `summary`) to read them, then call it again with `summary` and the `member_ids`
    it returned. The summary is a list of self-contained dated facts ("- " per line), detailed enough that
    each member's key point survives; it is what recall reads first.

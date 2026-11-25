@@ -84,12 +84,18 @@ class EntityRelation:
     note: str = ""
 
 
-def parse_relationship(raw: Dict[str, Any]) -> Union[RelationshipCreate, EntityRelation]:
+# A target_index in a batch save, until the memory it points at has an id.
+BATCH_REF = "batch-index:"
+
+
+def parse_relationship(raw: Dict[str, Any], in_batch: bool = False) -> Union[RelationshipCreate, EntityRelation]:
     """One item of a save's `relationships` list.
 
     `{target_id, type}` links the new memory to an existing node, as before.
+    `{target_index, type}` (batch saves only) links it to an earlier memory of
+    the same batch, which has no id yet: the error and its fix saved together.
     `{source, type, target}` (entity names) states how two entities relate;
-    unknown names are created as concepts. Either may carry a `note`.
+    unknown names are created as concepts. Any of them may carry a `note`.
     """
     if not isinstance(raw, dict):
         raise ValueError("each relationship must be an object")
@@ -105,4 +111,14 @@ def parse_relationship(raw: Dict[str, Any]) -> Union[RelationshipCreate, EntityR
     properties = dict(raw.get("properties") or {})
     if note:
         properties[NOTE_KEY] = note
-    return RelationshipCreate(source_id="", target_id=raw["target_id"], type=rel_type, properties=properties)
+    if "target_id" not in raw and "target_index" in raw:
+        index = raw["target_index"]
+        if not in_batch:
+            raise ValueError("target_index only works in collivind_batch_add; use target_id")
+        if isinstance(index, bool) or not isinstance(index, int) or index < 0:
+            raise ValueError("target_index must be the position (0, 1, ...) of an earlier memory in this batch")
+        return RelationshipCreate(source_id="", target_id=f"{BATCH_REF}{index}", type=rel_type, properties=properties)
+    target_id = raw["target_id"]
+    if isinstance(target_id, str) and target_id.startswith(BATCH_REF):
+        raise ValueError(f"target_id cannot start with {BATCH_REF!r}; use target_index for this batch")
+    return RelationshipCreate(source_id="", target_id=target_id, type=rel_type, properties=properties)

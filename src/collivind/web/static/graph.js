@@ -8,12 +8,16 @@ const MIN_K = 0.04, MAX_K = 8;
 const EDGE_STYLE = {
   ABOUT: "entity", MENTIONS: "entity",
   CONTRADICTS: "contradicts", SUPERSEDES: "supersedes",
+  // cause and fix: drawn heavier, coloured and always with an arrow, so a chain reads at a glance
+  RESOLVES: "resolves", CAUSED_BY: "causes",
   // how entities fit together: the structural edges, drawn heavier
   USES: "relation", PART_OF: "relation", IMPLEMENTS: "relation", INTERACTS_WITH: "relation", RELATED_TO: "relation",
   SUMMARIZES: "summary",
 };
 const isSummary = (d) => d.kind === "memory" && d.category === "summary";
 const LABEL_BUDGET = 220;
+const DIRECTED = new Set(["supersedes", "memory", "resolves", "causes"]);
+const HOVER_SLOP = 6; // px around a node that still counts as on it
 const EDGE_LABEL_BUDGET = 24;
 
 const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -33,6 +37,7 @@ export class GraphView {
     this.alpha = 0;
     this.hover = null; this.selected = null; this.highlight = null; this.meanings = {};
     this.userMoved = false;
+    this.litAll = false;        // true: the selection does not dim the rest (the local graph)
     this.pointer = null;
     this.reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
     this.gen = 0; this.inFlight = false;
@@ -53,6 +58,7 @@ export class GraphView {
     this.theme = {
       bg: cssVar("--canvas"), ink: cssVar("--ink"), steel: cssVar("--steel"), line: cssVar("--edge"),
       entityEdge: cssVar("--edge-soft"), danger: cssVar("--danger"), entity: cssVar("--entity"),
+      fix: cssVar("--green"), cause: cssVar("--cause"),
       halo: cssVar("--halo"), label: cssVar("--ink-2"), labelBg: cssVar("--canvas"),
     };
     this.dirty = true;
@@ -99,11 +105,15 @@ export class GraphView {
       this.adj.get(s.id).add(t.id); this.adj.get(t.id).add(s.id);
     }
     for (const n of this.nodes) {
-      n.r = n.data.kind === "cluster" ? n.data.r : n.data.kind === "entity" ? 3.6
+      n.r0 = n.data.kind === "cluster" ? n.data.r : n.data.kind === "entity" ? (n.data.hub ? 7 : 3.6)
         : isSummary(n.data) ? Math.min(18, 8 + Math.sqrt(n.data.members || 0) * 1.4)
         : Math.min(11, 4 + Math.sqrt(n.degree) * 1.1);
     }
+    this.scaleNodes(true);
     if (this.selected && !visible.has(this.selected)) this.selected = null;
+    // A click that re-centres leaves the pointer resting on a node of the new
+    // graph; that hover would hold the fresh layout still. The next move re-hits.
+    if (!fixed) this.hover = null;
     this.alpha = fixed ? 0 : Math.max(this.alpha, reheat);
     // Thousands of edges at full strength are a solid smear; the more there
     // are, the fainter each one, so structure shows through the density.
@@ -144,6 +154,15 @@ export class GraphView {
     this.worker.postMessage({ type: "tick", gen: this.gen, alpha: this.alpha, ticks, pin });
   }
 
+  // Zoomed in past 2x, nodes stop growing on screen: a fitted 4-node graph is
+  // zoomed in to spread the nodes apart, not to draw them as dinner plates.
+  scaleNodes(force = false) {
+    const f = Math.min(1, 2 / this.k);
+    if (!force && f === this.nodeScale) return;
+    this.nodeScale = f;
+    for (const n of this.nodes) n.r = n.data.kind === "cluster" ? n.r0 : n.r0 * f;
+  }
+
   setHighlight(ids) { this.highlight = ids && ids.size ? ids : null; this.dirty = true; }
   select(id, { center = false } = {}) {
     this.selected = id;
@@ -162,7 +181,10 @@ export class GraphView {
   }
   ensureVisible(id, margin = 60) {
     const n = this.byId.get(id);
+    // while the view still fits itself it keeps every node in sight; moving it
+    // here would mark it user-moved and freeze a half-settled layout off-fit
     if (!n || !this.w) return;
+    if (!this.userMoved) { if (this.alpha <= 0.004) this.fit(); return; }
     const sx = n.x * this.k + this.tx, sy = n.y * this.k + this.ty;
     if (sx < margin || sx > this.w - margin || sy < margin || sy > this.h - margin) this.centerOn(id, false);
   }
@@ -173,12 +195,18 @@ export class GraphView {
     this.tx = this.w / 2 - n.x * this.k; this.ty = this.h / 2 - n.y * this.k;
     this.userMoved = true; this.dirty = true;
   }
+  // A small graph is zoomed in until its nodes sit far enough apart for
+  // their labels (fixed 12px, drawn to the right of each node) not to collide;
+  // room is kept on the right for those labels.
   fit(pad = 40) {
     if (!this.nodes.length || !this.w) return;
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const n of this.nodes) { x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y); x1 = Math.max(x1, n.x); y1 = Math.max(y1, n.y); }
-    const k = Math.min(MAX_K, Math.max(MIN_K, Math.min((this.w - pad * 2) / (x1 - x0 || 1), (this.h - pad * 2) / (y1 - y0 || 1), 2)));
-    this.k = k; this.tx = this.w / 2 - ((x0 + x1) / 2) * k; this.ty = this.h / 2 - ((y0 + y1) / 2) * k;
+    const n = this.nodes.length, labelled = n <= 300 && this.nodes[0].data.kind !== "cluster";
+    const right = labelled ? Math.min(240, this.w * 0.3) : pad;
+    const cap = n <= 12 ? 6 : n <= 60 ? 4 : 2;
+    const k = Math.min(MAX_K, Math.max(MIN_K, Math.min((this.w - pad - right) / (x1 - x0 || 1), (this.h - pad * 2) / (y1 - y0 || 1), cap)));
+    this.k = k; this.tx = pad + (this.w - pad - right) / 2 - ((x0 + x1) / 2) * k; this.ty = this.h / 2 - ((y0 + y1) / 2) * k;
     this.dirty = true;
   }
 
@@ -187,7 +215,12 @@ export class GraphView {
     // With reduced motion the layout still settles, it just is not watched:
     // many ticks per frame, then one fitted paint.
     const ticks = this.reduced ? 40 : this.nodes.length > 1500 ? 1 : 2;
-    if (this.alpha > 0.004 && this.worker) {
+    // Hold still while the pointer is on a node, so a click lands where the
+    // node was drawn: the layout and the auto-fit both move nodes every frame.
+    const held = this.hover && !this.pointer?.dragging && !this.pointer?.connecting;
+    if (held) {
+      // the layout resumes (alpha is kept) once the pointer leaves the node
+    } else if (this.alpha > 0.004 && this.worker) {
       if (!this.inFlight) this.requestTick(ticks);
     } else if (this.alpha > 0.004) {
       for (let i = 0; i < ticks && this.alpha > 0.004; i++) {
@@ -203,12 +236,13 @@ export class GraphView {
 
   // The set the reader is looking at: hover beats selection beats search.
   focusSet() {
-    const anchor = this.hover || this.selected;
+    const anchor = this.hover || (this.litAll ? null : this.selected);
     if (anchor) return new Set([anchor, ...this.neighbours(anchor)]);
     return this.highlight;
   }
 
   draw() {
+    this.scaleNodes();
     const { ctx, theme: t, k, tx, ty, dpr } = this;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = t.bg;
@@ -222,6 +256,7 @@ export class GraphView {
       entity: [t.entityEdge, 0.8, []], memory: [t.line, 1.1, []],
       contradicts: [t.danger, 1.3, [4, 3]], supersedes: [t.steel, 1.2, [1.5, 2.5]],
       relation: [t.ink, 1.5, []], summary: [t.steel, 1.2, []],
+      resolves: [t.fix, 2.4, []], causes: [t.cause, 2.4, [6, 3]],
     };
     this.drawClusterLinks(focus);
     for (const pass of [false, true]) {
@@ -230,8 +265,8 @@ export class GraphView {
         let any = false;
         for (const l of this.links) {
           if (l.style !== style) continue;
-          const on = !focus || (focus.has(l.source.id) && focus.has(l.target.id) &&
-            (!(this.hover || this.selected) || l.source.id === (this.hover || this.selected) || l.target.id === (this.hover || this.selected)));
+          const a = this.hover || (this.litAll ? null : this.selected);
+          const on = !focus || (focus.has(l.source.id) && focus.has(l.target.id) && (!a || l.source.id === a || l.target.id === a));
           if (on !== pass) continue;
           ctx.moveTo(l.source.x, l.source.y); ctx.lineTo(l.target.x, l.target.y); any = true;
         }
@@ -243,7 +278,7 @@ export class GraphView {
       }
     }
     ctx.setLineDash([]);
-    if (k > 0.7) this.drawArrows(focus);
+    this.drawArrows(focus);
 
     // nodes
     for (const pass of [false, true]) {
@@ -282,7 +317,10 @@ export class GraphView {
     ctx.font = `500 11px "Instrument Sans", system-ui, sans-serif`;
     ctx.textBaseline = "middle"; ctx.textAlign = "center";
     // a summary's member links all say the same thing; the panel lists them instead
-    const links = this.links.filter((l) => l.style !== "summary" && (l.source.id === anchor || l.target.id === anchor)).slice(0, EDGE_LABEL_BUDGET);
+    // "is about" says nothing the square at its end does not; only its note is worth a label
+    const links = this.links.filter((l) => l.style !== "summary" && (l.style !== "entity" || l.data?.note)
+      && (l.source.id === anchor || l.target.id === anchor)).slice(0, EDGE_LABEL_BUDGET);
+    const taken = [];
     for (const l of links) {
       const m = this.meanings?.[l.type];
       let text = m ? m.forward : l.type.toLowerCase().replace(/_/g, " ");
@@ -290,9 +328,12 @@ export class GraphView {
       const sx = ((l.source.x + l.target.x) / 2) * k + tx, sy = ((l.source.y + l.target.y) / 2) * k + ty;
       if (sx < -80 || sx > this.w + 80 || sy < -20 || sy > this.h + 20) continue;
       const w = ctx.measureText(text).width + 10;
+      if (taken.some(([x, y, tw]) => Math.abs(sx - x) < (w + tw) / 2 && Math.abs(sy - y) < 16)) continue;
+      taken.push([sx, sy, w]);
       ctx.globalAlpha = 0.92; ctx.fillStyle = t.labelBg;
       ctx.fillRect(sx - w / 2, sy - 8, w, 16);
-      ctx.globalAlpha = 1; ctx.fillStyle = l.style === "relation" ? t.ink : t.label;
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = l.style === "resolves" ? t.fix : l.style === "causes" ? t.cause : l.style === "relation" ? t.ink : t.label;
       ctx.fillText(text, sx, sy);
     }
     ctx.textAlign = "start";
@@ -326,6 +367,13 @@ export class GraphView {
     if (d.kind === "entity") {
       const s = n.r * 1.7;
       ctx.fillStyle = t.entity;
+      if (d.hub) {
+        // a collapsed hub: an outlined square, its count in the label
+        ctx.fillStyle = t.bg; ctx.fillRect(n.x - s / 2, n.y - s / 2, s, s);
+        ctx.strokeStyle = t.entity; ctx.lineWidth = 2 / this.k; ctx.setLineDash([3 / this.k, 2 / this.k]);
+        ctx.strokeRect(n.x - s / 2, n.y - s / 2, s, s); ctx.setLineDash([]);
+        return;
+      }
       ctx.fillRect(n.x - s / 2, n.y - s / 2, s, s);
       return;
     }
@@ -354,13 +402,16 @@ export class GraphView {
 
   drawArrows(focus) {
     const { ctx, k, theme: t } = this;
-    ctx.fillStyle = t.steel;
     for (const l of this.links) {
-      if (l.style !== "supersedes" && l.style !== "memory") continue;
+      if (!DIRECTED.has(l.style)) continue;
+      // plain arrows only once zoomed in; cause and fix always show their direction
+      const strong = l.style === "resolves" || l.style === "causes";
+      if (!strong && k <= 0.7) continue;
       if (focus && !(focus.has(l.source.id) && focus.has(l.target.id))) continue;
+      ctx.fillStyle = l.style === "resolves" ? t.fix : l.style === "causes" ? t.cause : t.steel;
       const dx = l.target.x - l.source.x, dy = l.target.y - l.source.y, len = Math.hypot(dx, dy) || 1;
       const ux = dx / len, uy = dy / len, tipX = l.target.x - ux * (l.target.r + 2 / k), tipY = l.target.y - uy * (l.target.r + 2 / k);
-      const a = 6 / k, b = 3 / k;
+      const a = (strong ? 10 : 6) / k, b = (strong ? 5 : 3) / k;
       ctx.beginPath(); ctx.moveTo(tipX, tipY);
       ctx.lineTo(tipX - ux * a - uy * b, tipY - uy * a + ux * b);
       ctx.lineTo(tipX - ux * a + uy * b, tipY - uy * a - ux * b);
@@ -398,6 +449,7 @@ export class GraphView {
     for (const { n, sx, sy } of pool) {
       let text = n.data.label || n.id;
       if (text.length > 48) text = text.slice(0, 47) + "…";
+      if (n.data.hub) text += ` · ${n.data.count} memories, collapsed`;
       const w = ctx.measureText(text).width, x = sx + n.r * k + 6, y = sy;
       // skip a label that would overprint one already placed
       if (n.id !== anchor && taken.some((r) => x < r[2] && x + w > r[0] && Math.abs(y - r[1]) < 14)) continue;
@@ -439,7 +491,7 @@ export class GraphView {
   hit(sx, sy) {
     const [wx, wy] = this.toWorld(sx, sy);
     let best = null, bestD = Infinity;
-    const slop = 4 / this.k;
+    const slop = HOVER_SLOP / this.k;
     for (const n of this.nodes) {
       const d = Math.hypot(n.x - wx, n.y - wy);
       if (d < n.r + slop && d < bestD) { best = n; bestD = d; }

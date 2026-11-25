@@ -1,5 +1,6 @@
 import logging
 import time
+from dataclasses import replace
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 from collivind.config import CollivindConfig
@@ -19,6 +20,7 @@ from collivind.models import (
 from collivind.models.entity import ALIASES_KEY, EntityType, entity_slug
 from collivind.models.memory import MemoryCategory, MemorySource, validate_confidence
 from collivind.models.relations import (
+    BATCH_REF,
     ENTITY_RELATIONS,
     NOTE_KEY,
     EntityRelation,
@@ -39,6 +41,13 @@ DEGRADED_NOTE = (
     "entity or relationship enrichment, and new memories cannot be saved until it is back. "
     "Run `collivind status`."
 )
+
+
+def _batch_index(rel: Any) -> Optional[int]:
+    """The batch position a relationship's target_index points at, or None for an ordinary edge."""
+    if isinstance(rel, RelationshipCreate) and rel.target_id.startswith(BATCH_REF):
+        return int(rel.target_id[len(BATCH_REF) :])
+    return None
 
 
 # Which edge types a person may draw between which kinds of node. SUPERSEDES
@@ -106,7 +115,10 @@ class MemoryManager:
             existing = self._graph_write(self.graph_store.get_memory, dup_match.memory_id)
             if existing:
                 if dup_match.is_exact:
-                    # identical content resubmitted — reject, keep existing as-is
+                    # identical content resubmitted — keep existing as-is, but the
+                    # links the save states are new knowledge ("this fix resolves
+                    # that error") and must not vanish with the duplicate text
+                    self._write_relationships(existing.id, relationships)
                     return existing, []
                 # near-duplicate with different content: the incoming memory is
                 # the fresh version — store it and retire the stale one below,
@@ -144,13 +156,7 @@ class MemoryManager:
                     )
                 )
 
-        for rel in relationships or []:
-            if isinstance(rel, EntityRelation):
-                self._relate_entities(rel)
-                continue
-            if not rel.source_id:
-                rel.source_id = memory_node.id
-            self.graph_store.create_relationship(rel)
+        self._write_relationships(memory_node.id, relationships)
 
         # No CONTRADICTS edge from similarity: on a real store it flagged
         # thousands of compatible pairs (see engine/conflicts.py).
@@ -162,6 +168,15 @@ class MemoryManager:
             logger.warning("conflict check failed for %s", memory_node.id, exc_info=True)
             conflicts = []
         return memory_node, conflicts
+
+    def _write_relationships(
+        self, memory_id: str, relationships: Optional[Sequence[Union[RelationshipCreate, EntityRelation]]]
+    ) -> None:
+        for rel in relationships or []:
+            if isinstance(rel, EntityRelation):
+                self._relate_entities(rel)
+            else:
+                self.graph_store.create_relationship(replace(rel, source_id=rel.source_id or memory_id))
 
     @staticmethod
     def _graph_write(fn, *args, outcome: str = "the memory was NOT saved"):
@@ -580,7 +595,12 @@ class MemoryManager:
         prepared = []
         for i, mem_data in enumerate(memories):
             try:
-                prepared.append(self._prepare_batch_item(mem_data))
+                item = self._prepare_batch_item(mem_data)
+                for rel in item[2]:
+                    ref = _batch_index(rel)
+                    if ref is not None and ref >= i:
+                        raise ValueError(f"target_index {ref} must point to an earlier memory in this batch")
+                prepared.append(item)
             except (KeyError, ValueError, TypeError) as e:
                 detail = f"missing field {e}" if isinstance(e, KeyError) else str(e)
                 raise ValueError(f"memory[{i}]: {detail} — nothing in the batch was stored") from e
@@ -600,6 +620,10 @@ class MemoryManager:
         ids: List[str] = []
         conflicts: Dict[str, List[SearchResult]] = {}
         for i, (mem_create, entities, relationships) in enumerate(prepared):
+            # an edge to an earlier memory of this batch: it has an id now
+            relationships = [
+                replace(r, target_id=ids[ref]) if (ref := _batch_index(r)) is not None else r for r in relationships
+            ]
             try:
                 node, found = self.add_memory_checked(mem_create, entities=entities, relationships=relationships)
             except Exception as e:
@@ -619,7 +643,7 @@ class MemoryManager:
             EntityCreate(name=e["name"], type=EntityType(e["type"]), properties=e.get("properties", {}))
             for e in mem_data.get("entities", [])
         ]
-        relationships = [parse_relationship(r) for r in mem_data.get("relationships", [])]
+        relationships = [parse_relationship(r, in_batch=True) for r in mem_data.get("relationships", [])]
         mem_create = MemoryCreate(
             content=mem_data["content"],
             summary=mem_data["summary"],
