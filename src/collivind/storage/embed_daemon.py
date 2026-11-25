@@ -179,7 +179,9 @@ class EmbedServer(_ServerBase):
             or request.get("model") != self.model_name
             # started by a rerank-off process and now asked to rerank: replace it,
             # or an active user (embeds reset the idle timer) never gets rerank.
-            # Rerank-off clients never send this op, so two clients cannot loop.
+            # Rerank-off clients never send this op, so two clients cannot loop;
+            # a rerank-off process can still win a spawn race now and then, which
+            # costs one more model load on the next rerank request, not a loop.
             or (op == "rerank" and not self.rerank_model and bool(request.get("rerank_model")))
         ):
             self.stopping = True
