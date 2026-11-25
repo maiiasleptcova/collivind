@@ -7,6 +7,7 @@ AF_UNIX path limit on macOS."""
 import os
 import shutil
 import socket
+import socketserver
 import stat
 import tempfile
 import threading
@@ -320,3 +321,23 @@ def test_fallback_dir_is_rechecked_on_every_use(short_tmp, daemon_on):
         assert len(str(via.call_args.args[0])) > embed_daemon.MAX_SOCKET_PATH  # refused, not the open dir
     finally:
         private.chmod(0o700)
+
+
+def test_the_socket_path_appears_only_once_the_daemon_accepts(data_dir, daemon_on):
+    """bind() creates the socket file before listen() runs; a client that saw the file in that gap got
+    ECONNREFUSED (CI on 3.11, and 2 in 1,000 local starts under load). The gap is widened here so the
+    old order fails every time."""
+    activate = socketserver.UnixStreamServer.server_activate
+
+    def slow_activate(server):
+        time.sleep(0.3)
+        activate(server)
+
+    with patch.object(socketserver.UnixStreamServer, "server_activate", slow_activate):
+        path, t, _ = start_daemon(data_dir)
+        try:
+            assert embed_daemon.request(path, {"op": "info"})["model"] == MODEL
+            assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+        finally:
+            stop(path, t)
+    assert not path.exists() and not path.with_name(embed_daemon.BINDING_NAME).exists()

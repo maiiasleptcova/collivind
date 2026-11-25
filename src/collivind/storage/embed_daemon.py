@@ -59,6 +59,7 @@ SOCKET_NAME = "embed.sock"
 LOCK_NAME = "embed.lock"
 LOG_NAME = "embed-daemon.log"
 ENV_DISABLE = "COLLIVIND_EMBED_DAEMON"  # "0" disables the daemon
+BINDING_NAME = ".binding"  # the socket before it listens; one daemon at a time holds the lock
 MAX_SOCKET_PATH = 100  # AF_UNIX limit is 104 on macOS, 108 on Linux
 # Fixed, not tempfile.gettempdir(): $TMPDIR differs between a sandboxed agent
 # and the user's shell, and both must find the same daemon. The 0700 + owner
@@ -279,13 +280,23 @@ def serve(
         model.encode(["warm up"], batch_size=1, show_progress_bar=False)  # first encode pays device init (~0.6s on mps)
         reranker = _load_reranker_quietly(rerank_model, load_reranker)  # also before binding
         socket_path.unlink(missing_ok=True)  # we hold the lock, so any socket here is stale
-        server = EmbedServer(str(socket_path), model, model_name, idle_timeout, reranker, rerank_model)
+        # Bind and listen under a temporary name, then rename onto the real
+        # path. bind() creates the file before listen() runs, and a client
+        # that sees it in that gap gets ECONNREFUSED (seen in CI, and 2 in
+        # 1,000 starts under load). After the rename the path only ever names
+        # a socket that accepts. The name is no longer than the real one's
+        # dir + "/embed.sock", so it fits the same AF_UNIX limit.
+        binding = socket_path.with_name(BINDING_NAME)
+        binding.unlink(missing_ok=True)
+        server = EmbedServer(str(binding), model, model_name, idle_timeout, reranker, rerank_model)
         logger.info(f"embed daemon pid={os.getpid()} model={model_name} rerank={rerank_model or '-'} on {socket_path}")
         try:
+            os.replace(binding, socket_path)
             server.run()
         finally:
             server.server_close()
             socket_path.unlink(missing_ok=True)
+            binding.unlink(missing_ok=True)
         return 0
     finally:
         os.close(lock_fd)
