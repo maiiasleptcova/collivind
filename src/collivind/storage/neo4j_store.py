@@ -295,7 +295,9 @@ class Neo4jGraphStore(GraphStore):
                 records = session.run(cypher, q=lucene, project_id=project_id or None, limit=limit)
                 return [(self._node_to_memory(r["node"]), float(r["score"])) for r in records]
         except neo4j_exceptions.ClientError as e:
-            if FULLTEXT_INDEX in str(e.message or ""):  # no such index yet: a pre-0.19 store
+            # "There is no such fulltext schema index: ..." (Neo4j 5.26): a pre-0.19 store.
+            # Not "not online" (still populating): that must not re-run the CREATE.
+            if e.code == "Neo.ClientError.Procedure.ProcedureCallFailed" and "no such fulltext" in str(e.message or ""):
                 self._create_fulltext_index()
             else:
                 logger.warning("keyword search failed, using dense candidates only: %s", e)

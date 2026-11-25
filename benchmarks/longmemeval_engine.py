@@ -114,8 +114,10 @@ def run_question(question, embedder, arms):
         }
         for arm, overrides in arms.items():
             engine = SearchEngine(vector, graph, embedder, replace(config.search, **overrides))
-            pool = engine.search(SearchQuery(query=question["question"], project_id="lme", limit=POOL))
-            top = engine.search(SearchQuery(query=question["question"], project_id="lme", limit=max(KS)))
+            cutoff = engine.config.recall_min_score  # the recall path: cutoff on (inert with rerank off)
+            ask = lambda n: SearchQuery(query=question["question"], project_id="lme", limit=n, min_rerank_score=cutoff)  # noqa: E731
+            pool = engine.search(ask(POOL))
+            top = engine.search(ask(max(KS)))
             row[arm] = score(question, resolved, answer_texts, pool, top)
         vector.close()
         graph.close()

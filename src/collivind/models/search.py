@@ -19,6 +19,9 @@ class SearchQuery:
     user_id: Optional[str] = None
     date_from: Optional[datetime] = None
     date_to: Optional[datetime] = None
+    # recall only: drop results whose cross-encoder score (0..1) is below this.
+    # Applies only when the reranker ran; None or 0 = no cutoff.
+    min_rerank_score: Optional[float] = None
 
 
 @dataclass

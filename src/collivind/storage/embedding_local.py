@@ -42,7 +42,12 @@ class LocalEmbeddingProvider(EmbeddingProvider):
 
     @property
     def can_rerank(self) -> bool:
-        return bool(self.rerank_model) and not self._reranker_failed and time.monotonic() >= self._rerank_off_until
+        if not self.rerank_model or self._reranker_failed or time.monotonic() < self._rerank_off_until:
+            return False
+        try:
+            return self.allow_in_process_rerank or self._daemon_owns_models()
+        except Exception:
+            return False
 
     def rerank(self, query: str, texts: List[str]) -> Optional[List[float]]:
         """Scores from the resident daemon, or in-process when there is no daemon.

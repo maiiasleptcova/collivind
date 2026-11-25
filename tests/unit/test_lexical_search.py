@@ -307,3 +307,70 @@ def test_no_confident_candidate_serves_the_first_stage(stores):
     assert [r.memory.id for r in gated] == off and all(r.rerank_score is None for r in gated)
     emb.rerank = lambda q, texts: [0.5] + [-3.0] * (len(texts) - 1)  # one confident candidate: rerank applies
     assert _engine(graph, vector, emb).search(query)[0].rerank_score is not None
+
+
+def _scored(stores, logits_by_word):
+    """Three memories; the reranker scores each by the first matching word."""
+    graph, vector = stores
+    emb = WordEmbedder()
+    nodes = {w: _store(graph, vector, emb, f"deploy helm {w}") for w in logits_by_word}
+    emb.rerank = lambda q, texts: [next(v for w, v in logits_by_word.items() if w in t) for t in texts]
+    return graph, vector, emb, nodes
+
+
+def test_recall_cutoff_drops_low_scores(stores):
+    graph, vector, emb, nodes = _scored(stores, {"alpha": 4.0, "beta": 1.0, "gamma": -6.0})
+    engine = _engine(graph, vector, emb)
+    q = SearchQuery(query="deploy helm", project_id="p", limit=10)
+    assert {r.memory.id for r in engine.search(q)} == {n.id for n in nodes.values()}  # no cutoff: all
+    kept = engine.search(replace(q, min_rerank_score=0.5))
+    assert [r.memory.id for r in kept] == [nodes["alpha"].id, nodes["beta"].id]
+
+
+def test_recall_cutoff_can_return_nothing_and_also_filters_the_gated_order(stores):
+    graph, vector, emb, nodes = _scored(stores, {"alpha": -1.0, "beta": -4.0, "gamma": -9.0})
+    engine = _engine(graph, vector, emb)
+    q = SearchQuery(query="deploy helm", project_id="p", limit=10)
+    first_stage = [r.memory.id for r in _engine(graph, vector, emb, rerank=False).search(q)]
+    assert [r.memory.id for r in engine.search(q)] == first_stage  # gated, no cutoff: first stage as is
+    gated = engine.search(replace(q, min_rerank_score=0.01))  # sigmoid(-1)=0.27, (-4)=0.018, (-9)=0.0001
+    assert [r.memory.id for r in gated] == [i for i in first_stage if i != nodes["gamma"].id]
+    assert engine.search(replace(q, min_rerank_score=0.5)) == []
+
+
+def test_cutoff_zero_or_none_is_the_no_cutoff_ranking(stores):
+    graph, vector, emb, _ = _scored(stores, {"alpha": 4.0, "beta": 1.0, "gamma": -6.0})
+    engine = _engine(graph, vector, emb)
+    q = SearchQuery(query="deploy helm", project_id="p", limit=10)
+    ranked = lambda query: [r.memory.id for r in engine.search(query)]  # noqa: E731
+    assert ranked(replace(q, min_rerank_score=0.0)) == ranked(q) == ranked(replace(q, min_rerank_score=None))
+
+
+def test_cutoff_never_applies_without_a_reranker(stores):
+    graph, vector, emb, _ = _scored(stores, {"alpha": 4.0, "beta": 1.0, "gamma": -6.0})
+    q = SearchQuery(query="deploy helm", project_id="p", limit=10, min_rerank_score=0.99)
+    assert len(_engine(graph, vector, emb, rerank=False).search(q)) == 3
+
+
+def test_recall_uses_the_cutoff_and_explicit_search_does_not(tmp_path):
+    from unittest.mock import MagicMock
+
+    from collivind.config import CollivindConfig
+    from collivind.engine.memory_manager import MemoryManager
+
+    config = CollivindConfig()
+    config.search.recall_min_score = 0.3
+    manager = MemoryManager(MagicMock(), MagicMock(), MagicMock(), config)
+    manager.search_engine = MagicMock()
+    manager.search_engine.search_with_status.return_value = ([], False)
+    assert "No relevant context" in manager.get_context("q", project_id="p", limit=20)
+    assert manager.search_engine.search_with_status.call_args.args[0].min_rerank_score == 0.3
+    assert SearchQuery(query="q").min_rerank_score is None  # MCP/CLI search build plain queries
+
+
+@pytest.mark.parametrize("bad", [-0.1, 1.0, "0.2", True])
+def test_recall_min_score_is_validated(bad):
+    from collivind.exceptions import ConfigurationError
+
+    with pytest.raises(ConfigurationError):
+        SearchConfig(recall_min_score=bad)

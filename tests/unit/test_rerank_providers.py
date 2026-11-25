@@ -66,19 +66,40 @@ def test_reranker_that_fails_to_load_leaves_embeddings_up(data_dir, daemon_on): 
         stop(path, t)
 
 
-def test_other_rerank_model_does_not_kill_the_daemon(data_dir, daemon_on):  # noqa: F811
-    """Processes with different [search] rerank settings must not restart each other's daemon."""
-    path, t = start(data_dir, rerank_model="")  # started by a process with rerank off
+def test_daemon_without_a_reranker_is_replaced_on_the_first_rerank_request(data_dir, daemon_on):  # noqa: F811
+    """Started by a rerank-off process; embeds keep resetting its idle timer, so it must not linger."""
+    path, t = start(data_dir, rerank_model="")
+    try:
+        with patch.object(embed_daemon, "spawn") as spawn:
+            assert provider(data_dir).rerank("q", ["a"]) is None
+        spawn.assert_called_once()
+        assert spawn.call_args.args[3] == RERANK
+        t.join(5)
+        assert not t.is_alive()
+    finally:
+        stop(path, t)
+
+
+def test_daemon_with_another_reranker_is_not_killed(data_dir, daemon_on):  # noqa: F811
+    """Two configs naming different models must not restart each other's daemon in a loop."""
+    path, t = start(data_dir, rerank_model="other/cross-encoder")
     try:
         p = provider(data_dir)
         with patch.object(embed_daemon, "spawn") as spawn:
             assert p.rerank("q", ["a"]) is None
-            assert p.embed("ab") == [2.0, 1.0]  # embeddings still served
+            assert p.embed("ab") == [2.0, 1.0]
         spawn.assert_not_called()
         assert t.is_alive()
         assert p.can_rerank is False  # backs off instead of building pools for nothing
     finally:
         stop(path, t)
+
+
+def test_hook_without_any_daemon_skips_the_pool(data_dir, monkeypatch):  # noqa: F811
+    monkeypatch.setenv(embed_daemon.ENV_DISABLE, "0")
+    p = provider(data_dir)
+    p.allow_in_process_rerank = False
+    assert p.can_rerank is False
 
 
 def test_hook_processes_never_load_a_cross_encoder(data_dir, monkeypatch):  # noqa: F811

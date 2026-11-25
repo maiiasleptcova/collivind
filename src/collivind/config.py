@@ -5,6 +5,11 @@ from pathlib import Path
 
 from .exceptions import ConfigurationError
 
+# Chosen from data (BENCHMARKS.md): the largest cutoff that cost LoCoMo strict
+# hit@10 nothing measurable and kept every target in a synthetic coding-memory
+# check, while 9 of 10 unrelated prompts recalled nothing. sigmoid(-9.2).
+RECALL_MIN_SCORE_DEFAULT = 0.0001
+
 
 @dataclass
 class DockerConfig:
@@ -64,6 +69,10 @@ class SearchConfig:
     rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     rerank_pool: int = 50  # candidates scored per search (at least the requested limit)
     lexical: bool = True  # add keyword (BM25) candidates to the rerank pool
+    # Recall (get_context, i.e. the prompt hook) drops memories whose
+    # cross-encoder score is below this, so an unrelated prompt recalls
+    # nothing. 0 disables. Explicit search never applies it.
+    recall_min_score: float = RECALL_MIN_SCORE_DEFAULT
 
     def __post_init__(self):
         # on the prompt path: a typo must fail at config load, not mid-search
@@ -73,6 +82,14 @@ class SearchConfig:
             or not 1 <= self.rerank_pool <= 200
         ):
             raise ConfigurationError(f"[search] rerank_pool must be an integer from 1 to 200, got {self.rerank_pool!r}")
+        if (
+            isinstance(self.recall_min_score, bool)
+            or not isinstance(self.recall_min_score, (int, float))
+            or not (0.0 <= self.recall_min_score < 1.0)
+        ):
+            raise ConfigurationError(
+                f"[search] recall_min_score must be a number from 0 to below 1, got {self.recall_min_score!r}"
+            )
         for name in ("rerank", "lexical"):
             if not isinstance(getattr(self, name), bool):
                 raise ConfigurationError(f"[search] {name} must be true or false, got {getattr(self, name)!r}")
@@ -88,6 +105,17 @@ class HooksConfig:
     # Ask the agent to checkpoint without announcing or confirming routine
     # saves; failures are still reported (#35).
     quiet_capture: bool = True
+    # memories the prompt hook recalls per prompt; the hook's token budget
+    # (--max-tokens, 800) still caps what is injected
+    recall_limit: int = 20
+
+    def __post_init__(self):
+        if (
+            isinstance(self.recall_limit, bool)
+            or not isinstance(self.recall_limit, int)
+            or not 1 <= self.recall_limit <= 50
+        ):
+            raise ConfigurationError(f"[hooks] recall_limit must be an integer from 1 to 50, got {self.recall_limit!r}")
 
 
 @dataclass
@@ -185,6 +213,10 @@ rerank = true
 rerank_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 rerank_pool = 50
 lexical = true
+# Recall (the prompt hook, collivind_get_context) drops memories the reranker
+# scores below this (0..1), so an unrelated prompt recalls nothing. 0 = off.
+# Explicit search never applies it.
+recall_min_score = 0.0001
 
 # --- Docker (docker mode only) ---
 # [docker]
@@ -198,6 +230,7 @@ enable_stop = true
 enable_session_start = true
 enable_user_prompt = true
 quiet_capture = true
+recall_limit = 20  # memories recalled per prompt (the hook's 800-token budget still caps it)
 """
 
 

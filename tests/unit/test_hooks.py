@@ -1,5 +1,6 @@
 import json
 
+import pytest
 from click.testing import CliRunner
 
 from collivind.cli.commands.hook import collivind_bin, get_state_file, hook, install_hooks
@@ -436,3 +437,30 @@ def test_user_prompt_recalls_vector_only_when_graph_is_down(monkeypatch):
     result = CliRunner().invoke(hook, ["user-prompt"], input=_prompt_payload("which database did we choose"))
     context = json.loads(result.output)["hookSpecificOutput"]["additionalContext"]
     assert "Postgres chosen" in context and "DEGRADED" in context
+
+
+def test_user_prompt_recall_depth_comes_from_config(monkeypatch):
+    from unittest.mock import MagicMock
+
+    from collivind.config import CollivindConfig
+
+    assert CollivindConfig().hooks.recall_limit == 20
+    manager = MagicMock()
+    manager.config = CollivindConfig()
+    manager.get_context.return_value = "--- Collivind Context ---\n[FACT] x"
+    monkeypatch.setattr("collivind.cli.commands.hook._load_manager", lambda: manager)
+    CliRunner().invoke(hook, ["user-prompt"], input=_prompt_payload("build the database layer for orders"))
+    assert manager.get_context.call_args.kwargs["limit"] == 20
+
+    manager.config.hooks.recall_limit = 7
+    CliRunner().invoke(hook, ["user-prompt"], input=_prompt_payload("build the database layer for orders"))
+    assert manager.get_context.call_args.kwargs["limit"] == 7
+
+
+@pytest.mark.parametrize("bad", [0, 51, "20", True])
+def test_recall_limit_is_validated(bad):
+    from collivind.config import HooksConfig
+    from collivind.exceptions import ConfigurationError
+
+    with pytest.raises(ConfigurationError):
+        HooksConfig(recall_limit=bad)

@@ -296,7 +296,15 @@ def run(args) -> None:
             if not evidence <= ingested[pid]["_reachable"]:
                 skipped["evidence turn in no live memory (scored as a miss)"] += 1
 
-            hits = manager.search(SearchQuery(query=qa["question"], project_id=pid, limit=max(ks)))
+            # the recall path (prompt hook / get_context): the recall cutoff applies
+            hits = manager.search(
+                SearchQuery(
+                    query=qa["question"],
+                    project_id=pid,
+                    limit=max(ks),
+                    min_rerank_score=manager.config.search.recall_min_score,
+                )
+            )
             ranked = [set(ingested[pid]["owners"].get(h.memory.id, set())) for h in hits]
             row: Dict[str, Any] = {
                 # ids only: the dataset text is CC BY-NC and is not redistributed

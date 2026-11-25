@@ -526,6 +526,14 @@ def _load_manager():
     return manager
 
 
+def _recall_limit(manager) -> int:
+    """[hooks] recall_limit; the default when the manager carries no config (test fakes, embedders)."""
+    from collivind.config import HooksConfig
+
+    limit = getattr(getattr(getattr(manager, "config", None), "hooks", None), "recall_limit", None)
+    return limit if isinstance(limit, int) and not isinstance(limit, bool) else HooksConfig().recall_limit
+
+
 PROJECT = click.option(
     "--project", "-p", default=None, help="Project id (default: resolved from the session's working directory)"
 )
@@ -669,7 +677,9 @@ def user_prompt(project, max_tokens, agent):
                     continue
             except Exception:
                 pass
-            context = manager.get_context(prompt, project_id=project, limit=5, max_tokens=max_tokens)
+            context = manager.get_context(
+                prompt, project_id=project, limit=_recall_limit(manager), max_tokens=max_tokens
+            )
             if "No relevant context found" not in context:
                 break
         if not context:

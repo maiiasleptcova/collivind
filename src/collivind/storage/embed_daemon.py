@@ -175,7 +175,12 @@ class EmbedServer(_ServerBase):
             self.stopping = True
             return {"ok": True}
         if op in ("embed", "rerank") and (
-            request.get("version") != self.version or request.get("model") != self.model_name
+            request.get("version") != self.version
+            or request.get("model") != self.model_name
+            # started by a rerank-off process and now asked to rerank: replace it,
+            # or an active user (embeds reset the idle timer) never gets rerank.
+            # Rerank-off clients never send this op, so two clients cannot loop.
+            or (op == "rerank" and not self.rerank_model and bool(request.get("rerank_model")))
         ):
             self.stopping = True
             return {"ok": False, "error": "mismatch", "version": self.version, "model": self.model_name}

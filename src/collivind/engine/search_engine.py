@@ -21,6 +21,8 @@ RERANK_QUERY_CHARS = 1000
 # clears it, the model is saying "none of these answer the query" and its
 # order among them is noise (indirect prompts: preferences, "what should I
 # do about X"), so the first-stage ranking is served instead.
+# ponytail: tied to logit-scale models (the MS MARCO cross-encoders); a
+# custom rerank_model that outputs 0..1 scores would never trip it.
 RERANK_GATE_LOGIT = 0.0
 
 
@@ -161,7 +163,7 @@ class SearchEngine:
 
         results.sort(key=lambda x: x.score, reverse=True)
         if rerank and not degraded:
-            reranked = self._rerank(query, candidates, dense, now)
+            reranked = self._rerank(query, candidates, results, dense, now)
             if reranked is not None:
                 return reranked[: query.limit], degraded
         return results[: query.limit], degraded
@@ -176,11 +178,23 @@ class SearchEngine:
         return max(self.config.rerank_pool, query.limit)
 
     def _rerank(
-        self, query: SearchQuery, candidates: Dict[str, SearchResult], dense: List[Dict[str, Any]], now: datetime
+        self,
+        query: SearchQuery,
+        candidates: Dict[str, SearchResult],
+        first_stage: List[SearchResult],
+        dense: List[Dict[str, Any]],
+        now: datetime,
     ) -> Optional[List[SearchResult]]:
-        """Second-stage ranking, or None to keep the first stage. Never raises."""
+        """Second-stage ranking, or None to keep the first stage unchanged. Never raises.
+
+        Ordering and membership are separate decisions. The gate picks the
+        order (reranked, or first stage when no candidate is confidently
+        relevant); query.min_rerank_score then drops every result whose
+        cross-encoder score is below it, in either order, so a recall with
+        nothing relevant returns fewer results, possibly none.
+        """
         try:
-            pool = self._rerank_pool(query, candidates, dense, now)
+            pool = self._rerank_pool(query, candidates, first_stage, dense, now)
             if not pool:
                 return None
             texts = [r.memory.content for r in pool]
@@ -189,23 +203,39 @@ class SearchEngine:
                 return None
             if not all(isinstance(x, (int, float)) and math.isfinite(x) for x in logits):
                 return None  # a NaN would squash to 1.0 and rank first
+            cutoff = query.min_rerank_score or 0.0
             if max(logits) < RERANK_GATE_LOGIT:
-                return None
+                if not cutoff:
+                    return None
+                squashed = {r.memory.id: _sigmoid(float(x)) for r, x in zip(pool, logits)}
+                # the pool holds the whole first-stage top `limit`, so each has a score
+                return [
+                    replace(r, rerank_score=squashed[r.memory.id])
+                    for r in first_stage
+                    if squashed.get(r.memory.id, 0.0) >= cutoff
+                ]
             out = []
             for res, logit in zip(pool, logits):
                 rerank_score = _sigmoid(float(logit))
                 base = rerank_score * self.config.vector_weight + min(res.graph_score, 1.0) * self.config.graph_weight
                 out.append(replace(res, score=base * res.temporal_decay, rerank_score=rerank_score))
             out.sort(key=lambda x: x.score, reverse=True)
-            return out
+            return [r for r in out if (r.rerank_score or 0.0) >= cutoff]
         except Exception as e:
             logger.warning("rerank failed, serving first-stage ranking: %s", e)
             return None
 
     def _rerank_pool(
-        self, query: SearchQuery, candidates: Dict[str, SearchResult], dense: List[Dict[str, Any]], now: datetime
+        self,
+        query: SearchQuery,
+        candidates: Dict[str, SearchResult],
+        first_stage: List[SearchResult],
+        dense: List[Dict[str, Any]],
+        now: datetime,
     ) -> List[SearchResult]:
-        """RRF(dense, keyword) top pool_size, plus the best `limit` graph/entity-only candidates."""
+        """RRF(dense, keyword) top pool_size, plus the best `limit` graph/entity-only
+        candidates, plus the whole first-stage top `limit` (so the gate's
+        fallback order can be filtered by score too)."""
         size = self._pool_size(query)
         dense_scores = {r["id"]: r["score"] for r in dense}
         lexical = self._lexical_candidates(query, size, now)
@@ -228,8 +258,8 @@ class SearchEngine:
             key=lambda r: r.score,
             reverse=True,
         )
-        for res in graph_only[: query.limit]:
-            pool[res.memory.id] = res
+        for res in graph_only[: query.limit] + first_stage[: query.limit]:
+            pool.setdefault(res.memory.id, res)
         return list(pool.values())
 
     def _lexical_candidates(self, query: SearchQuery, limit: int, now: datetime) -> Dict[str, MemoryNode]:
