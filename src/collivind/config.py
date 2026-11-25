@@ -107,9 +107,12 @@ class HooksConfig:
     # Ask the agent to checkpoint without announcing or confirming routine
     # saves; failures are still reported (#35).
     quiet_capture: bool = True
-    # memories the prompt hook recalls per prompt; the hook's token budget
-    # (--max-tokens, 800) still caps what is injected
+    # memories the prompt hook recalls per prompt, packed into a token budget
+    # (len/4 estimate); `hook user-prompt --max-tokens` overrides the budget.
+    # 2400 fits about 20 coding-length memories (~120 tokens each); the recall
+    # cutoff runs first, so an unrelated prompt still injects nothing.
     recall_limit: int = 20
+    recall_max_tokens: int = 2400
 
     def __post_init__(self):
         if (
@@ -118,6 +121,14 @@ class HooksConfig:
             or not 1 <= self.recall_limit <= 50
         ):
             raise ConfigurationError(f"[hooks] recall_limit must be an integer from 1 to 50, got {self.recall_limit!r}")
+        if (
+            isinstance(self.recall_max_tokens, bool)
+            or not isinstance(self.recall_max_tokens, int)
+            or not 100 <= self.recall_max_tokens <= 20000
+        ):
+            raise ConfigurationError(
+                f"[hooks] recall_max_tokens must be an integer from 100 to 20000, got {self.recall_max_tokens!r}"
+            )
 
 
 @dataclass
@@ -232,7 +243,8 @@ enable_stop = true
 enable_session_start = true
 enable_user_prompt = true
 quiet_capture = true
-recall_limit = 20  # memories recalled per prompt (the hook's 800-token budget still caps it)
+recall_limit = 20  # memories recalled per prompt
+recall_max_tokens = 2400  # token budget for those memories (about 20 coding-length memories)
 """
 
 

@@ -388,23 +388,35 @@ numbers below are the same with and without it. Raise it to cut more noise at th
 for it) and is a sanity check, not a benchmark**; the score scale of a
 different `rerank_model` needs its own cutoff.
 
-**Injected tokens at hook depth 5 / 10 / 20** (real `get_context`,
-150 LoCoMo questions, the token estimate get_context budgets with, len/4):
+**Injected tokens at hook depth and budget.** These come from the real
+`get_context`, with tokens counted as get_context's budget estimates them
+(len/4). The hook now defaults to `[hooks] recall_limit = 20` and
+`recall_max_tokens = 2400`; it was 5 memories and 800 tokens before.
+`hook user-prompt --max-tokens` still overrides the budget. The recall
+cutoff runs before the budget is packed. Two stores were measured:
+- LoCoMo: 150 questions over two conversations; memories have a median of
+  164 characters, about 41 tokens.
+- A synthetic coding-length store: 48 memories, each built from four joined
+  coding facts, median 408 characters, about 102 tokens. It was queried with
+  the 10 relevant and 10 unrelated coding prompts from the cutoff check.
 
-| limit | memories injected (800-token budget) | tokens (budget) | memories (no budget) | tokens (no budget) |
+| Store / prompts | limit, budget | memories injected | tokens (mean / max) | nothing recalled |
 |---|---|---|---|---|
-| 5 | 4.9 | 313 | 4.9 | 313 |
-| 10 | 9.8 | 584 | 9.8 | 585 |
-| 20 | 13.5 | 761 | 19.4 | 1,073 |
+| LoCoMo | 5, 800 (old default) | 5.0 | 316 / 433 | 0 / 150 |
+| LoCoMo | 10, 800 | 9.9 | 592 / 798 | 0 / 150 |
+| LoCoMo | 20, 800 | 13.7 | 773 / 811 | 0 / 150 |
+| LoCoMo | **20, 2400 (new default)** | **19.8** | **1,098 / 1,548** | 0 / 150 |
+| coding, relevant | 5, 800 (old default) | 5.0 | 551 / 601 | 0 / 10 |
+| coding, relevant | 20, 800 | 6.7 | 737 / 804 | 0 / 10 |
+| coding, relevant | **20, 2400 (new default)** | **11.9** | **1,313 / 2,241** | 0 / 10 |
+| coding, unrelated | 5, 800 (old default) | 0.8 | 83 / 507 | 8 / 10 |
+| coding, unrelated | **20, 2400 (new default)** | **1.4** | **146 / 1,024** | **8 / 10** |
 
-LoCoMo memories are short (median 164 characters, about 41 tokens plus the
-meta line). Coding memories in a real store are about three times longer
-(about 120 tokens each with the meta line, judged from hook output on the
-maintainer's store; nothing was read from that store for this). At that
-size the hook's unchanged 800-token budget caps recall at about 6 memories
-whatever `recall_limit` says. Raising the depth to 20 is therefore mostly a
-change for stores with short memories, until the budget (`--max-tokens` on
-`hook user-prompt`) is raised too. That was left as is on purpose.
+At 800 tokens, depth 20 was capped at about 6.7 coding-length memories. At
+2,400 a relevant coding prompt now costs about 1,300 tokens on average
+(about 12 memories; the cutoff, not the budget, trims the rest) and at most
+about 2,240. An unrelated prompt usually costs nothing: 8 of 10 recalled
+nothing, and the other two recalled a few memories.
 
 ### End-to-end QA on LoCoMo (300-question sample, from the 2026-11-25 evaluation)
 

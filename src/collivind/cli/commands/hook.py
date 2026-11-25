@@ -526,6 +526,14 @@ def _load_manager():
     return manager
 
 
+def _recall_max_tokens(manager) -> int:
+    """[hooks] recall_max_tokens; the default when the manager carries no config."""
+    from collivind.config import HooksConfig
+
+    value = getattr(getattr(getattr(manager, "config", None), "hooks", None), "recall_max_tokens", None)
+    return value if isinstance(value, int) and not isinstance(value, bool) else HooksConfig().recall_max_tokens
+
+
 def _recall_limit(manager) -> int:
     """[hooks] recall_limit; the default when the manager carries no config (test fakes, embedders)."""
     from collivind.config import HooksConfig
@@ -641,7 +649,9 @@ def _unavailable_warning(error: Exception) -> str:
 
 @hook.command(name="user-prompt")
 @PROJECT
-@click.option("--max-tokens", default=800, type=int, help="Recall context budget")
+@click.option(
+    "--max-tokens", default=None, type=int, help="Recall context budget (default: [hooks] recall_max_tokens, 2400)"
+)
 @AGENT
 def user_prompt(project, max_tokens, agent):
     """Inject memory context relevant to the submitted prompt. Never fails.
@@ -678,7 +688,10 @@ def user_prompt(project, max_tokens, agent):
             except Exception:
                 pass
             context = manager.get_context(
-                prompt, project_id=project, limit=_recall_limit(manager), max_tokens=max_tokens
+                prompt,
+                project_id=project,
+                limit=_recall_limit(manager),
+                max_tokens=max_tokens if max_tokens is not None else _recall_max_tokens(manager),
             )
             if "No relevant context found" not in context:
                 break

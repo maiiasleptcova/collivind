@@ -299,7 +299,7 @@ collivind init
 ### Hooks
 
 - **SessionStart** — injects a compact index (~100 tokens) of your project's stored knowledge at the start of every session; after a compaction it also asks for the compaction checkpoint
-- **UserPromptSubmit** — searches memory with every prompt you type and injects the relevant context: up to `recall_limit` memories (`[hooks]`, default 20), packed into an 800-token budget (`--max-tokens`), so long memories fit fewer (about 6 at ~120 tokens each). With the reranker on, memories it scores below `recall_min_score` (`[search]`, default 0.00002) are dropped, so a prompt unrelated to anything stored injects nothing at all.
+- **UserPromptSubmit** — searches memory with every prompt you type and injects the relevant context: up to `recall_limit` memories (`[hooks]`, default 20), packed into a `recall_max_tokens` budget (default 2,400; `--max-tokens` overrides it). On coding-length memories (~100–120 tokens) a relevant prompt typically injects about 12 memories, about 1,300 tokens. With the reranker on, memories it scores below `recall_min_score` (`[search]`, default 0.00002) are dropped, so a prompt unrelated to anything stored injects nothing at all.
 - **Stop** — every `save_interval` responses (default 15, per session), asks the agent to checkpoint
 - **PreCompact** — marks a compaction checkpoint due (see *Compaction* above)
 
@@ -460,7 +460,8 @@ save_interval = 15        # responses between capture checkpoints, per session
 enable_precompact = true
 enable_stop = true
 quiet_capture = true      # save without announcing routine checkpoints
-recall_limit = 20         # memories recalled per prompt (1-50; the 800-token budget still caps it)
+recall_limit = 20         # memories recalled per prompt (1-50)
+recall_max_tokens = 2400  # token budget for them (100-20000); `hook user-prompt --max-tokens` overrides
 ```
 
 See the [design spec](docs/superpowers/specs/2026-04-29-collivind-design.md) for the full configuration reference.
