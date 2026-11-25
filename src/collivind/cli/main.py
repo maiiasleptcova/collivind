@@ -21,6 +21,7 @@ from collivind.cli.commands.projects import projects
 from collivind.cli.commands.reset import reset
 from collivind.cli.commands.search import search
 from collivind.cli.commands.status import status
+from collivind.cli.commands.summarize import summarize
 from collivind.cli.commands.web import web
 from collivind.version import __version__
 
@@ -66,6 +67,7 @@ cli.add_command(migrate_cmd)
 cli.add_command(commands)
 cli.add_command(embed_daemon)
 cli.add_command(projects)
+cli.add_command(summarize)
 
 
 if __name__ == "__main__":

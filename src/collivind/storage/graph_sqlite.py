@@ -115,6 +115,7 @@ class SqliteGraphStore(GraphStore):
 
             CREATE INDEX IF NOT EXISTS idx_memories_project ON memories(project_id);
             CREATE INDEX IF NOT EXISTS idx_memories_category ON memories(category);
+            CREATE INDEX IF NOT EXISTS idx_memories_session ON memories(session_id);
             CREATE INDEX IF NOT EXISTS idx_relationships_source ON relationships(source_id);
             CREATE INDEX IF NOT EXISTS idx_relationships_target ON relationships(target_id);
             CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(type);
@@ -396,6 +397,20 @@ class SqliteGraphStore(GraphStore):
             rows = self.conn.execute(
                 "SELECT * FROM memories WHERE project_id = ? ORDER BY created_at DESC LIMIT ?", (project_id, limit)
             ).fetchall()
+        return [self._row_to_memory(r) for r in rows]
+
+    def find_memories(
+        self, project_id: str, *, session_id: Optional[str] = None, category: Optional[str] = None
+    ) -> List[MemoryNode]:
+        sql = "SELECT * FROM memories WHERE project_id = ? AND valid_to IS NULL AND superseded_by IS NULL"
+        params: List[Any] = [project_id]
+        if session_id is not None:
+            sql += " AND session_id = ?"
+            params.append(session_id)
+        if category is not None:
+            sql += " AND category = ?"
+            params.append(category)
+        rows = self.conn.execute(sql + " ORDER BY created_at, id", params).fetchall()
         return [self._row_to_memory(r) for r in rows]
 
     def invalidate_memory(self, id: str, superseded_by: str, reason: str) -> None:

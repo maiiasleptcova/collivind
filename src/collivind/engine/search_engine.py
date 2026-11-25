@@ -5,10 +5,12 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from collivind.config import SearchConfig
+from collivind.engine import summaries as summaries_mod
 from collivind.engine.conflicts import CONFLICT_THRESHOLD, MAX_CANDIDATES, is_live, same_subject
 from collivind.engine.enrichment import build_enriched_query
 from collivind.engine.graph_engine import GraphEngine
 from collivind.models import MemoryNode, SearchQuery, SearchResult
+from collivind.models.memory import MemoryCategory
 from collivind.storage.interfaces import EmbeddingProvider, GraphStore, VectorStore
 
 logger = logging.getLogger(__name__)
@@ -24,6 +26,12 @@ RERANK_QUERY_CHARS = 1000
 # ponytail: tied to logit-scale models (the MS MARCO cross-encoders); a
 # custom rerank_model that outputs 0..1 scores would never trip it.
 RERANK_GATE_LOGIT = 0.0
+
+# Summary routing (see _route_summaries). The split mirrors the measured
+# "routed" arm: 3 summaries, 15 of their members, 10 other memories.
+SUMMARY_CANDIDATES = 10
+MAX_ROUTED_MEMBERS = 120
+ROUTED_SHARE = 0.6
 
 
 def _sigmoid(logit: float) -> float:
@@ -165,7 +173,8 @@ class SearchEngine:
         if rerank and not degraded:
             reranked = self._rerank(query, candidates, results, dense, now)
             if reranked is not None:
-                return reranked[: query.limit], degraded
+                routed = self._route_summaries(query, vector, vector_filters, reranked, now)
+                return (routed if routed is not None else reranked[: query.limit]), degraded
         return results[: query.limit], degraded
 
     def _can_rerank(self) -> bool:
@@ -224,6 +233,113 @@ class SearchEngine:
         except Exception as e:
             logger.warning("rerank failed, serving first-stage ranking: %s", e)
             return None
+
+    def _route_summaries(
+        self,
+        query: SearchQuery,
+        vector: List[float],
+        vector_filters: Dict[str, Any],
+        reranked: List[SearchResult],
+        now: datetime,
+    ) -> Optional[List[SearchResult]]:
+        """Summaries first, then the details inside them ("routed", BENCHMARKS.md).
+
+        The best summaries for the query are ranked against each other (they
+        would lose a pooled ranking to short memories that echo the query),
+        then their live member memories are reranked against the query. The
+        result is the top summaries, then ~60% of the remaining slots from
+        their members and the rest from the ordinary ranking. None, so the
+        caller keeps the ordinary ranking unchanged, when no summary qualifies:
+        a store without summaries searches exactly as before. Never raises.
+        """
+        routes = self.config.summary_routes
+        if routes <= 0 or query.category not in (None, MemoryCategory.SUMMARY.value) or query.limit < 2:
+            return None
+        try:
+            summaries = self._summary_candidates(query, vector, vector_filters, reranked, now)
+            if not summaries:
+                return None
+            cutoff = query.min_rerank_score or 0.0
+            # ponytail: a quarter of the slots, at most `routes`; 3 of 28 is what was measured
+            top = [r for r in self._rescore(query, summaries) if (r.rerank_score or 0.0) >= cutoff]
+            top = top[: min(routes, max(1, query.limit // 4))]
+            if not top:
+                return None
+            members = summaries_mod.members_of(self, [r.memory.id for r in top])
+            seen = {r.memory.id for r in top}
+            pool = []
+            for r in top:
+                for m in members.get(r.memory.id, []):
+                    if m.id not in seen and self._passes_filters(m, query, now):
+                        seen.add(m.id)
+                        pool.append(
+                            SearchResult(
+                                memory=m,
+                                score=0.0,
+                                vector_score=0.0,
+                                temporal_decay=self._compute_temporal_decay(m, now),
+                            )
+                        )
+            # ponytail: members are capped so one huge group cannot make the second rerank slow
+            details = [r for r in self._rescore(query, pool[:MAX_ROUTED_MEMBERS]) if (r.rerank_score or 0.0) >= cutoff]
+            slots = query.limit - len(top)
+            routed = details[: math.ceil(slots * ROUTED_SHARE)]
+            taken = {r.memory.id for r in top + routed}
+            others = [r for r in reranked if r.memory.id not in taken and not summaries_mod.is_summary(r.memory)]
+            out = top + routed + others[: slots - len(routed)]
+            out += [r for r in details if r.memory.id not in {x.memory.id for x in out}][: query.limit - len(out)]
+            return out
+        except Exception as e:
+            logger.warning("summary routing failed, serving the ordinary ranking: %s", e)
+            return None
+
+    def _summary_candidates(
+        self,
+        query: SearchQuery,
+        vector: List[float],
+        vector_filters: Dict[str, Any],
+        reranked: List[SearchResult],
+        now: datetime,
+    ) -> List[SearchResult]:
+        """Live summaries near the query: a dense fetch restricted to summaries, plus any already ranked."""
+        hits = self.vector_store.search(
+            vector=vector,
+            limit=SUMMARY_CANDIDATES,
+            filters={**vector_filters, "category": MemoryCategory.SUMMARY.value},
+            threshold=self.config.similarity_threshold,
+        )
+        found: Dict[str, SearchResult] = {r.memory.id: r for r in reranked if summaries_mod.is_summary(r.memory)}
+        for hit in hits:
+            if hit["id"] in found:
+                continue
+            memory = self.graph_store.get_memory(hit["id"])
+            if not summaries_mod.is_live(memory) or memory is None or not summaries_mod.is_summary(memory):
+                continue
+            if not self._passes_filters(memory, query, now):
+                continue
+            found[memory.id] = SearchResult(
+                memory=memory,
+                score=0.0,
+                vector_score=hit["score"],
+                temporal_decay=self._compute_temporal_decay(memory, now),
+            )
+        return list(found.values())
+
+    def _rescore(self, query: SearchQuery, pool: List[SearchResult]) -> List[SearchResult]:
+        """Cross-encoder scores for `pool`, best first; raises when the reranker gives none."""
+        if not pool:
+            return []
+        logits = self.embedding_provider.rerank(query.query[:RERANK_QUERY_CHARS], [r.memory.content for r in pool])
+        if not isinstance(logits, list) or len(logits) != len(pool):
+            raise RuntimeError("reranker returned no scores")
+        if not all(isinstance(x, (int, float)) and math.isfinite(x) for x in logits):
+            raise RuntimeError("reranker returned a non-finite score")
+        out = []
+        for res, logit in zip(pool, logits):
+            rs = _sigmoid(float(logit))
+            out.append(replace(res, score=rs * self.config.vector_weight * res.temporal_decay, rerank_score=rs))
+        out.sort(key=lambda x: x.rerank_score or 0.0, reverse=True)
+        return out
 
     def _rerank_pool(
         self,

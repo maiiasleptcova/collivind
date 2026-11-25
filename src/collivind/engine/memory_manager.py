@@ -94,6 +94,8 @@ class MemoryManager:
         caller (an agent, via the MCP response) decides whether a candidate
         is an older version, a real conflict or just a neighbour.
         """
+        if memory_create.category == MemoryCategory.SUMMARY:
+            raise ValueError("summaries are written with collivind_summarize (`collivind summarize`), not add")
         entity_names = [e.name for e in entities] if entities else None
         enriched = build_enriched_text(memory_create, entity_names=entity_names)
         vector = self.embedding_provider.embed(enriched)
@@ -209,10 +211,14 @@ class MemoryManager:
         # left any blank-summary memory permanently unsavable from the UI.
         if content is not None and not str(content).strip():
             raise ValueError("content cannot be blank; forget the memory instead")
+        if category is not None and category == MemoryCategory.SUMMARY:
+            raise ValueError("a memory cannot be turned into a summary; use collivind_summarize")
 
         existing = self._graph_write(self.graph_store.get_memory, memory_id, outcome="nothing was updated")
         if not existing:
             return None
+        if category is not None and existing.category == MemoryCategory.SUMMARY and category != existing.category:
+            raise ValueError("a summary cannot be reclassified; forget it instead")
 
         updates = {
             k: v
@@ -448,6 +454,10 @@ class MemoryManager:
         Returns the number of records processed.
         """
         for rec in records:
+            if rec.get("category") == MemoryCategory.SUMMARY.value:
+                # v1 carries no edges, so a summary would come back with no
+                # members; the v2 bundle (`collivind export`) keeps them.
+                continue
             self.add_memory(
                 MemoryCreate(
                     content=rec["content"],

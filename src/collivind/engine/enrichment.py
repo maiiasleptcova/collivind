@@ -51,7 +51,8 @@ def build_enriched_text(
     if entity_names:
         parts.append(" ".join(entity_names))
 
-    if memory.tags:
+    # a summary's only tag names its group (an id), which is noise to an embedder
+    if memory.tags and memory.category != MemoryCategory.SUMMARY:
         parts.append(" ".join(memory.tags))
 
     return " | ".join(parts)

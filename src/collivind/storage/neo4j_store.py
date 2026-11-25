@@ -377,6 +377,20 @@ class Neo4jGraphStore(GraphStore):
                 memories.append(self.get_memory(record["id"]))
         return [m for m in memories if m is not None]
 
+    def find_memories(
+        self, project_id: str, *, session_id: Optional[str] = None, category: Optional[str] = None
+    ) -> List[MemoryNode]:
+        query = """
+        MATCH (m:Memory {project_id: $project_id})
+        WHERE m.valid_to IS NULL AND m.superseded_by IS NULL
+          AND ($session_id IS NULL OR m.session_id = $session_id)
+          AND ($category IS NULL OR m.category = $category)
+        RETURN m ORDER BY m.created_at, m.id
+        """
+        with self.driver.session(database=self.config.database) as session:
+            res = session.run(query, project_id=project_id, session_id=session_id, category=category)
+            return [self._node_to_memory(record["m"]) for record in res]
+
     def invalidate_memory(self, id: str, superseded_by: str, reason: str) -> None:
         now_str = datetime.now(timezone.utc).isoformat()
 

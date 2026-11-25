@@ -33,6 +33,13 @@ class MemoryCategory(str, Enum):
     ARCHITECTURE = "architecture"
     PREFERENCE = "preference"
     SNIPPET = "snippet"
+    # Agent-written list of dated facts over a group of memories (a session or a
+    # topic), linked to each member by SUMMARIZES. Never written by add_memory.
+    SUMMARY = "summary"
+
+
+# what add/batch/extract/the explorer may write; summaries have their own path
+WRITABLE_CATEGORIES = [c.value for c in MemoryCategory if c is not MemoryCategory.SUMMARY]
 
 
 class MemorySource(str, Enum):

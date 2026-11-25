@@ -10,11 +10,11 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from collivind.models.entity import EntityType
-from collivind.models.memory import MemoryCategory
+from collivind.models.memory import WRITABLE_CATEGORIES
 
 logger = logging.getLogger(__name__)
 
-VALID_CATEGORIES = {c.value for c in MemoryCategory}
+VALID_CATEGORIES = set(WRITABLE_CATEGORIES)
 VALID_ENTITY_TYPES = {t.value for t in EntityType}
 
 EXTRACTION_PROMPT = """\

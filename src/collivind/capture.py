@@ -262,6 +262,10 @@ Call `collivind_batch_add` ONCE with `checkpoint_id: "{checkpoint_id}"` and the 
    history, the user's words). Retire the stale or wrong memory with `collivind_invalidate` (superseded_by =
    the one that is right). Ignore compatible ones. Only if you still cannot tell, ask the user one short
    question (even when saving quietly), then invalidate the wrong one and save their answer.
+6. If the response has `summary_due`, this session has enough memories for a summary: call
+   `collivind_summarize` (no `summary`) to read them, then call it again with `summary` and the `member_ids`
+   it returned. The summary is a list of self-contained dated facts ("- " per line), detailed enough that
+   each member's key point survives; it is what recall reads first.
 If nothing new is worth saving, still call `collivind_batch_add` with `checkpoint_id: "{checkpoint_id}"` and
 an empty `memories` list, so the checkpoint is recorded as checked.
 {tone}
