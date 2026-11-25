@@ -519,6 +519,9 @@ class MemoryManager:
             if budget is not None:
                 cost = len(part) // 4
                 if cost > budget:
+                    # a summary that does not fit gives way to the details after it
+                    if res.memory.category == MemoryCategory.SUMMARY:
+                        continue
                     break
                 budget -= cost
             context_parts.append(part)

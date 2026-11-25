@@ -98,14 +98,15 @@ def members_of(manager, summary_ids: Iterable[str]) -> Dict[str, List[MemoryNode
     cache: Dict[str, Optional[MemoryNode]] = {}
     out: Dict[str, List[MemoryNode]] = {}
     for sid in ids:
-        members = []
+        members: Dict[str, MemoryNode] = {}
         for n in links.get(sid) or []:
             mid = n.get("id")
             if mid not in cache:
                 cache[mid] = manager.graph_store.get_memory(mid)
-            if is_live(cache[mid]) and not is_summary(cache[mid]):
-                members.append(cache[mid])
-        out[sid] = list({m.id: m for m in members}.values())
+            m = cache[mid]
+            if m is not None and is_live(m) and not is_summary(m):
+                members[m.id] = m
+        out[sid] = list(members.values())
     return out
 
 

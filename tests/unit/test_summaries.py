@@ -370,3 +370,13 @@ def test_a_summary_is_scored_by_its_best_line_not_its_opening(tmp_path):
     hits = mgr.search(SearchQuery(query="Will Alice bring her dog to Paris?", project_id="p", limit=8))
     ranked = [h.memory.id for h in hits if h.memory.category == MemoryCategory.SUMMARY]
     assert ranked[:2] == [s.id, decoy.id]
+
+
+def test_a_summary_too_big_for_the_budget_lets_the_details_through(mgr):
+    ids = _trip_session(mgr)
+    _filler(mgr)
+    long_text = "\n".join(f"- Alice packing list item {i} for the Paris trip with the dog." for i in range(40))
+    summaries.save_summary(mgr, "p", summaries.Group("session", "s1"), long_text)
+    text = mgr.get_context("Will Alice bring her dog to Paris?", project_id="p", limit=6, max_tokens=120)
+    assert "[SUMMARY]" not in text and "bring her dog" in text
+    assert mgr.get_memory(ids[2]).content in text
