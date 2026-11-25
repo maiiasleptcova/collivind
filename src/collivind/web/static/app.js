@@ -31,14 +31,17 @@ const state = {
   visible: [],
   list: [], editingId: null, creating: false,
   knownTypes: new Set(),
-  mode: "overview",      // "overview": bubbles that open; "all": every loaded node
+  mode: "overview",      // "overview": bubbles that open; "all": every loaded node; "summaries"
   path: [],              // opened overview bubbles, outermost first: entity ids, OTHER, or CATEGORY + name
   edgeTypes: new Set(),  // relationship types drawn and walked
   knownEdgeTypes: new Set(),
   focusGraph: null,      // the neighbourhood of the search results, from the server
   page: { sort: "newest", group: "", offset: 0, total: 0 },
   picked: new Set(),     // search results ticked for "Link to topic"
+  expanded: new Set(),   // summaries opened in the Summaries mode: their members are drawn
 };
+
+const isSummary = (n) => n?.kind === "memory" && n.category === "summary";
 
 // What the graph view draws from: the search neighbourhood when there is one.
 const shown = () => state.focusGraph || state.graph;
@@ -180,6 +183,7 @@ function applyFilters() {
   const edges = shown().edges.filter((e) => state.edgeTypes.has(e.type));
   const memIds = new Set(nodes.filter((n) => n.kind === "memory" && memoryPasses(n, f)).map((n) => n.id));
   state.overview = null;
+  if (state.mode === "summaries" && !state.focusGraph) return renderSummaries(nodes, memIds);
   const overview = state.mode === "overview" && !state.focusGraph;
   const o = overview ? overviewInputs(nodes, memIds, edges) : null;
   const bubbles = o && overviewBubbles(o);
@@ -229,6 +233,23 @@ function applyFilters() {
   state.visible = nodes.filter((n) => ids.has(n.id));
   view.setGraph(state.visible, edges, { reheat: 0.4 });
   if (state.local || state.path.length || state.focusGraph) view.userMoved = false;
+  finishRender();
+}
+
+// Summaries mode: every live summary that passes the rail, plus the members
+// of the ones opened. Only SUMMARIZES edges are drawn, whatever Links says.
+function summaryMembers(id) {
+  return shown().edges.filter((e) => e.type === "SUMMARIZES" && e.source === id).map((e) => e.target);
+}
+
+function renderSummaries(nodes, memIds) {
+  const sums = nodes.filter((n) => isSummary(n) && !n.superseded && memIds.has(n.id));
+  const ids = new Set(sums.map((n) => n.id));
+  for (const id of state.expanded) if (ids.has(id)) for (const m of summaryMembers(id)) if (memIds.has(m)) ids.add(m);
+  state.visible = nodes.filter((n) => ids.has(n.id));
+  const edges = shown().edges.filter((e) => e.type === "SUMMARIZES" && ids.has(e.source) && ids.has(e.target));
+  $("#stage").classList.toggle("is-local", false);
+  view.setGraph(state.visible, edges, { reheat: 0.5 });
   finishRender();
 }
 
@@ -288,6 +309,15 @@ function renderNote() {
     $("#graph-empty").hidden = !!g.total_memories;
     return;
   }
+  if (state.mode === "summaries" && !state.focusGraph) {
+    const sums = state.visible.filter(isSummary);
+    $("#graph-note").textContent = sums.length
+      ? `${sums.length} summaries, ${state.visible.length - sums.length} detail memories open. ` +
+        "Click a summary (or pick it in the list) to open its details; click again to fold them."
+      : "No summaries yet. Agents write one per session (collivind_summarize), or run `collivind summarize --session <id>`.";
+    $("#graph-empty").hidden = !!g.total_memories;
+    return;
+  }
   const shownMem = state.visible.filter((n) => n.kind === "memory").length;
   const shownEnt = state.visible.length - shownMem;
   const parts = [`Showing ${shownMem} of ${g.total_memories} memories and ${shownEnt} entities.`];
@@ -334,7 +364,16 @@ function updateHighlight() {
       .map((n) => ({ id: n.id, label: n.label, sub: n.kind === "entity" ? n.type : n.category, kind: n.kind }));
     heading = `Matching “${state.text}”`;
   }
-  view.setHighlight(hits.length && !state.overview ? new Set(hits.map((h) => h.id)) : null);
+  if (!heading && state.mode === "summaries" && !state.focusGraph) {
+    // the keyboard path into the summary graph: every summary is a button here
+    hits = state.visible.filter(isSummary)
+      .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))
+      .map((n) => ({ id: n.id, label: n.label, sub: `${n.members} memories · ${(n.created_at || "").slice(0, 10)}${state.expanded.has(n.id) ? " · open" : ""}` }));
+    heading = hits.length ? "Summaries" : "";
+    view.setHighlight(null);
+  } else {
+    view.setHighlight(hits.length && !state.overview ? new Set(hits.map((h) => h.id)) : null);
+  }
   if (!heading) { results.innerHTML = ""; return; }
   results.innerHTML = `<h3>${esc(heading)}</h3>` + (hits.length
     ? `<ul>${hits.map((h) => `<li><button class="result" data-node="${esc(h.id)}">
@@ -400,6 +439,19 @@ function select(id, { center = false } = {}) {
   const drawn = id && view.byId.get(id);
   if (drawn?.data.kind === "cluster" && view.adj.has(id)) return openBubble(drawn.data);
   // Not on the canvas (the overview, or outside an opened bubble): bring it in.
+  // Summaries mode: a summary opens (or folds) its details, and a detail
+  // reached from a panel link opens its summary first, so it is drawn.
+  if (state.mode === "summaries" && !state.focusGraph && id) {
+    const node = state.byId.get(id);
+    const owner = isSummary(node) ? null : shown().edges.find((e) => e.type === "SUMMARIZES" && e.target === id)?.source;
+    if (isSummary(node)) {
+      if (state.expanded.has(id) && state.selected === id) state.expanded.delete(id); else state.expanded.add(id);
+      applyFilters();
+    } else if (owner && !state.expanded.has(owner)) {
+      state.expanded.add(owner);
+      applyFilters();
+    }
+  }
   if (id && !view.adj.has(id) && state.byId.has(id)) return focusOn(id);
   state.selected = id;
   view.select(id, { center });
@@ -686,6 +738,7 @@ function wireControls() {
       "/": () => $("#q").focus(),
       g: () => setView("graph"), l: () => setView("list"), p: () => setView("projects"),
       v: () => { setView("graph"); setMode("overview"); }, e: () => { setView("graph"); setMode("all"); },
+      s: () => { setView("graph"); setMode("summaries"); },
       o: () => { if (state.selected) { state.local = !state.local; applyFilters(); refreshPanel(); } },
     };
     if (keys[e.key]) { e.preventDefault(); keys[e.key](); }

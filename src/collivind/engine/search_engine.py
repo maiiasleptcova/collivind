@@ -29,7 +29,8 @@ RERANK_GATE_LOGIT = 0.0
 
 # Summary routing (see _route_summaries). The split mirrors the measured
 # "routed" arm: 3 summaries, 15 of their members, 10 other memories.
-SUMMARY_CANDIDATES = 10
+SUMMARY_CANDIDATES = 20  # dense top-N summaries scored line by line
+MAX_SUMMARY_LINES = 40
 MAX_ROUTED_MEMBERS = 120
 ROUTED_SHARE = 0.6
 
@@ -261,7 +262,7 @@ class SearchEngine:
                 return None
             cutoff = query.min_rerank_score or 0.0
             # ponytail: a quarter of the slots, at most `routes`; 3 of 28 is what was measured
-            top = [r for r in self._rescore(query, summaries) if (r.rerank_score or 0.0) >= cutoff]
+            top = [r for r in self._rescore(query, summaries, by_line=True) if (r.rerank_score or 0.0) >= cutoff]
             top = top[: min(routes, max(1, query.limit // 4))]
             if not top:
                 return None
@@ -325,15 +326,31 @@ class SearchEngine:
             )
         return list(found.values())
 
-    def _rescore(self, query: SearchQuery, pool: List[SearchResult]) -> List[SearchResult]:
-        """Cross-encoder scores for `pool`, best first; raises when the reranker gives none."""
+    def _rescore(self, query: SearchQuery, pool: List[SearchResult], by_line: bool = False) -> List[SearchResult]:
+        """Cross-encoder scores for `pool`, best first; raises when the reranker gives none.
+
+        by_line scores each line of a memory on its own and keeps the best:
+        the cross-encoder reads 256 tokens, so a summary of a few hundred
+        words would otherwise be judged on its first facts only (on LoCoMo
+        the right summary reached the top 3 for 207 of 300 questions scored
+        whole, 277 scored by its best line).
+        """
         if not pool:
             return []
-        logits = self.embedding_provider.rerank(query.query[:RERANK_QUERY_CHARS], [r.memory.content for r in pool])
-        if not isinstance(logits, list) or len(logits) != len(pool):
+        owners, texts = [], []
+        for i, r in enumerate(pool):
+            parts = [ln for ln in r.memory.content.splitlines() if ln.strip()][:MAX_SUMMARY_LINES] if by_line else []
+            for text in parts or [r.memory.content]:
+                owners.append(i)
+                texts.append(text)
+        raw = self.embedding_provider.rerank(query.query[:RERANK_QUERY_CHARS], texts)
+        if not isinstance(raw, list) or len(raw) != len(texts):
             raise RuntimeError("reranker returned no scores")
-        if not all(isinstance(x, (int, float)) and math.isfinite(x) for x in logits):
+        if not all(isinstance(x, (int, float)) and math.isfinite(x) for x in raw):
             raise RuntimeError("reranker returned a non-finite score")
+        logits = [float("-inf")] * len(pool)
+        for i, x in zip(owners, raw):
+            logits[i] = max(logits[i], float(x))
         out = []
         for res, logit in zip(pool, logits):
             rs = _sigmoid(float(logit))

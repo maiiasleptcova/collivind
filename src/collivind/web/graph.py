@@ -25,8 +25,10 @@ def _enum(value: Any) -> Any:
     return value.value if hasattr(value, "value") else value
 
 
-def _memory_node(m: MemoryNode) -> Dict[str, Any]:
+def _memory_node(m: MemoryNode, members: Optional[Dict[str, int]] = None) -> Dict[str, Any]:
+    extra = {"members": (members or {}).get(m.id, 0)} if _enum(m.category) == "summary" else {}
     return {
+        **extra,
         "id": m.id,
         "kind": "memory",
         "label": (m.summary or m.content or "")[:LABEL_LEN],
@@ -79,7 +81,14 @@ def build_graph(
     def allowed(rel: str) -> bool:
         return types is None or rel in types
 
-    rels = [r for r in graph.iter_relationships() if allowed(_enum(r.type))]
+    every_rel = list(graph.iter_relationships())
+    rels = [r for r in every_rel if allowed(_enum(r.type))]
+    # a summary's member count, whatever link types are drawn: live members only
+    live = {m.id for m in memories if not (m.superseded_by or m.valid_to)}
+    members: Dict[str, int] = {}
+    for r in every_rel:
+        if _enum(r.type) == RelType.SUMMARIZES.value and r.target_id in live:
+            members[r.source_id] = members.get(r.source_id, 0) + 1
     raw = [(r.source_id, _enum(r.type), r.target_id) for r in rels]
     # what the panel and the edge labels show: the note, and who drew it
     detail = {
@@ -133,7 +142,7 @@ def build_graph(
             note, origin = detail.get(key, ("", "versioning"))
             edges.append({"source": s, "target": t, "type": rel, "derived": is_derived, "note": note, "origin": origin})
 
-    nodes = [_memory_node(m) for m in kept] + [
+    nodes = [_memory_node(m, members) for m in kept] + [
         {"id": e.id, "kind": "entity", "label": e.name, "type": _enum(e.type)}
         for e in sorted((entities[i] for i in linked_entities), key=lambda e: e.id)
     ]

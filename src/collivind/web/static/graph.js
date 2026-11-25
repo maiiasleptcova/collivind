@@ -10,7 +10,9 @@ const EDGE_STYLE = {
   CONTRADICTS: "contradicts", SUPERSEDES: "supersedes",
   // how entities fit together: the structural edges, drawn heavier
   USES: "relation", PART_OF: "relation", IMPLEMENTS: "relation", INTERACTS_WITH: "relation", RELATED_TO: "relation",
+  SUMMARIZES: "summary",
 };
+const isSummary = (d) => d.kind === "memory" && d.category === "summary";
 const LABEL_BUDGET = 220;
 const EDGE_LABEL_BUDGET = 24;
 
@@ -97,7 +99,9 @@ export class GraphView {
       this.adj.get(s.id).add(t.id); this.adj.get(t.id).add(s.id);
     }
     for (const n of this.nodes) {
-      n.r = n.data.kind === "cluster" ? n.data.r : n.data.kind === "entity" ? 3.6 : Math.min(11, 4 + Math.sqrt(n.degree) * 1.1);
+      n.r = n.data.kind === "cluster" ? n.data.r : n.data.kind === "entity" ? 3.6
+        : isSummary(n.data) ? Math.min(18, 8 + Math.sqrt(n.data.members || 0) * 1.4)
+        : Math.min(11, 4 + Math.sqrt(n.degree) * 1.1);
     }
     if (this.selected && !visible.has(this.selected)) this.selected = null;
     this.alpha = fixed ? 0 : Math.max(this.alpha, reheat);
@@ -217,7 +221,7 @@ export class GraphView {
     const styles = {
       entity: [t.entityEdge, 0.8, []], memory: [t.line, 1.1, []],
       contradicts: [t.danger, 1.3, [4, 3]], supersedes: [t.steel, 1.2, [1.5, 2.5]],
-      relation: [t.ink, 1.5, []],
+      relation: [t.ink, 1.5, []], summary: [t.steel, 1.2, []],
     };
     this.drawClusterLinks(focus);
     for (const pass of [false, true]) {
@@ -277,7 +281,8 @@ export class GraphView {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.font = `500 11px "Instrument Sans", system-ui, sans-serif`;
     ctx.textBaseline = "middle"; ctx.textAlign = "center";
-    const links = this.links.filter((l) => l.source.id === anchor || l.target.id === anchor).slice(0, EDGE_LABEL_BUDGET);
+    // a summary's member links all say the same thing; the panel lists them instead
+    const links = this.links.filter((l) => l.style !== "summary" && (l.source.id === anchor || l.target.id === anchor)).slice(0, EDGE_LABEL_BUDGET);
     for (const l of links) {
       const m = this.meanings?.[l.type];
       let text = m ? m.forward : l.type.toLowerCase().replace(/_/g, " ");
@@ -324,8 +329,20 @@ export class GraphView {
       ctx.fillRect(n.x - s / 2, n.y - s / 2, s, s);
       return;
     }
-    ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
     const color = this.colorOf(d.project_id);
+    if (isSummary(d)) {
+      // a hexagon with a ring: a summary stands for a group, not one fact
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = Math.PI / 6 + (i * Math.PI) / 3;
+        ctx[i ? "lineTo" : "moveTo"](n.x + n.r * Math.cos(a), n.y + n.r * Math.sin(a));
+      }
+      ctx.closePath();
+      ctx.fillStyle = d.superseded ? t.bg : color; ctx.fill();
+      ctx.strokeStyle = t.ink; ctx.lineWidth = 2 / this.k; ctx.stroke();
+      return;
+    }
+    ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
     if (d.superseded) {
       // superseded versions are drawn hollow: history, not current knowledge
       ctx.fillStyle = t.bg; ctx.fill();
@@ -368,6 +385,15 @@ export class GraphView {
       .filter((p) => p.sx > -50 && p.sx < this.w + 50 && p.sy > -20 && p.sy < this.h + 20)
       .sort((a, b) => (b.n.id === anchor) - (a.n.id === anchor) || b.n.degree - a.n.degree)
       .slice(0, LABEL_BUDGET);
+    ctx.textAlign = "center";
+    ctx.font = `700 11px "Instrument Sans", system-ui, sans-serif`;
+    for (const n of this.nodes) {
+      if (!isSummary(n.data) || n.r * k < 8) continue;
+      ctx.fillStyle = t.bg;
+      ctx.fillText(String(n.data.members || 0), n.x * k + tx, n.y * k + ty);
+    }
+    ctx.textAlign = "start";
+    ctx.font = `500 12px "Instrument Sans", system-ui, sans-serif`;
     const taken = [];
     for (const { n, sx, sy } of pool) {
       let text = n.data.label || n.id;
