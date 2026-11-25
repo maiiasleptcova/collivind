@@ -463,6 +463,78 @@ above are embedded mode only; docker-mode accuracy was not benchmarked, and
 neither was the cost of the extra `get_memory` round trips (up to about 50)
 per search on Neo4j at scale.
 
+## Summary memories (0.20.0)
+
+A summary memory is an agent-written list of dated facts over one session's
+memories (or a named topic), linked to each member by `SUMMARIZES`. At recall
+the best summaries for the query are ranked against each other by their best
+fact line; those the reranker judges relevant (best-line logit at least 0)
+come first, then their most relevant members merged by score with the best
+other memories (see README, *How It Works*). This differs from the offline
+"routed" arm in the 2026-11-25 evaluation in three ways: best-line scoring
+and 20 dense summary candidates (chosen from the retrieval check below), and
+the relevance gate and score ordering (added after code review so an
+off-topic summary cannot lead a recall). Collivind never writes summary text: **every summary costs one agent
+call per session at save time** (the agent reads the session's memories with
+`collivind_summarize` and writes the facts). That cost is not in the numbers
+below.
+
+### LoCoMo QA through `MemoryManager` (300-question sample, 2026-11-25)
+
+Same sample, reader, judge and prompts as the end-to-end QA above (seed 0,
+categories 1-4, Claude Sonnet 5.5 reader and judge through the Claude CLI,
+Mem0's judge prompt). Every turn is added with `add_memory` (one session id
+per LoCoMo session); the summaries are the 272 written by Sonnet 5.5 from
+the session text alone in the 2026-11-25 evaluation (mean 327 words, about
+45% of a session), stored with `save_summary`. Both arms run on the same code
+and store: the turns-only searches run before any summary is saved.
+`benchmarks/locomo_summary_qa.py` reproduces it; results (ids and verdicts
+only) in `results_locomo_summary_qa.json`.
+
+| Context given to the reader | words | overall | single-hop | multi-hop | temporal | open-domain |
+|---|---|---|---|---|---|---|
+| n | | 300 | 167 | 57 | 54 | 22 |
+| turns only, `search(limit=50)` | 1,648 | 75.7 | 85.6 | 56.1 | 72.2 | 59.1 |
+| with summaries, `search(limit=28)`: 3 summaries + their best members + other turns | 1,803 | **83.7** | 93.4 | 57.9 | 85.2 | 72.7 |
+| prompt hook at 800 tokens (`get_context`, limit 20; the old default), turns only | 560 | 74.3 | 84.4 | 49.1 | 74.1 | 63.6 |
+| prompt hook at 800 tokens, with summaries | 569 | **81.3** | 93.4 | 47.4 | 85.2 | 68.2 |
+
+Paired exact McNemar: with summaries vs turns only, 32 questions to 8,
+p = 0.0002; at the hook's 800-token budget, 38 to 17, p = 0.007. These arms
+were measured before the hook default rose to 2,400 tokens
+(`[hooks] recall_max_tokens`) and were not re-run at 2,400. The routed context's
+gold-session summary is among the 3 returned for 270 of 300 questions.
+
+**Multi-hop barely moved here** (57.9 vs 56.1), unlike the offline estimate
+in the evaluation (64.9 vs 52.6), and is below the 62% this work aimed for.
+The contexts are not the reason: for the 57 multi-hop questions the share of
+gold sessions among the routed summaries is the same as offline, and paired
+against the offline routed arm the engine's answers differ on 3 vs 7
+questions (p = 0.34). With 57 questions one question is 1.8 points and the
+95% CI is about ±13, so the multi-hop column cannot separate these arms.
+Not tuned further.
+
+**What was changed to get here, and why (measured without the reader).**
+The engine's cross-encoder reads 256 tokens, so a 330-word summary scored
+whole is judged on its first facts: the gold session's summary reached the
+top 3 for 207 of 300 questions (259 at 512 tokens). Scoring each summary by
+its best line gives 277 at 256 tokens, without changing how ordinary
+memories are scored. The 20 dense summary candidates come from the same
+check (top 10: 245, top 20: 271, all: 277); a LoCoMo conversation has at
+most 35 summaries, so on a store with hundreds of summaries the dense
+prefilter matters more than here. Line scoring is capped at 300
+cross-encoder pairs per search.
+
+**Caveats.** One reader run; the binomial 95% CI is about ±5 points overall
+and ±13 on multi-hop. Verdicts are cached by prompt, one per prompt. The
+summaries came from Sonnet 5.5 with a fixed prompt; an agent summarising
+coding sessions mid-task will write different ones. Measured on base `6651c12`; the later base commit
+changes a test fixture only. Embedded mode only; routing on Neo4j costs one
+round trip per member read (up to 120 per search). Routing adds about 150 ms
+median per prompt recall on a laptop (127 to 279 ms, 60 summaries in the
+project); ten unrelated prompts on the same store recalled nothing, with or
+without summaries.
+
 ## Which public memory benchmarks exist (2026-11 survey)
 
 | Benchmark | License | Size | Measures | Gold ids for retrieval | Official scoring |

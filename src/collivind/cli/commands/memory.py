@@ -11,10 +11,10 @@ import click
 from collivind.config import load_config
 from collivind.engine.memory_manager import MemoryManager
 from collivind.engine.project_labels import resolve_project
-from collivind.models.memory import MemoryCategory, MemoryCreate
+from collivind.models.memory import WRITABLE_CATEGORIES, MemoryCategory, MemoryCreate
 from collivind.storage.factory import create_all_backends
 
-CATEGORIES = [c.value for c in MemoryCategory]
+CATEGORIES = WRITABLE_CATEGORIES
 
 
 def _manager() -> MemoryManager:

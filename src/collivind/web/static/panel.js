@@ -53,8 +53,24 @@ function edgesOf(id) {
 // Newest first, dated: an entity's connections read as its history.
 const createdOf = (nodeId) => ctx.graph().byId.get(nodeId)?.created_at || "";
 
+// Summary <-> detail: shown as their own section, so a summary's dozens of
+// SUMMARIZES links do not bury its other connections.
+function summaryMarkup(m) {
+  const linked = edgesOf(m.id).filter((e) => e.type === "SUMMARIZES");
+  const row = (e) => `<li><button class="link-like" data-goto="${esc(e.other)}">${esc(labelOf(e.other))}</button>
+    ${createdOf(e.other) ? `<time class="when">${esc(fmtDate(createdOf(e.other)))}</time>` : ""}</li>`;
+  if (m.category === "summary") {
+    const members = linked.filter((e) => e.out).sort((a, b) => createdOf(a.other).localeCompare(createdOf(b.other)));
+    return `<section class="panel-section summary-members"><h3>Detail memories (${members.length})</h3>
+      ${members.length ? `<ol class="connections">${members.map(row).join("")}</ol>` : `<p class="hint">None of its members is loaded.</p>`}</section>`;
+  }
+  const owners = linked.filter((e) => !e.out);
+  return owners.length ? `<section class="panel-section summary-owner"><h3>Part of summary</h3>
+    <ul class="connections">${owners.map(row).join("")}</ul></section>` : "";
+}
+
 function connectionsMarkup(id) {
-  const edges = edgesOf(id).sort((a, b) => createdOf(b.other).localeCompare(createdOf(a.other)));
+  const edges = edgesOf(id).filter((e) => e.type !== "SUMMARIZES").sort((a, b) => createdOf(b.other).localeCompare(createdOf(a.other)));
   if (!edges.length) return `<p class="hint">No connections yet. Link this to another memory or entity below, or shift-drag between two nodes on the graph.</p>`;
   return `<ul class="connections">${edges.map((e) => {
     const removable = e.type !== "SUPERSEDES";
@@ -109,6 +125,7 @@ function render() {
         <button class="danger" id="p-forget">Forget</button>
       </div>
       <div id="p-version-list"></div>
+      ${summaryMarkup(m)}
       ${detailsMarkup(m)}
       <section class="panel-section"><h3>Connections</h3>${connectionsMarkup(m.id)}${linkFormMarkup()}</section>`;
   } else {

@@ -17,6 +17,7 @@ class RelType(str, Enum):
     CAUSED_BY = "CAUSED_BY"
     RESOLVES = "RESOLVES"
     DEPENDS_ON_MEM = "DEPENDS_ON"
+    SUMMARIZES = "SUMMARIZES"  # summary memory -> each member (detail) memory
 
     # Entity -> Entity
     IMPLEMENTS = "IMPLEMENTS"

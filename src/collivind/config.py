@@ -75,6 +75,11 @@ class SearchConfig:
     # cross-encoder score is below this, so an unrelated prompt recalls
     # nothing. 0 disables. Explicit search never applies it.
     recall_min_score: float = RECALL_MIN_SCORE_DEFAULT
+    # When a summary memory is among the reranked candidates, return the top
+    # `summary_routes` summaries followed by their best member memories (and
+    # the best other memories); 0 treats summaries as ordinary results.
+    # Needs the reranker. 3 is the setting measured in BENCHMARKS.md.
+    summary_routes: int = 3
 
     def __post_init__(self):
         # on the prompt path: a typo must fail at config load, not mid-search
@@ -84,6 +89,14 @@ class SearchConfig:
             or not 1 <= self.rerank_pool <= 200
         ):
             raise ConfigurationError(f"[search] rerank_pool must be an integer from 1 to 200, got {self.rerank_pool!r}")
+        if (
+            isinstance(self.summary_routes, bool)
+            or not isinstance(self.summary_routes, int)
+            or not 0 <= self.summary_routes <= 10
+        ):
+            raise ConfigurationError(
+                f"[search] summary_routes must be an integer from 0 to 10, got {self.summary_routes!r}"
+            )
         if (
             isinstance(self.recall_min_score, bool)
             or not isinstance(self.recall_min_score, (int, float))
@@ -113,8 +126,15 @@ class HooksConfig:
     # cutoff runs first, so an unrelated prompt still injects nothing.
     recall_limit: int = 20
     recall_max_tokens: int = 2400
+    # Ask the agent for a session summary once a session holds this many
+    # memories no summary covers yet; 0 never asks.
+    summary_after: int = 8
 
     def __post_init__(self):
+        if isinstance(self.summary_after, bool) or not isinstance(self.summary_after, int) or self.summary_after < 0:
+            raise ConfigurationError(
+                f"[hooks] summary_after must be a non-negative integer, got {self.summary_after!r}"
+            )
         if (
             isinstance(self.recall_limit, bool)
             or not isinstance(self.recall_limit, int)
@@ -230,6 +250,9 @@ lexical = true
 # scores below this (0..1), so an unrelated prompt recalls nothing. 0 = off.
 # Explicit search never applies it.
 recall_min_score = 0.00002
+# A summary among the candidates returns the top N summaries plus their most
+# relevant member memories. 0 = treat summaries as ordinary results.
+summary_routes = 3
 
 # --- Docker (docker mode only) ---
 # [docker]
@@ -245,6 +268,7 @@ enable_user_prompt = true
 quiet_capture = true
 recall_limit = 20  # memories recalled per prompt
 recall_max_tokens = 2400  # token budget for those memories (about 20 coding-length memories)
+summary_after = 8  # ask the agent for a session summary after this many new memories (0 = never)
 """
 
 

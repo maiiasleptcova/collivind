@@ -3,6 +3,7 @@ from dataclasses import replace
 from typing import Any, Dict, List, Optional
 
 from collivind import capture
+from collivind.engine import summaries
 from collivind.engine.conflicts import CONFLICT_INSTRUCTION
 from collivind.engine.extractor import build_extraction_prompt, parse_extraction_response
 from collivind.engine.memory_manager import DEGRADED_NOTE, MemoryManager
@@ -17,6 +18,7 @@ from collivind.models import (
     SearchQuery,
     SearchResult,
 )
+from collivind.models.memory import WRITABLE_CATEGORIES
 from collivind.models.relations import ENTITY_RELATIONS, MAX_NOTE, glossary, parse_relationship
 from collivind.storage.interfaces import EmbeddingProvider, GraphStore, VectorStore
 
@@ -146,7 +148,49 @@ class CollivindTools:
         if checkpoint_id:
             result["checkpoint_id"] = checkpoint_id
             result["checkpoint"] = "confirmed" if ids else "checked, nothing new"
+        due = self._summary_due(ids, memories)
+        if due:
+            result["summary_due"] = due
         return json.dumps(_with_conflicts(result, conflicts))
+
+    def _summarize(self, args: Dict[str, Any]) -> str:
+        project = self._project(args)
+        topic = args.get("topic")
+        try:
+            group = summaries.group_for(session_id=None if topic else args.get("session_id") or self.session_id,
+                                        topic=topic)  # fmt: skip
+            member_ids = args.get("member_ids")
+            if member_ids is not None and not (
+                isinstance(member_ids, list) and all(isinstance(i, str) for i in member_ids)
+            ):
+                raise ValueError("member_ids must be a list of memory ids")
+            if args.get("summary") is None:
+                return json.dumps(summaries.group_view(self.memory_manager, project, group, member_ids), indent=2)
+            node = summaries.save_summary(self.memory_manager, project, group, args["summary"], member_ids)
+        except LookupError as e:
+            return json.dumps({"error": str(e)})
+        members = summaries.members_of(self.memory_manager, [node.id])[node.id]
+        return json.dumps(
+            {
+                "status": "success",
+                "summary_id": node.id,
+                "version": node.version,
+                "replaces": node.previous_version_id,
+                "members": len(members),
+            }
+        )
+
+    def _summary_due(self, ids: List[str], memories: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Ask for this session's summary once it has enough memories no summary covers."""
+        try:
+            threshold = self.memory_manager.config.hooks.summary_after
+            sessions = {(m["project_id"], m.get("session_id")) for m in memories}
+            if not ids or not isinstance(threshold, int) or threshold <= 0 or len(sessions) != 1:
+                return None
+            project, session = sessions.pop()
+            return summaries.summary_due(self.memory_manager, project, session, threshold)
+        except Exception:
+            return None  # the save succeeded; a failed check must not turn it into an error
 
     def _record(self, checkpoint_id, ok, ids, **kw) -> None:
         try:
@@ -174,7 +218,7 @@ class CollivindTools:
                     "properties": {
                         "content": {"type": "string"},
                         "summary": {"type": "string"},
-                        "category": {"type": "string", "enum": [c.value for c in MemoryCategory]},
+                        "category": {"type": "string", "enum": WRITABLE_CATEGORIES},
                         "project_id": PROJECT_PROP,
                         "entities": {
                             "type": "array",
@@ -325,7 +369,7 @@ class CollivindTools:
                                 "properties": {
                                     "content": {"type": "string"},
                                     "summary": {"type": "string"},
-                                    "category": {"type": "string", "enum": [c.value for c in MemoryCategory]},
+                                    "category": {"type": "string", "enum": WRITABLE_CATEGORIES},
                                     "project_id": PROJECT_PROP,
                                     "entities": {
                                         "type": "array",
@@ -362,6 +406,33 @@ class CollivindTools:
                         },
                     },
                     "required": ["memories"],
+                },
+            },
+            {
+                "name": "collivind_summarize",
+                "description": (
+                    "Read or write the summary memory of a group: one session (default: this session) or a "
+                    "named topic. Without `summary` it returns the group's member memories, any current "
+                    'summary and how to write one. With `summary` (lines starting with "- ", each a '
+                    "self-contained dated fact) it stores it, linked to every member, replacing the previous "
+                    "version. Recall then returns the summary plus its most relevant members."
+                ),
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "session_id": {"type": "string", "description": "Session group (default: this session)"},
+                        "topic": {"type": "string", "description": "Topic group name, instead of a session"},
+                        "summary": {"type": "string", "description": "The summary text to store"},
+                        "member_ids": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": (
+                                "Members the summary covers: pass back the member_ids the read returned. "
+                                "Required for a topic; extra ids add memories to the group."
+                            ),
+                        },
+                        "project_id": PROJECT_PROP,
+                    },
                 },
             },
             {
@@ -558,6 +629,9 @@ class CollivindTools:
 
             elif name == "collivind_batch_add":
                 return self._batch_add(args)
+
+            elif name == "collivind_summarize":
+                return self._summarize(args)
 
             elif name == "collivind_get_version_chain":
                 chain = self.memory_manager.get_version_chain(args["memory_id"])

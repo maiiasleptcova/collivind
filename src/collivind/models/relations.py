@@ -39,6 +39,7 @@ MEANINGS: Dict[str, Meaning] = {
     "CAUSED_BY": Meaning("was caused by", "caused", "the other is the cause or trigger"),
     "RESOLVES": Meaning("resolves", "is resolved by", "a fix or decision that settles the other"),
     "SUPERSEDES": Meaning("supersedes", "is superseded by", "a newer version of the other"),
+    "SUMMARIZES": Meaning("summarizes", "is summarized by", "a summary and one of the detail memories it covers"),
     "CONTRADICTS": Meaning("contradicts", "is contradicted by", "both cannot be true; one needs retiring"),
     "RELATES_TO": Meaning("relates to", "relates to", "on the same subject, no stronger link known"),
     # session edges, written by capture only

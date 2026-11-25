@@ -94,6 +94,8 @@ class MemoryManager:
         caller (an agent, via the MCP response) decides whether a candidate
         is an older version, a real conflict or just a neighbour.
         """
+        if memory_create.category == MemoryCategory.SUMMARY:
+            raise ValueError("summaries are written with collivind_summarize (`collivind summarize`), not add")
         entity_names = [e.name for e in entities] if entities else None
         enriched = build_enriched_text(memory_create, entity_names=entity_names)
         vector = self.embedding_provider.embed(enriched)
@@ -213,6 +215,17 @@ class MemoryManager:
         existing = self._graph_write(self.graph_store.get_memory, memory_id, outcome="nothing was updated")
         if not existing:
             return None
+        # str enum: neo4j hands the category back as a plain string
+        if category is not None and (category == MemoryCategory.SUMMARY) != (
+            existing.category == MemoryCategory.SUMMARY
+        ):
+            if existing.category == MemoryCategory.SUMMARY:
+                raise ValueError("a summary cannot be reclassified; forget it instead")
+            raise ValueError("a memory cannot be turned into a summary; use collivind_summarize")
+        if tags is not None and existing.category == MemoryCategory.SUMMARY:
+            # the group tag is how a rewrite finds this summary; keep it whatever the edit
+            group_tags = [t for t in existing.tags if t.startswith("summary-of:")]
+            tags = group_tags + [t for t in tags if t not in group_tags]
 
         updates = {
             k: v
@@ -448,6 +461,10 @@ class MemoryManager:
         Returns the number of records processed.
         """
         for rec in records:
+            if rec.get("category") == MemoryCategory.SUMMARY.value:
+                # v1 carries no edges, so a summary would come back with no
+                # members; the v2 bundle (`collivind export`) keeps them.
+                continue
             self.add_memory(
                 MemoryCreate(
                     content=rec["content"],
@@ -509,6 +526,9 @@ class MemoryManager:
             if budget is not None:
                 cost = len(part) // 4
                 if cost > budget:
+                    # a summary that does not fit gives way to the details after it
+                    if res.memory.category == MemoryCategory.SUMMARY:
+                        continue
                     break
                 budget -= cost
             context_parts.append(part)

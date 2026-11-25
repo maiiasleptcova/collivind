@@ -141,6 +141,24 @@ class GraphStore(ABC):
         """
         return []
 
+    def find_memories(
+        self, project_id: str, *, session_id: Optional[str] = None, category: Optional[str] = None
+    ) -> List[MemoryNode]:
+        """Live memories of a project (not superseded, no valid_to), optionally one
+        session's or one category's, oldest first.
+
+        This default scans every memory; stores override it with one query.
+        """
+        return [
+            m
+            for m in self.iter_memories()
+            if m.project_id == project_id
+            and not m.valid_to
+            and not m.superseded_by
+            and (session_id is None or m.session_id == session_id)
+            and (category is None or m.category == category)  # str enum: equal to its value
+        ]
+
     @abstractmethod
     def get_timeline(self, project_id: str, entity: Optional[str] = None, limit: int = 50) -> List[MemoryNode]:
         """Get timeline of memories."""

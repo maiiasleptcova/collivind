@@ -28,10 +28,12 @@ class Deduplicator:
     def find_duplicate_detailed(self, vector: List[float], project_id: str) -> Optional[DuplicateMatch]:
         results = self.vector_store.search(
             vector=vector,
-            limit=1,
+            limit=3,
             filters={"project_id": project_id},
             threshold=self.config.dedup_threshold,
         )
+        # a summary is never a duplicate of a detail memory, nor the reverse
+        results = [r for r in results if (r.get("payload") or {}).get("category") != "summary"]
 
         if results and results[0]["score"] >= self.config.dedup_threshold:
             return DuplicateMatch(

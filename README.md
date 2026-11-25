@@ -110,7 +110,7 @@ collivind web            # on the host, any mode
 Opens a local explorer on `127.0.0.1:8765` over the same store your hooks and
 MCP tools use (it reads `~/.collivind/config.toml` and names the mode in the
 header). Three views, keyboard reachable (`/` search, `g` `l` `p` to switch,
-`Esc` to deselect):
+`v` `e` `s` for the graph's Overview, Everything and Summaries modes, `Esc` to deselect):
 
 - **Graph**: memories and the entities they mention, with entity links,
   `RELATES_TO`/`CAUSED_BY`/`DEPENDS_ON`, `CONTRADICTS` (dashed) and version
@@ -121,6 +121,11 @@ header). Three views, keyboard reachable (`/` search, `g` `l` `p` to switch,
   rendering with a built-in force layout stays interactive at a few thousand
   nodes; past 3,000 memories the newest are loaded and the sidebar says so
   (pick a project to see the rest).
+- **Summaries** (graph mode, `s`): only summary memories, drawn as hexagons
+  with their member count. Clicking one (or picking it in the sidebar list,
+  which is keyboard reachable) opens its text in the side panel, lists its
+  detail memories, and draws them around it; click it again to fold them. A
+  detail memory's panel shows the summary it belongs to and links back.
 - **Search**: typing filters node labels live; Enter runs the hybrid semantic
   search and lights the results up on the graph (and lists them in the List view).
 - **Edit and link**: the side panel edits content, summary, category, tags and
@@ -300,7 +305,7 @@ collivind init
 
 - **SessionStart** — injects a compact index (~100 tokens) of your project's stored knowledge at the start of every session; after a compaction it also asks for the compaction checkpoint
 - **UserPromptSubmit** — searches memory with every prompt you type and injects the relevant context: up to `recall_limit` memories (`[hooks]`, default 20), packed into a `recall_max_tokens` budget (default 2,400; `--max-tokens` overrides it). On coding-length memories (~100–120 tokens) a relevant prompt typically injects about 12 memories, about 1,300 tokens. With the reranker on, memories it scores below `recall_min_score` (`[search]`, default 0.00002) are dropped, so a prompt unrelated to anything stored injects nothing at all.
-- **Stop** — every `save_interval` responses (default 15, per session), asks the agent to checkpoint
+- **Stop** — every `save_interval` responses (default 15, per session), asks the agent to checkpoint; once a session holds `summary_after` (default 8) memories no summary covers, the save's response asks the agent to write the session summary too
 - **PreCompact** — marks a compaction checkpoint due (see *Compaction* above)
 
 Registered for Claude Code (via the plugin, or `~/.claude/settings.json`), for Codex in `~/.codex/hooks.json` when `~/.codex` exists, and for GitHub Copilot in `~/.copilot/hooks/collivind.json` (camelCase events: sessionStart, userPromptTransformed, agentStop, preCompact). If any hook finds the store down it says so in the session instead of recalling nothing.
@@ -340,6 +345,7 @@ Once connected, Claude Code gets these tools:
 | `collivind_find_contradictions` | List memories close enough to need checking against one (update, conflict or neighbour) |
 | `collivind_mark_conflict` | Flag two memories as a genuine, unresolved conflict for later review |
 | `collivind_get_version_chain` | Full supersession history of a memory |
+| `collivind_summarize` | Read a session's (or topic's) member memories, then store the summary the agent writes for them |
 | `collivind_extract` | Get an extraction prompt for raw text |
 | `collivind_extract_save` | Parse and store an LLM extraction response |
 
@@ -367,6 +373,8 @@ collivind reset             # Wipe all data (with confirmation)
 collivind docker up|down|logs  # Container management (docker mode), including the web UI
 collivind web               # Local memory explorer on 127.0.0.1:8765
 collivind hook install      # Register Claude Code hooks
+collivind summarize --session <id>     # A session's memories and its current summary
+collivind summarize --session <id> --text - < summary.txt  # Store the summary you wrote (one "- " fact per line)
 ```
 
 Memory verbs take `--json` for scripting and agent use.
@@ -396,13 +404,15 @@ Each sync imports records you don't have yet (exact duplicates are skipped; upda
 
 Collivind stores memories as nodes in a knowledge graph with vector embeddings for semantic search.
 
-**Memory categories:** fact, decision, pattern, error, architecture, preference, snippet
+**Memory categories:** fact, decision, pattern, error, architecture, preference, snippet, and summary (written only through `collivind_summarize`)
 
 **Entity types:** project, file, service, concept, person, library, tool
 
 **Relationships:** ABOUT, MENTIONS, SUPERSEDES, CONTRADICTS, RELATES_TO, CAUSED_BY, DEPENDS_ON, IMPLEMENTS, PART_OF, USES, and more
 
 **Search** runs in two stages, all local (no LLM, no API key). The first stage combines vector similarity (70% weight) with graph proximity (30% weight) and temporal decay. The second stage takes a pool of 50 candidates, fused by reciprocal rank from the dense top 50 and a keyword (BM25) top 50, plus the best graph-linked memories, and rescores each against the query with a small cross-encoder (`cross-encoder/ms-marco-MiniLM-L-6-v2`, about 90 MB, downloaded once on first use). Its score takes the vector similarity's place in the same formula, so graph links and recency still count. If the reranker is not loaded yet, fails or is turned off, search returns the first-stage ranking unchanged; it never fails or blocks a prompt. The same happens when no candidate reaches the model's relevance boundary (logit 0): its order among texts it finds irrelevant is noise. Recall (the prompt hook and `collivind_get_context`) also drops memories scored below `recall_min_score`. Explicit search (`collivind search`, `collivind_search`) never does, because an explicit search that returns nothing is more surprising than one weak match. Keyword search uses SQLite FTS5 in embedded mode and a Neo4j full-text index in docker mode; both are built automatically for memories that already exist.
+
+**Summary memories** group the detail memories of one session (everything saved with its session id; the group exists before any summary text does) or of a named topic. The agent writes the summary, never collivind: when a session has accumulated enough new memories, the checkpoint's `collivind_batch_add` response says `summary_due`, the agent reads the members with `collivind_summarize` and passes back a list of self-contained dated facts. The summary is an ordinary searchable memory (category `summary`) linked to each member by a `SUMMARIZES` edge; writing it again for new members supersedes the old version, keeping the version chain. At recall, the best summaries for the query are ranked against each other by their best fact line; those whose best line the reranker judges relevant come first, followed by their most relevant members and the best other memories, those two merged by score. An off-topic summary is never returned this way, and a prompt unrelated to anything stored still recalls nothing. With no summaries in the store, search is unchanged. Routing adds about 150 ms to a prompt's recall (measured on a laptop, embedded mode). Recall goes summary to details only: attaching a detail's summary when the detail ranks high did not measurably help offline (p = 0.20) and is not done. `export`, `import` and `migrate` carry summaries and their links; the older one-memory-per-line format (`sync`) skips them.
 
 **Deduplication and supersession** keep the store current: resubmitting identical knowledge is rejected, and storing an updated version of existing knowledge retires the stale memory (it leaves search results but stays in the version history) instead of keeping old and new side by side. **Conflicts are resolved on write**: when a new memory is close to a live one about the same subject, `collivind_add_memory`/`collivind_batch_add` return it under `possible_conflicts` with an instruction. The agent checks the code, docs or the user's words, retires the stale or wrong one with `collivind_invalidate` (history kept), and asks the user one short question only when it cannot tell. Similarity alone no longer writes CONTRADICTS edges; `collivind contradictions review` triages the ones older versions wrote (dry run by default, `--apply` re-labels or invalidates, never deletes a memory).
 
@@ -416,6 +426,11 @@ caveats in [benchmarks/BENCHMARKS.md](benchmarks/BENCHMARKS.md).
 hit@10 77.5%** with the 0.19 hybrid keyword + cross-encoder rerank stage
 (0.18: 57.6% / 67.2%; 1,536 non-adversarial questions, a much harder,
 turn-level task, same doc).
+**Summary memories (0.20)** lift LoCoMo QA through the engine from 75.7% to
+83.7% at about 1,800 words of context (300 questions, Claude Sonnet 5.5
+reader and judge, p = 0.0002), and the prompt hook's recall at 800 tokens (the old default;
+now 2,400, not re-measured) from 74.3% to 81.3%; multi-hop did not improve measurably. Summaries cost one
+agent call per session at save time.
 We publish
 no side-by-side numbers against other memory tools — different projects
 measure different things on different splits.
@@ -454,9 +469,11 @@ rerank_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"  # embedded mode (docker: 
 rerank_pool = 50          # candidates rescored per search
 lexical = true            # add keyword (BM25) candidates to the rerank pool
 recall_min_score = 0.00002 # recall drops memories the reranker scores below this (0 = off); explicit search never
+summary_routes = 3        # top summaries returned with their best members; 0 = summaries are ordinary results
 
 [hooks]
 save_interval = 15        # responses between capture checkpoints, per session
+summary_after = 8         # ask for a session summary after this many uncovered memories; 0 = never
 enable_precompact = true
 enable_stop = true
 quiet_capture = true      # save without announcing routine checkpoints
