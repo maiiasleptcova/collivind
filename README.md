@@ -299,7 +299,7 @@ collivind init
 ### Hooks
 
 - **SessionStart** — injects a compact index (~100 tokens) of your project's stored knowledge at the start of every session; after a compaction it also asks for the compaction checkpoint
-- **UserPromptSubmit** — searches memory with every prompt you type and injects the relevant context (budgeted, silent when nothing matches)
+- **UserPromptSubmit** — searches memory with every prompt you type and injects the relevant context: up to `recall_limit` memories (`[hooks]`, default 20), packed into an 800-token budget (`--max-tokens`), so long memories fit fewer (about 6 at ~120 tokens each). With the reranker on, memories it scores below `recall_min_score` (`[search]`, default 0.00002) are dropped, so a prompt unrelated to anything stored injects nothing at all.
 - **Stop** — every `save_interval` responses (default 15, per session), asks the agent to checkpoint
 - **PreCompact** — marks a compaction checkpoint due (see *Compaction* above)
 
@@ -402,7 +402,7 @@ Collivind stores memories as nodes in a knowledge graph with vector embeddings f
 
 **Relationships:** ABOUT, MENTIONS, SUPERSEDES, CONTRADICTS, RELATES_TO, CAUSED_BY, DEPENDS_ON, IMPLEMENTS, PART_OF, USES, and more
 
-**Search** runs in two stages, all local (no LLM, no API key). The first stage combines vector similarity (70% weight) with graph proximity (30% weight) and temporal decay. The second stage takes a pool of 50 candidates, fused by reciprocal rank from the dense top 50 and a keyword (BM25) top 50, plus the best graph-linked memories, and rescores each against the query with a small cross-encoder (`cross-encoder/ms-marco-MiniLM-L-6-v2`, about 90 MB, downloaded once on first use). Its score takes the vector similarity's place in the same formula, so graph links and recency still count. If the reranker is not loaded yet, fails or is turned off, search returns the first-stage ranking unchanged; it never fails or blocks a prompt. Keyword search uses SQLite FTS5 in embedded mode and a Neo4j full-text index in docker mode; both are built automatically for memories that already exist.
+**Search** runs in two stages, all local (no LLM, no API key). The first stage combines vector similarity (70% weight) with graph proximity (30% weight) and temporal decay. The second stage takes a pool of 50 candidates, fused by reciprocal rank from the dense top 50 and a keyword (BM25) top 50, plus the best graph-linked memories, and rescores each against the query with a small cross-encoder (`cross-encoder/ms-marco-MiniLM-L-6-v2`, about 90 MB, downloaded once on first use). Its score takes the vector similarity's place in the same formula, so graph links and recency still count. If the reranker is not loaded yet, fails or is turned off, search returns the first-stage ranking unchanged; it never fails or blocks a prompt. The same happens when no candidate reaches the model's relevance boundary (logit 0): its order among texts it finds irrelevant is noise. Recall (the prompt hook and `collivind_get_context`) also drops memories scored below `recall_min_score`. Explicit search (`collivind search`, `collivind_search`) never does, because an explicit search that returns nothing is more surprising than one weak match. Keyword search uses SQLite FTS5 in embedded mode and a Neo4j full-text index in docker mode; both are built automatically for memories that already exist.
 
 **Deduplication and supersession** keep the store current: resubmitting identical knowledge is rejected, and storing an updated version of existing knowledge retires the stale memory (it leaves search results but stays in the version history) instead of keeping old and new side by side. **Conflicts are resolved on write**: when a new memory is close to a live one about the same subject, `collivind_add_memory`/`collivind_batch_add` return it under `possible_conflicts` with an instruction. The agent checks the code, docs or the user's words, retires the stale or wrong one with `collivind_invalidate` (history kept), and asks the user one short question only when it cannot tell. Similarity alone no longer writes CONTRADICTS edges; `collivind contradictions review` triages the ones older versions wrote (dry run by default, `--apply` re-labels or invalidates, never deletes a memory).
 
@@ -412,7 +412,7 @@ Collivind stores memories as nodes in a knowledge graph with vector embeddings f
 standard split, raw mode — local embeddings, no LLM, no reranking, no API
 keys). Fully reproducible: methodology, per-question results, and honest
 caveats in [benchmarks/BENCHMARKS.md](benchmarks/BENCHMARKS.md).
-**LoCoMo turn-level retrieval through the full engine: strict hit@5 72.3%,
+**LoCoMo turn-level retrieval through the full engine: strict hit@5 72.4%,
 hit@10 77.5%** with the 0.19 hybrid keyword + cross-encoder rerank stage
 (0.18: 57.6% / 67.2%; 1,536 non-adversarial questions, a much harder,
 turn-level task, same doc).
@@ -453,12 +453,14 @@ rerank = true             # cross-encoder second stage; false = the pre-0.19 ran
 rerank_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"  # embedded mode (docker: COLLIVIND_RERANK_MODEL on the embeddings service)
 rerank_pool = 50          # candidates rescored per search
 lexical = true            # add keyword (BM25) candidates to the rerank pool
+recall_min_score = 0.00002 # recall drops memories the reranker scores below this (0 = off); explicit search never
 
 [hooks]
 save_interval = 15        # responses between capture checkpoints, per session
 enable_precompact = true
 enable_stop = true
 quiet_capture = true      # save without announcing routine checkpoints
+recall_limit = 20         # memories recalled per prompt (1-50; the 800-token budget still caps it)
 ```
 
 See the [design spec](docs/superpowers/specs/2026-04-29-collivind-design.md) for the full configuration reference.

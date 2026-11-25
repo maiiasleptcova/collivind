@@ -4,77 +4,77 @@
     "no evidence": 4,
     "some unresolvable evidence ids (scored on the rest)": 2
   },
-  "seconds": 362.9,
+  "seconds": 303.1,
   "ingest": [
     {
       "project": "locomo-conv-26",
       "turns": 419,
       "live_memories": 389,
       "turns_reachable": 419,
-      "seconds": 12.7
+      "seconds": 7.2
     },
     {
       "project": "locomo-conv-30",
       "turns": 369,
       "live_memories": 346,
       "turns_reachable": 369,
-      "seconds": 7.8
+      "seconds": 4.2
     },
     {
       "project": "locomo-conv-41",
       "turns": 663,
       "live_memories": 649,
       "turns_reachable": 663,
-      "seconds": 16.8
+      "seconds": 10.1
     },
     {
       "project": "locomo-conv-42",
       "turns": 629,
       "live_memories": 558,
       "turns_reachable": 629,
-      "seconds": 19.4
+      "seconds": 11.6
     },
     {
       "project": "locomo-conv-43",
       "turns": 680,
       "live_memories": 657,
       "turns_reachable": 680,
-      "seconds": 23.2
+      "seconds": 17.2
     },
     {
       "project": "locomo-conv-44",
       "turns": 675,
       "live_memories": 639,
       "turns_reachable": 675,
-      "seconds": 24.7
+      "seconds": 18.8
     },
     {
       "project": "locomo-conv-47",
       "turns": 689,
       "live_memories": 641,
       "turns_reachable": 689,
-      "seconds": 25.3
+      "seconds": 22.8
     },
     {
       "project": "locomo-conv-48",
       "turns": 681,
       "live_memories": 670,
       "turns_reachable": 681,
-      "seconds": 21.9
+      "seconds": 25.6
     },
     {
       "project": "locomo-conv-49",
       "turns": 509,
       "live_memories": 488,
       "turns_reachable": 509,
-      "seconds": 17.8
+      "seconds": 18.6
     },
     {
       "project": "locomo-conv-50",
       "turns": 568,
       "live_memories": 502,
       "turns_reachable": 568,
-      "seconds": 21.6
+      "seconds": 23.4
     }
   ],
   "scores": {
@@ -82,46 +82,46 @@
       "n": 321.0,
       "hit@5": 0.7694704049844237,
       "strict_hit@5": 0.7414330218068536,
-      "recall@5": 0.7349428868120457,
+      "recall@5": 0.7365005192107995,
       "hit@10": 0.822429906542056,
       "strict_hit@10": 0.7757009345794392,
       "recall@10": 0.7915368639667706
     },
     "all": {
       "n": 1982.0,
-      "hit@5": 0.7063572149344097,
-      "strict_hit@5": 0.6846619576185671,
-      "recall@5": 0.6465903438917141,
-      "hit@10": 0.7769929364278506,
-      "strict_hit@10": 0.7487386478304743,
+      "hit@5": 0.7078708375378405,
+      "strict_hit@5": 0.686175580221998,
+      "recall@5": 0.6477255608442873,
+      "hit@10": 0.777497477295661,
+      "strict_hit@10": 0.7492431886982845,
       "recall@10": 0.7207813474609374
     },
     "overall": {
       "n": 1536.0,
-      "hit@5": 0.74609375,
-      "strict_hit@5": 0.72265625,
-      "recall@5": 0.6709258213498551,
-      "hit@10": 0.8040364583333334,
-      "strict_hit@10": 0.7747395833333334,
+      "hit@5": 0.7473958333333334,
+      "strict_hit@5": 0.7239583333333334,
+      "recall@5": 0.6717396234331884,
+      "hit@10": 0.8046875,
+      "strict_hit@10": 0.775390625,
       "recall@10": 0.7334561397575378
     },
     "open-domain": {
       "n": 92.0,
-      "hit@5": 0.45652173913043476,
-      "strict_hit@5": 0.43478260869565216,
-      "recall@5": 0.338768115942029,
-      "hit@10": 0.532608695652174,
-      "strict_hit@10": 0.5108695652173914,
-      "recall@10": 0.4302536231884058
+      "hit@5": 0.4673913043478261,
+      "strict_hit@5": 0.44565217391304346,
+      "recall@5": 0.3496376811594203,
+      "hit@10": 0.5434782608695652,
+      "strict_hit@10": 0.5217391304347826,
+      "recall@10": 0.4411231884057971
     },
     "multi-hop": {
       "n": 282.0,
-      "hit@5": 0.7056737588652482,
-      "strict_hit@5": 0.6879432624113475,
-      "recall@5": 0.4129742136880995,
+      "hit@5": 0.7092198581560284,
+      "strict_hit@5": 0.6914893617021277,
+      "recall@5": 0.4120876888654044,
       "hit@10": 0.7695035460992907,
       "strict_hit@10": 0.75177304964539,
-      "recall@10": 0.49322209456587957
+      "recall@10": 0.4896759952750994
     },
     "single-hop": {
       "n": 841.0,
@@ -134,9 +134,9 @@
     },
     "adversarial": {
       "n": 446.0,
-      "hit@5": 0.5695067264573991,
-      "strict_hit@5": 0.5538116591928252,
-      "recall@5": 0.5627802690582959,
+      "hit@5": 0.5717488789237668,
+      "strict_hit@5": 0.5560538116591929,
+      "recall@5": 0.5650224215246636,
       "hit@10": 0.6838565022421524,
       "strict_hit@10": 0.6591928251121076,
       "recall@10": 0.6771300448430493

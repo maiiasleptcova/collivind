@@ -5,10 +5,12 @@ from pathlib import Path
 
 from .exceptions import ConfigurationError
 
-# Chosen from data (BENCHMARKS.md): the largest cutoff that cost LoCoMo strict
-# hit@10 nothing measurable and kept every target in a synthetic coding-memory
-# check, while 9 of 10 unrelated prompts recalled nothing. sigmoid(-9.2).
-RECALL_MIN_SCORE_DEFAULT = 0.0001
+# Chosen from data (BENCHMARKS.md): just above the cross-encoder's floor
+# (about 1.1e-5 to 1.4e-5, where it puts text unrelated to the query).
+# LoCoMo costs nothing; a synthetic coding check keeps every target and 8 of
+# 10 unrelated prompts recall nothing. Higher values cut more noise but drop
+# indirect matches (LongMemEval preference questions) that sit at the floor.
+RECALL_MIN_SCORE_DEFAULT = 0.00002
 
 
 @dataclass
@@ -216,7 +218,7 @@ lexical = true
 # Recall (the prompt hook, collivind_get_context) drops memories the reranker
 # scores below this (0..1), so an unrelated prompt recalls nothing. 0 = off.
 # Explicit search never applies it.
-recall_min_score = 0.0001
+recall_min_score = 0.00002
 
 # --- Docker (docker mode only) ---
 # [docker]

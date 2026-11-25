@@ -4,14 +4,14 @@
     "no evidence": 4,
     "some unresolvable evidence ids (scored on the rest)": 2
   },
-  "seconds": 170.7,
+  "seconds": 168.2,
   "ingest": [
     {
       "project": "locomo-conv-26",
       "turns": 419,
       "live_memories": 389,
       "turns_reachable": 419,
-      "seconds": 8.3
+      "seconds": 7.3
     },
     {
       "project": "locomo-conv-30",
@@ -25,56 +25,56 @@
       "turns": 663,
       "live_memories": 649,
       "turns_reachable": 663,
-      "seconds": 10.2
+      "seconds": 10.5
     },
     {
       "project": "locomo-conv-42",
       "turns": 629,
       "live_memories": 558,
       "turns_reachable": 629,
-      "seconds": 11.8
+      "seconds": 12.1
     },
     {
       "project": "locomo-conv-43",
       "turns": 680,
       "live_memories": 657,
       "turns_reachable": 680,
-      "seconds": 14.8
+      "seconds": 15.6
     },
     {
       "project": "locomo-conv-44",
       "turns": 675,
       "live_memories": 639,
       "turns_reachable": 675,
-      "seconds": 17.1
+      "seconds": 17.2
     },
     {
       "project": "locomo-conv-47",
       "turns": 689,
       "live_memories": 641,
       "turns_reachable": 689,
-      "seconds": 20.1
+      "seconds": 19.1
     },
     {
       "project": "locomo-conv-48",
       "turns": 681,
       "live_memories": 670,
       "turns_reachable": 681,
-      "seconds": 22.5
+      "seconds": 21.5
     },
     {
       "project": "locomo-conv-49",
       "turns": 509,
       "live_memories": 488,
       "turns_reachable": 509,
-      "seconds": 18.8
+      "seconds": 17.9
     },
     {
       "project": "locomo-conv-50",
       "turns": 568,
       "live_memories": 502,
       "turns_reachable": 568,
-      "seconds": 23.1
+      "seconds": 22.6
     }
   ],
   "scores": {
