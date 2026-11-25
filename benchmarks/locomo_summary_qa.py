@@ -10,7 +10,7 @@ answered from:
             engine.summaries.save_summary: the top 3 summaries, the best of
             their member turns and the best other turns
   hook_*    get_context(limit=20, max_tokens=800): what the prompt hook
-            injects, before (hook_turns) and after (hook_summ) summaries
+            injected at its old 800-token budget (the default is now 2,400), before (hook_turns) and after (hook_summ) summaries
 
 Summaries are agent-written input (for example the evaluation's summaries.json,
 {"conv-26|1": {"when": ..., "summary": "- fact\\n- fact"}}): this script never

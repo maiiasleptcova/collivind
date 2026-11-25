@@ -428,8 +428,8 @@ hit@10 77.5%** with the 0.19 hybrid keyword + cross-encoder rerank stage
 turn-level task, same doc).
 **Summary memories (0.20)** lift LoCoMo QA through the engine from 75.7% to
 83.7% at about 1,800 words of context (300 questions, Claude Sonnet 5.5
-reader and judge, p = 0.0002), and the prompt hook's default 800-token recall
-from 74.3% to 81.3%; multi-hop did not improve measurably. Summaries cost one
+reader and judge, p = 0.0002), and the prompt hook's recall at 800 tokens (the old default;
+now 2,400, not re-measured) from 74.3% to 81.3%; multi-hop did not improve measurably. Summaries cost one
 agent call per session at save time.
 We publish
 no side-by-side numbers against other memory tools — different projects

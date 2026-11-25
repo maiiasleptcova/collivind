@@ -496,11 +496,13 @@ only) in `results_locomo_summary_qa.json`.
 | n | | 300 | 167 | 57 | 54 | 22 |
 | turns only, `search(limit=50)` | 1,648 | 75.7 | 85.6 | 56.1 | 72.2 | 59.1 |
 | with summaries, `search(limit=28)`: 3 summaries + their best members + other turns | 1,803 | **83.7** | 93.4 | 57.9 | 85.2 | 72.7 |
-| prompt hook default (`get_context`, limit 20, 800 tokens), turns only | 560 | 74.3 | 84.4 | 49.1 | 74.1 | 63.6 |
-| prompt hook default, with summaries | 569 | **81.3** | 93.4 | 47.4 | 85.2 | 68.2 |
+| prompt hook at 800 tokens (`get_context`, limit 20; the old default), turns only | 560 | 74.3 | 84.4 | 49.1 | 74.1 | 63.6 |
+| prompt hook at 800 tokens, with summaries | 569 | **81.3** | 93.4 | 47.4 | 85.2 | 68.2 |
 
 Paired exact McNemar: with summaries vs turns only, 32 questions to 8,
-p = 0.0002; at the hook's budget, 38 to 17, p = 0.007. The routed context's
+p = 0.0002; at the hook's 800-token budget, 38 to 17, p = 0.007. These arms
+were measured before the hook default rose to 2,400 tokens
+(`[hooks] recall_max_tokens`) and were not re-run at 2,400. The routed context's
 gold-session summary is among the 3 returned for 270 of 300 questions.
 
 **Multi-hop barely moved here** (57.9 vs 56.1), unlike the offline estimate
