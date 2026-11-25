@@ -187,10 +187,10 @@ def _validate_text(text: str) -> str:
 
 
 def _title(text: str, group: Group, n: int) -> str:
+    """What lists and graph labels show; the member count is drawn separately."""
     first = next((ln.strip()[2:] for ln in text.splitlines() if ln.strip().startswith("- ")), "")
-    label = "session" if group.kind == "session" else f"topic {group.key}"
-    head = f"Summary of {n} memories ({label})"
-    return f"{head}: {first[:100]}" if first else head
+    where = "session" if group.kind == "session" else f"topic {group.key}"
+    return f"Summary: {first[:110]}" if first else f"Summary of {n} memories ({where})"
 
 
 def save_summary(

@@ -215,7 +215,7 @@ body.has-panel .graph-view { grid-template-columns: var(--rail) minmax(0, 1fr) v
 .crumbs [aria-current="page"] { background: var(--surface); border: 1px solid var(--line-2); border-radius: 100px; padding: 0.2rem 0.75rem; color: var(--ink); font-weight: 600; box-shadow: var(--shadow); }
 .crumbs .sep { color: var(--muted); padding: 0 0.15rem; }
 .mode { align-self: stretch; }
-.mode button { flex: 1; padding: 0 0.5rem; min-width: 0; }
+.mode button { flex: 1; padding: 0 0.4rem; min-width: 0; font-size: 0.85rem; }
 .mode button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
 .since { display: flex; justify-content: space-between; font-size: var(--step--1); color: var(--ink); margin-bottom: 0.15rem; }
 .since output { color: var(--muted); font-variant-numeric: tabular-nums; }

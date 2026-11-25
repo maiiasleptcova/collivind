@@ -347,3 +347,26 @@ def test_bundle_and_migrate_round_trip_summaries(tmp_path):
     hits = imported.search(SearchQuery(query="Will Alice bring her dog to Paris?", project_id="p", limit=4))
     assert hits[0].memory.category == MemoryCategory.SUMMARY
     assert any(e.type == RelType.SUMMARIZES for e in imported.graph_store.iter_relationships())
+
+
+class TruncatingEmbedder(WordEmbedder):
+    """A reranker that reads only the start of each text, as the 256-token cross-encoder does."""
+
+    def rerank(self, query, texts):
+        return super().rerank(query, [t[:60] for t in texts])
+
+
+def test_a_summary_is_scored_by_its_best_line_not_its_opening(tmp_path):
+    mgr = _manager(tmp_path / "t")
+    mgr.embedding_provider = mgr.search_engine.embedding_provider = TruncatingEmbedder()
+    _trip_session(mgr)
+    _filler(mgr)
+    late_fact = "\n".join([f"- Bob note {i} about the bank job interview and the concert." for i in range(6)])
+    text = late_fact + "\n- Alice brings her dog on the Paris trip."  # the answer is past the cut
+    s = summaries.save_summary(mgr, "p", summaries.Group("session", "s1"), text)
+    # a decoy whose opening line matches better than the true summary's opening
+    _add(mgr, "Alice visited Paris once", session="s9")
+    decoy = summaries.save_summary(mgr, "p", summaries.Group("session", "s9"), "- Alice visited Paris once, years ago.")
+    hits = mgr.search(SearchQuery(query="Will Alice bring her dog to Paris?", project_id="p", limit=8))
+    ranked = [h.memory.id for h in hits if h.memory.category == MemoryCategory.SUMMARY]
+    assert ranked[:2] == [s.id, decoy.id]
