@@ -3,23 +3,23 @@
   "model": "sonnet",
   "arms": {
     "turns50": {
-      "words": 1557,
-      "overall": 76.66666666666667,
-      "multi-hop": 61.4,
+      "words": 1648,
+      "overall": 75.66666666666667,
+      "multi-hop": 56.1,
       "n_multi-hop": 57,
-      "temporal": 70.4,
+      "temporal": 72.2,
       "n_temporal": 54,
       "open-domain": 59.1,
       "n_open-domain": 22,
-      "single-hop": 86.2,
+      "single-hop": 85.6,
       "n_single-hop": 167
     },
     "routed": {
-      "words": 1773,
-      "overall": 83.0,
+      "words": 1803,
+      "overall": 83.66666666666667,
       "multi-hop": 57.9,
       "n_multi-hop": 57,
-      "temporal": 81.5,
+      "temporal": 85.2,
       "n_temporal": 54,
       "open-domain": 72.7,
       "n_open-domain": 22,
@@ -27,7 +27,7 @@
       "n_single-hop": 167
     },
     "hook_turns": {
-      "words": 553,
+      "words": 560,
       "overall": 74.33333333333333,
       "multi-hop": 49.1,
       "n_multi-hop": 57,
@@ -39,7 +39,7 @@
       "n_single-hop": 167
     },
     "hook_summ": {
-      "words": 568,
+      "words": 569,
       "overall": 81.33333333333333,
       "multi-hop": 47.4,
       "n_multi-hop": 57,
@@ -54,8 +54,8 @@
   "mcnemar": {
     "routed vs turns50": {
       "routed only": 32,
-      "turns50 only": 13,
-      "p": 0.0066
+      "turns50 only": 8,
+      "p": 0.0002
     },
     "hook_summ vs hook_turns": {
       "hook_summ only": 38,
@@ -64,5 +64,5 @@
     }
   },
   "sample": "300 LoCoMo questions, categories 1-4, seed 0 (the 2026-11-25 evaluation's sample)",
-  "code": "feat/summary-memories 0820a8e"
+  "code": "feat/summary-memories rebased on feat/hybrid-rerank 6651c12"
 }
