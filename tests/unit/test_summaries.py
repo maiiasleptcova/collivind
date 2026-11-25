@@ -380,3 +380,55 @@ def test_a_summary_too_big_for_the_budget_lets_the_details_through(mgr):
     text = mgr.get_context("Will Alice bring her dog to Paris?", project_id="p", limit=6, max_tokens=120)
     assert "[SUMMARY]" not in text and "bring her dog" in text
     assert mgr.get_memory(ids[2]).content in text
+
+
+def test_an_off_topic_summary_never_outranks_an_exact_match(mgr):
+    _trip_session(mgr)
+    exact = _add(mgr, "deploy helm postgres redis", session="x").id
+    summaries.save_summary(mgr, "p", summaries.Group("session", "s1"), SUMMARY)
+    hits = mgr.search(SearchQuery(query="deploy helm postgres redis", project_id="p", limit=5))
+    assert hits[0].memory.id == exact
+    assert all(h.memory.category != MemoryCategory.SUMMARY for h in hits)
+
+
+def test_routed_members_and_other_results_are_ordered_by_score(mgr):
+    _trip_session(mgr)
+    _filler(mgr)
+    summaries.save_summary(mgr, "p", summaries.Group("session", "s1"), SUMMARY)
+    hits = mgr.search(SearchQuery(query="Will Alice bring her dog to Paris?", project_id="p", limit=8))
+    rest = [h.score for h in hits[1:]]
+    assert hits[0].memory.category == MemoryCategory.SUMMARY and rest == sorted(rest, reverse=True)
+
+
+def test_a_superseded_member_is_followed_to_its_current_version(mgr):
+    ids = _trip_session(mgr)
+    s = summaries.save_summary(mgr, "p", summaries.Group("session", "s1"), SUMMARY)
+    newer = _add(mgr, "Alice will leave the dog with Bob", session="s3")
+    mgr.invalidate(ids[2], newer.id, "corrected")
+    members = {m.id for m in summaries.members_of(mgr, [s.id])[s.id]}
+    assert newer.id in members and ids[2] not in members
+
+
+def test_an_interrupted_rewrite_is_healed_by_the_next_save(mgr, monkeypatch):
+    ids = _trip_session(mgr)
+    group = summaries.Group("session", "s1")
+    first = summaries.save_summary(mgr, "p", group, SUMMARY)
+    real = mgr.graph_store.invalidate_memory
+    monkeypatch.setattr(mgr.graph_store, "invalidate_memory", lambda *a: (_ for _ in ()).throw(RuntimeError("down")))
+    with pytest.raises(RuntimeError):
+        summaries.save_summary(mgr, "p", group, SUMMARY + "\n- v2")
+    monkeypatch.setattr(mgr.graph_store, "invalidate_memory", real)
+    assert len(summaries.group_summaries(mgr, "p", group)) == 2  # both live after the failure
+    third = summaries.save_summary(mgr, "p", group, SUMMARY + "\n- v3")
+    assert [s.id for s in summaries.group_summaries(mgr, "p", group)] == [third.id]
+    assert not summaries.is_live(mgr.get_memory(first.id))
+    assert {m.id for m in summaries.members_of(mgr, [third.id])[third.id]} == set(ids)
+
+
+def test_editing_a_summary_keeps_its_group_tag(mgr):
+    _trip_session(mgr)
+    group = summaries.Group("session", "s1")
+    s = summaries.save_summary(mgr, "p", group, SUMMARY)
+    updated = mgr.update_memory(s.id, tags=["travel"])
+    assert updated.tags == [group.tag, "travel"]
+    assert summaries.live_summary(mgr, "p", group).id == s.id

@@ -219,6 +219,10 @@ class MemoryManager:
             return None
         if category is not None and existing.category == MemoryCategory.SUMMARY and category != existing.category:
             raise ValueError("a summary cannot be reclassified; forget it instead")
+        if tags is not None and existing.category == MemoryCategory.SUMMARY:
+            # the group tag is how a rewrite finds this summary; keep it whatever the edit
+            group_tags = [t for t in existing.tags if t.startswith("summary-of:")]
+            tags = group_tags + [t for t in tags if t not in group_tags]
 
         updates = {
             k: v

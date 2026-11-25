@@ -84,26 +84,53 @@ def live_summaries(manager, project_id: str) -> List[MemoryNode]:
     return manager.graph_store.find_memories(project_id, category=MemoryCategory.SUMMARY.value)
 
 
-def live_summary(manager, project_id: str, group: Group) -> Optional[MemoryNode]:
+def group_summaries(manager, project_id: str, group: Group) -> List[MemoryNode]:
+    """Every live summary of a group, newest first (more than one only after an interrupted save)."""
     found = [s for s in live_summaries(manager, project_id) if group.tag in (s.tags or [])]
-    return max(found, key=lambda s: s.created_at) if found else None
+    return sorted(found, key=lambda s: s.created_at, reverse=True)
 
 
-def members_of(manager, summary_ids: Iterable[str]) -> Dict[str, List[MemoryNode]]:
-    """Live member memories of each summary, in edge order."""
+def live_summary(manager, project_id: str, group: Group) -> Optional[MemoryNode]:
+    found = group_summaries(manager, project_id, group)
+    return found[0] if found else None
+
+
+def _head(manager, memory: Optional[MemoryNode], cache: Dict[str, Optional[MemoryNode]]) -> Optional[MemoryNode]:
+    """Follow a superseded member to its current version (a dedup merge or an invalidate)."""
+    seen = set()
+    while memory is not None and memory.superseded_by and memory.superseded_by not in seen:
+        seen.add(memory.superseded_by)
+        nxt = memory.superseded_by
+        if nxt not in cache:
+            cache[nxt] = manager.graph_store.get_memory(nxt)
+        memory = cache[nxt]
+    return memory
+
+
+def member_ids(manager, summary_ids: Iterable[str]) -> Dict[str, List[str]]:
+    """The ids each summary links to, as stored (no node reads)."""
     ids = list(dict.fromkeys(summary_ids))
     if not ids:
         return {}
     links = manager.graph_store.get_neighbors_batch(ids, [RelType.SUMMARIZES.value], direction="OUT")
+    return {sid: list(dict.fromkeys(n.get("id") for n in links.get(sid) or [] if n.get("id"))) for sid in ids}
+
+
+def members_of(manager, summary_ids: Iterable[str], cap: Optional[int] = None) -> Dict[str, List[MemoryNode]]:
+    """Live member memories of each summary, in edge order; a superseded member
+    counts as its current version. `cap` bounds the node reads per summary.
+
+    ponytail: one get_memory per member (a Bolt round trip in docker mode);
+    add a batch read to GraphStore if routing latency on Neo4j matters.
+    """
     cache: Dict[str, Optional[MemoryNode]] = {}
     out: Dict[str, List[MemoryNode]] = {}
-    for sid in ids:
+    for sid, mids in member_ids(manager, summary_ids).items():
         members: Dict[str, MemoryNode] = {}
-        for n in links.get(sid) or []:
-            mid = n.get("id")
+        for mid in mids[:cap] if cap else mids:
             if mid not in cache:
                 cache[mid] = manager.graph_store.get_memory(mid)
-            m = cache[mid]
+            m = _head(manager, cache[mid], cache)
             if m is not None and is_live(m) and not is_summary(m):
                 members[m.id] = m
         out[sid] = list(members.values())
@@ -126,7 +153,7 @@ def _session_members(manager, project_id: str, group: Group) -> List[MemoryNode]
 def unsummarized(manager, project_id: str, group: Group) -> List[MemoryNode]:
     """Session members no live summary of the group links yet (a topic has no implicit members)."""
     current = live_summary(manager, project_id, group)
-    linked = {m.id for m in members_of(manager, [current.id])[current.id]} if current else set()
+    linked = set(member_ids(manager, [current.id])[current.id]) if current else set()
     return [m for m in _session_members(manager, project_id, group) if m.id not in linked]
 
 
@@ -208,8 +235,8 @@ def save_summary(
         given = _session_members(manager, project_id, group)
     else:
         given = _checked_members(manager, project_id, member_ids or [])
-    previous = live_summary(manager, project_id, group)
-    kept = members_of(manager, [previous.id])[previous.id] if previous else []
+    previous = group_summaries(manager, project_id, group)
+    kept = [m for ms in members_of(manager, [p.id for p in previous]).values() for m in ms]
     members = list({m.id: m for m in kept + given}.values())
     if not members:
         raise ValueError("a summary needs at least one member memory")
@@ -223,16 +250,21 @@ def save_summary(
         source=MemorySource.MANUAL,
         tags=[group.tag],
     )
+    vector = manager.embedding_provider.embed(build_enriched_text(create))  # before any write
     node = manager._graph_write(manager.graph_store.create_memory, create, outcome="the summary was NOT saved")
-    manager.vector_store.upsert(node.id, manager.embedding_provider.embed(build_enriched_text(create)), node.to_dict())
     for m in members:
         manager.graph_store.create_relationship(
             RelationshipCreate(source_id=node.id, target_id=m.id, type=RelType.SUMMARIZES, source="summary")
         )
-    if previous:
-        manager.graph_store.invalidate_memory(previous.id, node.id, "summary_rewritten")
-        manager.vector_store.delete(previous.id)
-    return manager.graph_store.get_memory(node.id) or node
+    # Supersede only once the new summary is complete. An interrupted save
+    # leaves the old one live next to it; the next save supersedes both
+    # (every live summary of the group) and keeps all their members.
+    for old in previous:
+        manager.graph_store.invalidate_memory(old.id, node.id, "summary_rewritten")
+        manager.vector_store.delete(old.id)
+    node = manager.graph_store.get_memory(node.id) or node  # with its version fields
+    manager.vector_store.upsert(node.id, vector, node.to_dict())
+    return node
 
 
 def summary_due(manager, project_id: str, session_id: Optional[str], threshold: int) -> Optional[Dict[str, Any]]:

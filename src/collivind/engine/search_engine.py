@@ -30,7 +30,11 @@ RERANK_GATE_LOGIT = 0.0
 # Summary routing (see _route_summaries). The split mirrors the measured
 # "routed" arm: 3 summaries, 15 of their members, 10 other memories.
 SUMMARY_CANDIDATES = 20  # dense top-N summaries scored line by line
-MAX_SUMMARY_LINES = 40
+# ponytail: line scoring is capped at MAX_LINE_PAIRS cross-encoder pairs per
+# search (about 0.25 s on a laptop CPU); a store whose summaries are longer
+# scores fewer of them. Embed summary lines separately if that ever bites.
+MAX_SUMMARY_LINES = 60
+MAX_LINE_PAIRS = 300
 MAX_ROUTED_MEMBERS = 120
 ROUTED_SHARE = 0.6
 
@@ -247,11 +251,14 @@ class SearchEngine:
 
         The best summaries for the query are ranked against each other (they
         would lose a pooled ranking to short memories that echo the query),
-        then their live member memories are reranked against the query. The
-        result is the top summaries, then ~60% of the remaining slots from
-        their members and the rest from the ordinary ranking. None, so the
-        caller keeps the ordinary ranking unchanged, when no summary qualifies:
-        a store without summaries searches exactly as before. Never raises.
+        then their live member memories are reranked against the query. A
+        summary routes only when its best line clears the reranker's own
+        relevance boundary, so an off-topic summary never leads a result.
+        The result is the routed summaries, then up to ~60% of the remaining
+        slots from their members and the rest from the ordinary ranking,
+        those two merged by score. None, so the caller keeps the ordinary
+        ranking unchanged, when no summary qualifies: a store without
+        summaries searches exactly as before. Never raises.
         """
         routes = self.config.summary_routes
         if routes <= 0 or query.category not in (None, MemoryCategory.SUMMARY.value) or query.limit < 2:
@@ -262,11 +269,12 @@ class SearchEngine:
                 return None
             cutoff = query.min_rerank_score or 0.0
             # ponytail: a quarter of the slots, at most `routes`; 3 of 28 is what was measured
-            top = [r for r in self._rescore(query, summaries, by_line=True) if (r.rerank_score or 0.0) >= cutoff]
+            gate = max(cutoff, _sigmoid(RERANK_GATE_LOGIT))
+            top = [r for r in self._rescore(query, summaries, by_line=True) if (r.rerank_score or 0.0) >= gate]
             top = top[: min(routes, max(1, query.limit // 4))]
             if not top:
                 return None
-            members = summaries_mod.members_of(self, [r.memory.id for r in top])
+            members = summaries_mod.members_of(self, [r.memory.id for r in top], cap=MAX_ROUTED_MEMBERS)
             seen = {r.memory.id for r in top}
             pool = []
             for r in top:
@@ -287,9 +295,11 @@ class SearchEngine:
             routed = details[: math.ceil(slots * ROUTED_SHARE)]
             taken = {r.memory.id for r in top + routed}
             others = [r for r in reranked if r.memory.id not in taken and not summaries_mod.is_summary(r.memory)]
-            out = top + routed + others[: slots - len(routed)]
-            out += [r for r in details if r.memory.id not in {x.memory.id for x in out}][: query.limit - len(out)]
-            return out
+            rest = routed + others[: slots - len(routed)]
+            rest += [r for r in details if r.memory.id not in {x.memory.id for x in rest}][: slots - len(rest)]
+            # membership follows the measured split; order follows the scores, so a
+            # weak member never sits above a strong ordinary match
+            return top + sorted(rest, key=lambda r: r.score, reverse=True)
         except Exception as e:
             logger.warning("summary routing failed, serving the ordinary ranking: %s", e)
             return None
@@ -324,7 +334,7 @@ class SearchEngine:
                 vector_score=hit["score"],
                 temporal_decay=self._compute_temporal_decay(memory, now),
             )
-        return list(found.values())
+        return sorted(found.values(), key=lambda r: r.vector_score, reverse=True)
 
     def _rescore(self, query: SearchQuery, pool: List[SearchResult], by_line: bool = False) -> List[SearchResult]:
         """Cross-encoder scores for `pool`, best first; raises when the reranker gives none.
@@ -337,12 +347,19 @@ class SearchEngine:
         """
         if not pool:
             return []
-        owners, texts = [], []
-        for i, r in enumerate(pool):
+        owners: List[int] = []
+        texts: List[str] = []
+        kept: List[SearchResult] = []
+        for r in pool:  # best dense match first, so the pair budget drops the far end
             parts = [ln for ln in r.memory.content.splitlines() if ln.strip()][:MAX_SUMMARY_LINES] if by_line else []
-            for text in parts or [r.memory.content]:
-                owners.append(i)
+            parts = parts or [r.memory.content]
+            if by_line and kept and len(texts) + len(parts) > MAX_LINE_PAIRS:
+                break
+            for text in parts:
+                owners.append(len(kept))
                 texts.append(text)
+            kept.append(r)
+        pool = kept
         raw = self.embedding_provider.rerank(query.query[:RERANK_QUERY_CHARS], texts)
         if not isinstance(raw, list) or len(raw) != len(texts):
             raise RuntimeError("reranker returned no scores")
