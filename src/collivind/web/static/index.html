@@ -74,6 +74,7 @@
         <button class="quiet" id="f-reset">Reset filters</button>
       </div>
       <p id="graph-note" class="hint" aria-live="polite"></p>
+      <div id="local-tools" class="local-tools" hidden aria-label="Local graph"></div>
       <div class="legend" aria-label="Legend">
         <span><i class="lg-mem"></i>memory, in its project's colour</span>
         <span><i class="lg-old"></i>superseded version</span>
@@ -82,6 +83,9 @@
         <span><i class="lg-cluster"></i>cluster; click to open</span>
         <span><i class="lg-contra"></i>contradicts</span>
         <span><i class="lg-ver"></i>supersedes</span>
+        <span><i class="lg-fix"></i>resolves (arrow: fix → problem)</span>
+        <span><i class="lg-cause"></i>was caused by (arrow: effect → cause)</span>
+        <span><i class="lg-hub"></i>hub entity, collapsed; open it from the rail</span>
       </div>
     </aside>
 
@@ -92,6 +96,15 @@
         <h2>The graph is empty</h2>
         <p>Memories appear here as your agents save them, linked to the files, services and ideas they mention.
         Write one from the <b>New memory</b> button, or from a terminal: <code>collivind add "…"</code></p>
+      </div>
+      <div class="graph-empty" id="summaries-empty" hidden>
+        <h2>No summaries yet</h2>
+        <p>A summary is one memory that sums up a working session (or a topic) as a list of dated facts, linked to the
+        detail memories it covers. Recall reads summaries first, so an agent gets the gist before the details.</p>
+        <p>Agents write them: once a session has saved enough memories, the next checkpoint asks the agent to call
+        <code>collivind_summarize</code>. You can also write one from a terminal:
+        <code>collivind summarize --session &lt;id&gt;</code> prints a session's memories to sum up, and
+        <code>--text</code> saves the summary.</p>
       </div>
       <div class="stage-controls">
         <button class="icon" id="zoom-in" aria-label="Zoom in">+</button>

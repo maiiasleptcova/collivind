@@ -20,6 +20,7 @@
   --edge: #A9B0BB; --edge-soft: #CDD2D9; --entity: #5B6270; --halo: #16181D;
   --green: #0E8F5E; --green-ink: #0B6B46; --green-tint: #E3F5EC;
   --danger: #B42318; --danger-tint: #FEE4E2;
+  --cause: #B54708;
   --primary: #16181D; --primary-ink: #F7F8F6; --primary-hover: #2A2E37;
   --chip: #EEF0EF; --chip-ink: #3C4250;
   --shadow: 0 1px 2px rgba(22,24,29,.06), 0 1px 1px rgba(22,24,29,.04);
@@ -42,6 +43,7 @@
     --edge: #59606C; --edge-soft: #3D434D; --entity: #A3AAB5; --halo: #ECEEF1;
     --green: #3DBE87; --green-ink: #5FD39A; --green-tint: #15302A;
     --danger: #F08A80; --danger-tint: #3A1E1D;
+    --cause: #F5A35C;
     --primary: #ECEEF1; --primary-ink: #16181D; --primary-hover: #FFFFFF;
     --chip: #2A2E37; --chip-ink: #C3C8D1;
     --shadow: 0 1px 2px rgba(0,0,0,.3);
@@ -56,6 +58,7 @@
   --edge: #59606C; --edge-soft: #3D434D; --entity: #A3AAB5; --halo: #ECEEF1;
   --green: #3DBE87; --green-ink: #5FD39A; --green-tint: #15302A;
   --danger: #F08A80; --danger-tint: #3A1E1D;
+  --cause: #F5A35C;
   --primary: #ECEEF1; --primary-ink: #16181D; --primary-hover: #FFFFFF;
   --chip: #2A2E37; --chip-ink: #C3C8D1;
   --shadow: 0 1px 2px rgba(0,0,0,.3);
@@ -202,6 +205,9 @@ body.has-panel .graph-view { grid-template-columns: var(--rail) minmax(0, 1fr) v
 .lg-cluster { height: 12px; width: 12px !important; border-radius: 50%; border: 1.5px solid #4f7cac; background: color-mix(in srgb, #4f7cac 20%, transparent); margin: 0 1px; }
 .lg-contra { border-top: 1.5px dashed var(--danger); }
 .lg-ver { border-top: 1.5px dotted var(--steel); }
+.lg-fix { border-top: 2.4px solid var(--green); }
+.lg-cause { border-top: 2.4px dashed var(--cause); }
+.lg-hub { height: 11px; width: 11px !important; border: 1.5px dashed var(--entity); margin: 0 1.5px; }
 
 .stage { position: relative; min-width: 0; min-height: 0; background: var(--canvas); overflow: hidden; }
 #canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
@@ -374,3 +380,23 @@ dialog .actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-
 .connections li.is-auto .rel, .connections li.is-auto .link-like { opacity: 0.6; }
 .connections .note { grid-column: 2 / -1; color: var(--ink-2); font-size: var(--step--2, 0.75rem); margin-top: -0.15rem; }
 .link-form .grow { flex: 1 1 12rem; }
+
+/* local graph tools: open a collapsed hub, show more */
+.local-tools { display: flex; flex-direction: column; gap: 0.35rem; }
+.local-tools .hubs { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.local-tools .count { color: var(--muted); font-variant-numeric: tabular-nums; margin-left: 0.2rem; }
+
+/* a search result that looks like the open memory said again */
+.result.is-dup { box-shadow: inset 3px 0 0 var(--cause); }
+.dup-flag { display: block; color: var(--cause); font-weight: 500; }
+
+/* cause and fix chain, duplicates, in the panel */
+.chain, .dups { list-style: none; margin: 0 0 1rem; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; font-size: var(--step--1); }
+.chain li { padding-left: 0.6rem; border-left: 3px solid var(--line-2); }
+.chain li.chain-resolves { border-left-color: var(--green); }
+.chain li.chain-caused_by { border-left-color: var(--cause); }
+.chain .rel { color: var(--muted); margin: 0 0.25rem; }
+.chain .note, .dups .when { display: block; color: var(--ink-2); font-size: 0.75rem; }
+.chain-self { font-weight: 600; }
+.dup-actions { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.25rem; }
+#summaries-empty p { margin: 0 0 0.6rem; }

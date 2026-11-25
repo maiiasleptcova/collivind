@@ -12,6 +12,7 @@ from collivind.models import MemoryCategory, MemoryCreate, RelType, SearchQuery
 from collivind.models.entity import EntityType
 from collivind.models.relations import MEANINGS
 from collivind.web.graph import DEFAULT_LIMIT, MAX_LIMIT, build_graph
+from collivind.web.local import LOCAL_LIMIT, MAX_LOCAL_LIMIT, chain, neighbourhood
 
 Result = Tuple[int, Dict[str, Any]]
 
@@ -113,6 +114,57 @@ class MemoryAPI:
         return 200, build_graph(
             self.manager.graph_store, project=project, limit=limit, types=types, seeds=seeds, depth=depth
         )
+
+    def local(
+        self,
+        center: str,
+        depth: int,
+        limit: int,
+        types: Optional[set] = None,
+        expand: Optional[set] = None,
+        project: Optional[str] = None,
+    ) -> Result:
+        return 200, neighbourhood(
+            self.manager.graph_store, center, depth=depth, limit=limit, types=types, expand=expand, project=project
+        )
+
+    def chain(self, memory_id: str) -> Result:
+        found = chain(self.manager.graph_store, memory_id)
+        if found is None:
+            return 404, {"error": f"No memory {memory_id}"}
+        return 200, found
+
+    def duplicates(self, memory_id: str) -> Result:
+        """Live memories close enough to this one to be the same fact said twice, or an older version of it.
+
+        The engine's write-time conflict candidates (same project and
+        category, cosine >= 0.85, same subject): a reader decides, nothing
+        is merged here.
+        """
+        found = self.manager.find_conflicts(memory_id)
+        if found is None:
+            return 404, {"error": f"No memory {memory_id}"}
+        # at or above the threshold add_memory itself merges at, call it likely
+        likely = self.manager.config.search.dedup_threshold
+        return 200, {
+            "duplicates": [
+                {**_memory_dict(r.memory), "similarity": round(r.vector_score, 3), "likely": r.vector_score >= likely}
+                for r in sorted(found, key=lambda r: -r.vector_score)
+            ]
+        }
+
+    def supersede(self, memory_id: str, body: Dict[str, Any]) -> Result:
+        """Retire `memory_id` in favour of `superseded_by`, through the version chain (history is kept)."""
+        keeper = _id(body.get("superseded_by"), "superseded_by")
+        if keeper == memory_id:
+            return 400, {"error": "a memory cannot supersede itself"}
+        old, new = self.manager.get_memory(memory_id), self.manager.get_memory(keeper)
+        if old is None or new is None:
+            return 404, {"error": f"No memory {memory_id if old is None else keeper}"}
+        if old.superseded_by or old.valid_to or new.superseded_by or new.valid_to:
+            return 409, {"error": "only two current memories can be merged; one of them is already superseded"}
+        self.manager.invalidate(memory_id, keeper, "duplicate, retired in the explorer")
+        return 200, {"superseded": memory_id, "superseded_by": keeper}
 
     def projects(self) -> Result:
         return 200, {"projects": list_projects(self.manager.graph_store)}
@@ -339,6 +391,25 @@ def _dispatch(api: MemoryAPI, method: str, parts: list, params: Dict[str, str], 
             depth=_int_param(params, "depth", 1, 1, 3),
         )
 
+    if parts == ["local"] and method == "GET":
+        project = params.get("project") or None
+        if project is not None:
+            validate_project_id(project)
+        types = _csv(params, "types", len(RelType))
+        for t in types:
+            _rel_type(t)
+        expand = _csv(params, "expand", MAX_SEEDS)
+        for e in expand:
+            _id(e, "expand")
+        return api.local(
+            _id(params.get("id"), "id"),
+            _int_param(params, "depth", 1, 1, 3),
+            _int_param(params, "limit", LOCAL_LIMIT, 1, MAX_LOCAL_LIMIT),
+            types=set(types) if "types" in params else None,
+            expand=set(expand),
+            project=project,
+        )
+
     if parts == ["projects"] and method == "GET":
         return api.projects()
 
@@ -387,8 +458,15 @@ def _dispatch(api: MemoryAPI, method: str, parts: list, params: Dict[str, str], 
         if method == "DELETE":
             return api.forget(parts[1])
 
-    if len(parts) == 3 and parts[0] == "memories" and parts[2] == "versions" and method == "GET":
-        return api.get_versions(parts[1])
+    if len(parts) == 3 and parts[0] == "memories":
+        if parts[2] == "versions" and method == "GET":
+            return api.get_versions(parts[1])
+        if parts[2] == "chain" and method == "GET":
+            return api.chain(parts[1])
+        if parts[2] == "duplicates" and method == "GET":
+            return api.duplicates(parts[1])
+        if parts[2] == "supersede" and method == "POST":
+            return api.supersede(parts[1], body)
 
     if parts == ["entity"] and method == "GET":
         return api.get_entity(_id(params.get("name"), "name"))

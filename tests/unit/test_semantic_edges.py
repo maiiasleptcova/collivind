@@ -122,3 +122,42 @@ def test_status_serves_meanings_and_link_route_takes_a_note(manager):
     )
     assert code == 201
     assert any(r["note"] == "bolt" for r in manager.get_entity("Neo4j")["relations"])
+
+
+def _item(content, category="error", relationships=()):
+    return {"content": content, "summary": content, "category": category, "relationships": list(relationships)}
+
+
+def test_a_fix_links_to_the_error_saved_in_the_same_batch(manager):
+    """The checkpoint saves an error and its fix in one call; target_index is how the fix points back."""
+    ids = manager.batch_add_memories(
+        [
+            _item("docker exec fails: no space left on device"),
+            _item("the colima vm disk was full", "fact"),
+            _item(
+                "resized the colima disk to 80 GB",
+                "decision",
+                [{"target_index": 0, "type": "RESOLVES", "note": "more disk"}],
+            ),
+        ]
+    )
+    manager.link(ids[0], ids[1], RelType.CAUSED_BY)
+    edges = {(r.source_id, r.type.value, r.target_id) for r in manager.graph_store.iter_relationships()}
+    assert (ids[2], "RESOLVES", ids[0]) in edges and (ids[0], "CAUSED_BY", ids[1]) in edges
+    assert not any(t.startswith("batch-index:") for _, _, t in edges)
+
+
+@pytest.mark.parametrize("index", [0, 1, -1, "0", True])
+def test_target_index_must_point_earlier_in_the_batch(manager, index):
+    """Itself, a later item, or a non-integer is refused before anything is stored."""
+    with pytest.raises(ValueError, match="target_index"):
+        # the fix comes first, so 0 is itself and 1 is a later item
+        manager.batch_add_memories(
+            [_item("its fix", "decision", [{"target_index": index, "type": "RESOLVES"}]), _item("an error")]
+        )
+    assert list(manager.graph_store.iter_memories()) == []
+
+
+def test_target_index_outside_a_batch_is_refused():
+    with pytest.raises(ValueError, match="batch"):
+        parse_relationship({"target_index": 0, "type": "RESOLVES"})

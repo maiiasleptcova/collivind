@@ -33,7 +33,9 @@ RELATIONSHIPS_PROP: Dict[str, Any] = {
         "Between two entities, name them: {source, type, target} — " + glossary(ENTITY_RELATIONS) + ". "
         "From this memory to an existing memory id: {target_id, type} — "
         + glossary(("RESOLVES", "CAUSED_BY", "DEPENDS_ON", "RELATES_TO"))
-        + "."
+        + ". A fix that settles an earlier error always gets RESOLVES to that error (find its id with "
+        "collivind_search). In collivind_batch_add, {target_index, type} points at an earlier memory of the "
+        "same batch (0 = the first), for an error and its fix saved together."
     ),
     "items": {
         "type": "object",
@@ -42,6 +44,11 @@ RELATIONSHIPS_PROP: Dict[str, Any] = {
             "source": {"type": "string", "description": "entity name (entity-to-entity edge)"},
             "target": {"type": "string", "description": "entity name (entity-to-entity edge)"},
             "target_id": {"type": "string", "description": "existing memory or entity id (edge from this memory)"},
+            "target_index": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "collivind_batch_add only: position of an earlier memory in this batch",
+            },
             "note": {"type": "string", "maxLength": MAX_NOTE},
             "properties": {"type": "object"},
         },
@@ -356,8 +363,11 @@ class CollivindTools:
             {
                 "name": "collivind_batch_add",
                 "description": (
-                    "Add multiple memories in batch (all-or-nothing validation). possible_conflicts, when "
-                    "present, maps each new memory id to existing memories to check; follow conflict_instruction."
+                    "Add multiple memories in batch (all-or-nothing validation). Link a fix to the error it "
+                    "settles with a RESOLVES relationship (target_index for an error earlier in this batch, "
+                    "target_id for one saved before), and an error to its cause with CAUSED_BY. "
+                    "possible_conflicts, when present, maps each new memory id to existing memories to check; "
+                    "follow conflict_instruction."
                 ),
                 "inputSchema": {
                     "type": "object",

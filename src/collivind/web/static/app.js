@@ -7,12 +7,15 @@ import { topicBar, pickBox, wireTopic } from "./topic.js";
 import { initPanel, openNode, closePanel, currentId, refreshPanel } from "./panel.js";
 import { initProjects, renderProjects } from "./projects.js";
 import { CATEGORY, OPEN_LIMIT, OTHER, categoryClusters, entityClusters, entityLinks, membersAt, openIds, projectClusters } from "./overview.js";
+import { railHint } from "./search.js";
 
 // Off until asked for: on a real store CONTRADICTS is ~40% of all edges, and
 // drawn by default it paints the whole graph red.
 const DEFAULT_OFF = new Set(["CONTRADICTS"]);
 const DAY = 86400000;
 const PAGE = 50;
+const LOCAL_LIMIT = 60;  // nodes in a local graph before "Show more"
+const LOCAL_STEP = 40;
 
 const state = {
   view: "graph",
@@ -25,8 +28,14 @@ const state = {
   filters: { project: "", categories: new Set(CATEGORIES), entityTypes: null, showEntities: true, from: "", to: "", hideSuperseded: false },
   text: "",
   search: null,          // { query, results } after Enter
+  searching: null,       // the query of a search still in flight
+  searchSeq: 0,          // only the newest search's answer is drawn
   selected: null,
   local: false,
+  localGraph: null,      // the selection's neighbourhood, ranked and capped server-side
+  localLimit: LOCAL_LIMIT,
+  openHubs: new Set(),   // hub entities the reader opened in the local graph
+  duplicates: null,      // { of, likely: Map id -> bool } near-duplicates of the open memory
   depth: 1,
   visible: [],
   list: [], editingId: null, creating: false,
@@ -43,8 +52,8 @@ const state = {
 
 const isSummary = (n) => n?.kind === "memory" && n.category === "summary";
 
-// What the graph view draws from: the search neighbourhood when there is one.
-const shown = () => state.focusGraph || state.graph;
+// What the graph view draws from: the local graph, else the search neighbourhood.
+const shown = () => (state.local && state.localGraph) || state.focusGraph || state.graph;
 
 const colorOf = (projectId) => projectColor(projectId, state.meta);
 
@@ -63,8 +72,10 @@ initPanel({
   select: (id, opts) => select(id, opts),
   reload: () => loadGraph(),
   local: () => state.local,
-  toggleLocal: () => { state.local = !state.local; applyFilters(); refreshPanel(); },
+  toggleLocal: () => toggleLocal(),
   confirmForget: (id) => confirmForget(id),
+  confirm: (opts) => confirmAction(opts),
+  duplicatesFound: (of, found) => { state.duplicates = { of, likely: new Map(found.map((d) => [d.id, d.likely])) }; updateHighlight(); },
 });
 
 initProjects({
@@ -91,6 +102,7 @@ async function loadGraph() {
     renderEdgeTypes();
     renderSince();
     if (state.search) await refocus({ apply: false });
+    if (state.local && state.selected) await loadLocal({ apply: false });
     rebuildById();
     // Types never seen before arrive switched on; only an untick hides one.
     const types = g.nodes.filter((n) => n.kind === "entity").map((n) => n.type);
@@ -103,7 +115,43 @@ async function loadGraph() {
 }
 
 function rebuildById() {
-  state.byId = new Map([...state.graph.nodes, ...(state.focusGraph?.nodes || [])].map((n) => [n.id, n]));
+  const all = [...state.graph.nodes, ...(state.focusGraph?.nodes || []), ...(state.localGraph?.nodes || [])];
+  state.byId = new Map(all.map((n) => [n.id, n]));
+}
+
+// The selection's neighbourhood from the server: hubs are reached but not
+// walked through, the rest is ranked and capped (web/local.py says why).
+async function loadLocal({ apply = true } = {}) {
+  const id = state.selected;
+  if (!id) return;
+  const params = new URLSearchParams({ id, depth: String(state.depth), types: [...state.edgeTypes].join(","), limit: String(state.localLimit) });
+  if (state.openHubs.size) params.set("expand", [...state.openHubs].join(","));
+  try {
+    const g = await api(`/api/local?${params}`);
+    if (state.selected !== id || !state.local) return; // the reader moved on while this was in flight
+    state.localGraph = g;
+  } catch (e) { showError(e); return; }
+  rebuildById();
+  view.userMoved = false;
+  if (apply) applyFilters();
+}
+
+function toggleLocal() {
+  state.local = !state.local;
+  resetLocal();
+  if (state.local) loadLocal(); else applyFilters();
+  refreshPanel();
+}
+
+function resetLocal() {
+  state.localGraph = null;
+  state.localLimit = LOCAL_LIMIT;
+  state.openHubs = new Set();
+}
+
+function openHub(id) {
+  state.openHubs = new Set([...state.openHubs, id]);
+  loadLocal();
 }
 
 async function loadProjects() {
@@ -173,6 +221,7 @@ function renderOverview(o, bubbles) {
   const { nodes, edges } = bubbles;
   state.visible = [];
   view.select(null);
+  view.litAll = false;
   view.setGraph(nodes, edges, { fixed: true });
   state.overview = { clusters: nodes.length, memories: o.memories.length, byProject: o.byProject };
 }
@@ -183,8 +232,9 @@ function applyFilters() {
   const edges = shown().edges.filter((e) => state.edgeTypes.has(e.type));
   const memIds = new Set(nodes.filter((n) => n.kind === "memory" && memoryPasses(n, f)).map((n) => n.id));
   state.overview = null;
-  if (state.mode === "summaries" && !state.focusGraph) return renderSummaries(nodes, memIds);
-  const overview = state.mode === "overview" && !state.focusGraph;
+  const localNow = state.local && state.localGraph;
+  if (state.mode === "summaries" && !state.focusGraph && !localNow) return renderSummaries(nodes, memIds);
+  const overview = state.mode === "overview" && !state.focusGraph && !localNow;
   const o = overview ? overviewInputs(nodes, memIds, edges) : null;
   const bubbles = o && overviewBubbles(o);
   if (bubbles) {
@@ -213,26 +263,14 @@ function applyFilters() {
     ids = new Set([...ids].filter((id) => open.has(id)));
   }
 
-  // Local graph: n hops around the selection, over what the filters allow.
-  if (state.local && state.selected && ids.has(state.selected)) {
-    const near = new Set([state.selected]);
-    let frontier = new Set([state.selected]);
-    for (let hop = 0; hop < state.depth; hop++) {
-      const next = new Set();
-      for (const e of edges) {
-        for (const [a, b] of [[e.source, e.target], [e.target, e.source]]) {
-          if (frontier.has(a) && ids.has(b) && !near.has(b)) { near.add(b); next.add(b); }
-        }
-      }
-      frontier = next;
-    }
-    ids = near;
-  }
+  // Local graph: the server already walked and capped it; the selection always stays.
+  if (localNow) ids.add(state.selected);
   $("#stage").classList.toggle("is-local", state.local);
 
   state.visible = nodes.filter((n) => ids.has(n.id));
+  view.litAll = Boolean(localNow); // the whole local graph is the subject, not just the selection's neighbours
   view.setGraph(state.visible, edges, { reheat: 0.4 });
-  if (state.local || state.path.length || state.focusGraph) view.userMoved = false;
+  if (localNow || state.path.length || state.focusGraph) view.userMoved = false;
   finishRender();
 }
 
@@ -249,6 +287,7 @@ function renderSummaries(nodes, memIds) {
   state.visible = nodes.filter((n) => ids.has(n.id));
   const edges = shown().edges.filter((e) => e.type === "SUMMARIZES" && ids.has(e.source) && ids.has(e.target));
   $("#stage").classList.toggle("is-local", false);
+  view.litAll = false;
   view.setGraph(state.visible, edges, { reheat: 0.5 });
   finishRender();
 }
@@ -256,7 +295,23 @@ function renderSummaries(nodes, memIds) {
 function finishRender() {
   updateHighlight();
   renderNote();
+  renderLocalTools();
   renderCrumbs();
+}
+
+// The local graph's controls, as buttons in the rail so the keyboard reaches
+// them: open a collapsed hub, or show more of what the cap left out.
+function renderLocalTools() {
+  const box = $("#local-tools");
+  const g = state.local && state.localGraph;
+  if (!g) { box.hidden = true; box.innerHTML = ""; return; }
+  const hubs = g.nodes.filter((n) => n.hub);
+  box.hidden = !hubs.length && !g.more;
+  box.innerHTML = (hubs.length ? `<p class="hint">Shared by many memories, so the local graph does not walk through:</p><ul class="hubs">${hubs.map((n) =>
+    `<li><button class="quiet" data-hub="${esc(n.id)}" title="Add the memories about it that are most related to the selection">Open ${esc(n.label)} <span class="count">${n.count.toLocaleString()}</span></button></li>`).join("")}</ul>` : "")
+    + (g.more ? `<button class="quiet" id="local-more">Show ${Math.min(LOCAL_STEP, g.more)} more <span class="count">${g.more.toLocaleString()} left out</span></button>` : "");
+  $$("[data-hub]", box).forEach((b) => b.onclick = () => openHub(b.dataset.hub));
+  $("#local-more")?.addEventListener("click", () => { state.localLimit += LOCAL_STEP; loadLocal(); });
 }
 
 // ---- overview navigation ------------------------------------------------
@@ -302,6 +357,7 @@ function renderCrumbs() {
 
 function renderNote() {
   const g = shown();
+  $("#summaries-empty").hidden = true;
   if (state.overview) {
     const o = state.overview;
     $("#graph-note").textContent = `Overview: ${o.memories} memories in ${o.clusters} ${o.byProject ? "projects" : "clusters"}. ` +
@@ -314,21 +370,26 @@ function renderNote() {
     $("#graph-note").textContent = sums.length
       ? `${sums.length} summaries, ${state.visible.length - sums.length} detail memories open. ` +
         "Click a summary (or pick it in the list) to open its details; click again to fold them."
-      : "No summaries yet. Agents write one per session (collivind_summarize), or run `collivind summarize --session <id>`.";
+      : "No summaries in this view yet.";
     $("#graph-empty").hidden = !!g.total_memories;
+    $("#summaries-empty").hidden = !!sums.length || !g.total_memories;
     return;
   }
   const shownMem = state.visible.filter((n) => n.kind === "memory").length;
   const shownEnt = state.visible.length - shownMem;
   const parts = [`Showing ${shownMem} of ${g.total_memories} memories and ${shownEnt} entities.`];
   if (state.capped) parts.push(`Showing the newest ${OPEN_LIMIT} of ${state.capped} memories here; narrow with Recent or the List view.`);
-  if (state.focusGraph) parts.push(`Search results and what is within ${state.depth} hop${state.depth > 1 ? "s" : ""} of them.`);
-  else if (g.truncated) {
+  if (state.focusGraph && !state.local) parts.push(`Search results and what is within ${state.depth} hop${state.depth > 1 ? "s" : ""} of them.`);
+  else if (g.truncated && !state.local) {
     parts.push(state.filters.project
       ? `Only this project's newest ${g.limit} memories are loaded.`
       : `Only the newest ${g.limit} memories are loaded; pick a project to see the rest.`);
   }
-  if (state.local) parts.push(`Local graph, ${state.depth} hop${state.depth > 1 ? "s" : ""} around the selection.`);
+  if (state.local) {
+    const g = state.localGraph;
+    parts.push(`Local graph, ${state.depth} hop${state.depth > 1 ? "s" : ""} around the selection` +
+      (g?.more ? `: the ${g.nodes.length} most related, ${g.more.toLocaleString()} more left out.` : "."));
+  }
   $("#graph-note").textContent = parts.join(" ");
   const empty = !g.total_memories;
   $("#graph-empty").hidden = !empty;
@@ -350,19 +411,25 @@ function topicsMatching(query) {
 function updateHighlight() {
   const results = $("#results");
   let hits = [];
-  let heading = "";
-  if (state.search) {
+  const hint = railHint(state);
+  let heading = hint?.heading || "";
+  if (state.searching) {
+    hits = []; // the answer is on its way; the text filter must not claim nothing matches
+  } else if (state.search) {
     hits = [
       ...(state.search.topics || []).map((n) => ({ id: n.id, label: n.label, sub: `topic · ${n.type}`, kind: "entity" })),
       ...state.search.results.map((m) => ({ id: m.id, label: m.summary || m.content || m.label, sub: m.score === undefined ? m.kind || "" : `match ${Number(m.score).toFixed(2)}`, kind: "memory", category: m.category })),
     ];
-    heading = `Search results for “${state.search.query}”`;
   } else if (state.text) {
     const q = state.text.toLowerCase();
     // In the overview nothing is drawn node by node, so match everything loaded.
     hits = (state.visible.length ? state.visible : shown().nodes).filter((n) => n.label.toLowerCase().includes(q)).slice(0, 60)
       .map((n) => ({ id: n.id, label: n.label, sub: n.kind === "entity" ? n.type : n.category, kind: n.kind }));
-    heading = `Matching “${state.text}”`;
+  }
+  const dup = state.duplicates;
+  if (dup) {
+    const flag = (id) => (dup.likely.get(id) ? "likely duplicate of the open memory" : "similar to the open memory");
+    hits = hits.map((h) => (dup.likely.has(h.id) ? { ...h, dup: flag(h.id) } : h));
   }
   if (!heading && state.mode === "summaries" && !state.focusGraph) {
     // the keyboard path into the summary graph: every summary is a button here
@@ -372,30 +439,45 @@ function updateHighlight() {
     heading = hits.length ? "Summaries" : "";
     view.setHighlight(null);
   } else {
-    view.setHighlight(hits.length && !state.overview ? new Set(hits.map((h) => h.id)) : null);
+    // in the local graph every node is the subject; search hits would dim most of it
+    const lit = hits.length && !state.overview && !(state.local && state.localGraph);
+    view.setHighlight(lit ? new Set(hits.map((h) => h.id)) : null);
   }
   if (!heading) { results.innerHTML = ""; return; }
   results.innerHTML = `<h3>${esc(heading)}</h3>` + (hits.length
-    ? `<ul>${hits.map((h) => `<li><button class="result" data-node="${esc(h.id)}">
-        <span class="result-label">${esc(h.label)}</span><span class="result-sub">${esc(h.sub || "")}</span></button></li>`).join("")}</ul>`
-    : `<p class="hint">Nothing matches. ${state.search ? "Try other words, or clear the project filter." : "Press Enter to search by meaning instead."}</p>`)
+    ? `<ul>${hits.map((h) => `<li><button class="result${h.dup ? " is-dup" : ""}" data-node="${esc(h.id)}">
+        <span class="result-label">${esc(h.label)}</span><span class="result-sub">${esc(h.sub || "")}${h.dup ? `<span class="dup-flag">${esc(h.dup)}</span>` : ""}</span></button></li>`).join("")}</ul>`
+    : `<p class="hint"${state.searching ? ' aria-busy="true"' : ""}>${esc(hint.empty)}</p>`)
     + (state.search ? `<button class="quiet" id="clear-search">Clear search</button>` : "");
   $$("[data-node]", results).forEach((b) => b.onclick = () => select(b.dataset.node, { center: true }));
   $("#clear-search")?.addEventListener("click", clearSearch);
 }
 
+// The first search after a start loads the embedding model and can take
+// seconds. Until it answers the rail says so: it used to show the live text
+// filter's "Nothing matches. Press Enter to search", and readers pressed again.
 async function runSearch(query) {
   const project = state.filters.project || "*";
+  const seq = ++state.searchSeq;
+  state.searching = query;
+  state.text = query;
+  updateHighlight();
   try {
     clearError();
     const data = await api(`/api/memories?limit=30&project=${encodeURIComponent(project)}&q=${encodeURIComponent(query)}`);
+    if (seq !== state.searchSeq) return; // a newer search (or a clear) replaced this one
+    state.searching = null;
     state.search = { query, results: data.memories || [], topics: topicsMatching(query) };
     // a selection outranks the highlight, so results would stay hidden behind it
     if (state.selected) select(null);
     await refocus();
     state.picked = new Set();
     if (state.view === "list") { state.list = state.search.results; renderList(); }
-  } catch (e) { showError(e); }
+  } catch (e) {
+    if (seq === state.searchSeq) showError(e);
+  } finally {
+    if (seq === state.searchSeq && state.searching) { state.searching = null; updateHighlight(); }
+  }
 }
 
 // Search first: the results become the graph, with their neighbourhood
@@ -426,6 +508,7 @@ function focusOn(id) {
 }
 
 function clearSearch() {
+  state.searchSeq++; state.searching = null;
   state.search = null; state.text = ""; $("#q").value = "";
   state.focusGraph = null;
   rebuildById();
@@ -452,11 +535,15 @@ function select(id, { center = false } = {}) {
       applyFilters();
     }
   }
-  if (id && !view.adj.has(id) && state.byId.has(id)) return focusOn(id);
+  // In the local graph a collapsed hub opens in place rather than becoming
+  // the centre: re-centring on "Docker" would be the 700-memory view again.
+  if (state.local && id && id !== state.selected && state.localGraph?.nodes.some((n) => n.id === id && n.hub)) return openHub(id);
+  if (id && !state.local && !view.adj.has(id) && state.byId.has(id)) return focusOn(id);
+  if (id !== state.selected) state.duplicates = null;
   state.selected = id;
   view.select(id, { center });
-  if (!id) { closePanel(); if (state.local) { state.local = false; applyFilters(); } return; }
-  if (state.local) applyFilters();
+  if (!id) { closePanel(); if (state.local) { state.local = false; resetLocal(); applyFilters(); } return; }
+  if (state.local && state.localGraph?.center !== id) { resetLocal(); loadLocal(); }
   if (currentId() !== id) openNode(id);
   // the panel narrows the stage on the next layout; keep the selection in view
   setTimeout(() => view.ensureVisible(id), 260);
@@ -588,23 +675,34 @@ function wireList() {
 }
 
 // Destructive actions are never one click (PRODUCT.md).
-function confirmForget(id) {
+function confirmAction({ title, body, ok, danger = true, run }) {
   const dialog = $("#confirm");
-  const node = state.byId.get(id);
-  $("#confirm-body").textContent = `“${(node?.label || id).slice(0, 140)}” will be deleted from both stores with its links. This cannot be undone. Editing it keeps the history instead.`;
+  $("#confirm-title").textContent = title;
+  $("#confirm-body").textContent = body;
+  $("#confirm-ok").textContent = ok;
+  $("#confirm-ok").className = danger ? "danger-solid" : "primary";
   dialog.showModal();
   $("#confirm-cancel").onclick = () => dialog.close();
   $("#confirm-ok").onclick = async () => {
     dialog.close();
-    try {
-      clearError();
+    try { clearError(); await run(); } catch (e) { showError(e); }
+  };
+}
+
+function confirmForget(id) {
+  const node = state.byId.get(id);
+  confirmAction({
+    title: "Forget this memory?",
+    body: `“${(node?.label || id).slice(0, 140)}” will be deleted from both stores with its links. This cannot be undone. Editing it keeps the history instead.`,
+    ok: "Forget permanently",
+    run: async () => {
       await api(`/api/memories/${encodeURIComponent(id)}`, { method: "DELETE" });
       toast("Memory forgotten");
       if (state.selected === id) select(null);
       await Promise.all([loadGraph(), loadProjects()]);
       if (state.view === "list") loadList();
-    } catch (e) { showError(e); }
-  };
+    },
+  });
 }
 
 // ---- filter controls --------------------------------------------------
@@ -629,7 +727,8 @@ function renderEdgeTypes() {
     const next = new Set(state.edgeTypes);
     if (i.checked) next.add(i.value); else next.delete(i.value);
     state.edgeTypes = next;
-    if (state.search) refocus(); else applyFilters();
+    if (state.search) refocus();
+    if (state.local) loadLocal(); else if (!state.search) applyFilters();
   });
 }
 
@@ -687,7 +786,8 @@ function wireControls() {
   $("#f-to").onchange = (e) => { state.filters.to = e.target.value; applyFilters(); };
   $("#f-depth").onchange = (e) => {
     state.depth = Number(e.target.value) || 1;
-    if (state.search) refocus(); else if (state.local) applyFilters();
+    if (state.search) refocus();
+    if (state.local) loadLocal();
   };
   $("#f-reset").onclick = () => {
     state.filters = { ...state.filters, project: "", categories: new Set(CATEGORIES), from: "", to: "", hideSuperseded: false, showEntities: true,
@@ -703,12 +803,13 @@ function wireControls() {
     clearTimeout(timer);
     timer = setTimeout(() => {
       state.text = e.target.value.trim();
-      if (!state.text) state.search = null;
+      if (!state.text) { state.search = null; state.searchSeq++; state.searching = null; }
       updateHighlight();
     }, 120);
   });
   $("#search-form").onsubmit = (e) => {
     e.preventDefault();
+    clearTimeout(timer);
     const q = $("#q").value.trim();
     if (q) runSearch(q); else clearSearch();
   };
@@ -739,7 +840,7 @@ function wireControls() {
       g: () => setView("graph"), l: () => setView("list"), p: () => setView("projects"),
       v: () => { setView("graph"); setMode("overview"); }, e: () => { setView("graph"); setMode("all"); },
       s: () => { setView("graph"); setMode("summaries"); },
-      o: () => { if (state.selected) { state.local = !state.local; applyFilters(); refreshPanel(); } },
+      o: () => { if (state.selected) toggleLocal(); },
     };
     if (keys[e.key]) { e.preventDefault(); keys[e.key](); }
   });

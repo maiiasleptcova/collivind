@@ -110,29 +110,57 @@ collivind web            # on the host, any mode
 Opens a local explorer on `127.0.0.1:8765` over the same store your hooks and
 MCP tools use (it reads `~/.collivind/config.toml` and names the mode in the
 header). Three views, keyboard reachable (`/` search, `g` `l` `p` to switch,
-`v` `e` `s` for the graph's Overview, Everything and Summaries modes, `Esc` to deselect):
+`v` `e` `s` for the graph's Overview, Everything and Summaries modes, `o` for the
+selection's local graph, `Esc` to deselect):
 
 - **Graph**: memories and the entities they mention, with entity links,
-  `RELATES_TO`/`CAUSED_BY`/`DEPENDS_ON`, `CONTRADICTS` (dashed) and version
-  chains (`SUPERSEDES`, dotted; superseded versions drawn hollow). Pan, zoom,
-  drag; hover lights up a node's neighbours; click opens it in the side panel.
-  Filter by project, category, entity type and date, hide superseded versions,
-  or switch to a local graph of 1 to 3 hops around the selection. Canvas
-  rendering with a built-in force layout stays interactive at a few thousand
-  nodes; past 3,000 memories the newest are loaded and the sidebar says so
-  (pick a project to see the rest).
+  `RELATES_TO`/`DEPENDS_ON`, `CONTRADICTS` (dashed), cause and fix
+  (`RESOLVES` solid green, `CAUSED_BY` dashed amber, both with arrows) and
+  version chains (`SUPERSEDES`, dotted; superseded versions drawn hollow). Pan,
+  zoom, drag; hover lights up a node's neighbours and holds the layout still so
+  a click lands on it; click opens it in the side panel. Filter by project,
+  category, entity type and date, or hide superseded versions. Canvas rendering
+  with a built-in force layout stays interactive at a few thousand nodes; past
+  3,000 memories the newest are loaded and the sidebar says so (pick a project
+  to see the rest).
+- **Local graph** (`o`, or the panel's Local graph button): 1 to 3 hops around
+  the selection, zoomed to fit. An entity more than 30 memories are about (a
+  "hub", such as the project or Docker) is drawn as a dashed square with its
+  count and is not walked through, so 2 hops stay tens of nodes instead of
+  hundreds. What is reached is ranked: typed links between memories (resolves,
+  caused by, supersedes) before shared entities, and a shared entity counts for
+  less the more memories share it. At most 60 nodes are drawn; the sidebar has
+  **Show more** for the rest and an **Open** button per hub, which adds the
+  hub's memories most related to the selection. The search neighbourhood
+  (Enter) applies the same hub rule.
 - **Summaries** (graph mode, `s`): only summary memories, drawn as hexagons
   with their member count. Clicking one (or picking it in the sidebar list,
   which is keyboard reachable) opens its text in the side panel, lists its
   detail memories, and draws them around it; click it again to fold them. A
-  detail memory's panel shows the summary it belongs to and links back.
+  detail memory's panel shows the summary it belongs to and links back. With
+  no summaries yet, the view explains what they are and how they get written.
 - **Search**: typing filters node labels live; Enter runs the hybrid semantic
-  search and lights the results up on the graph (and lists them in the List view).
+  search and lights the results up on the graph (and lists them in the List
+  view). While a search is running the sidebar says so; the first one after a
+  start can take a few seconds while the model loads.
+- **Cause and fix**: a memory's panel lists every `CAUSED_BY`, `RESOLVES` and
+  `SUPERSEDES` link reachable from it, nearest first, so an error leads straight
+  to its cause and its fix. Agents are asked to write these links when they
+  save a fix (`collivind_batch_add` takes `target_index` for an error saved in
+  the same batch).
+- **Likely duplicates**: a memory's panel lists live memories in the same
+  project and category that are close in meaning and about the same subject
+  (the check `add_memory` runs on write), and marks them in the search results.
+  **Keep this, retire that** supersedes one with the other after a
+  confirmation; the retired one stays in its version history. Nothing is
+  merged automatically.
 - **Edit and link**: the side panel edits content, summary, category, tags and
   confidence (same id, re-embedded like `collivind update`), forgets with a
   confirmation, walks the version chain, and adds or removes links between two
-  memories, a memory and an entity, or two entities. Shift-drag from one node
-  to another to start a link. Version edges are history and cannot be unlinked.
+  memories, a memory and an entity, or two entities, with an optional note.
+  Shift-drag from one node to another to start a link: the panel opens with the
+  type picker focused (for two memories: relates to, was caused by, resolves,
+  depends on, contradicts). Version edges are history and cannot be unlinked.
 - **Projects**: every project with its memory counts, plus a display name,
   description, graph colour, repository URL or path, and tags. These live in the
   store itself (one `project` entity per project, id `project:<name>`), so

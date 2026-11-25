@@ -7,6 +7,7 @@ const panel = () => $("#panel");
 let ctx = null;          // { graph, linkable, projects, select, reload, confirm, local }
 let current = null;      // { kind, id, data }
 let pendingTarget = null;
+let extras = null;       // { id, chain, dups } fetched once per opened memory
 
 export function initPanel(context) {
   ctx = context;
@@ -125,6 +126,8 @@ function render() {
         <button class="danger" id="p-forget">Forget</button>
       </div>
       <div id="p-version-list"></div>
+      <section class="panel-section" id="p-chain" hidden></section>
+      <section class="panel-section" id="p-dups" hidden></section>
       ${summaryMarkup(m)}
       ${detailsMarkup(m)}
       <section class="panel-section"><h3>Connections</h3>${connectionsMarkup(m.id)}${linkFormMarkup()}</section>`;
@@ -141,6 +144,96 @@ function render() {
   }
   $$(".project-dot", body).forEach((el) => { el.style.background = ctx.colorOf(el.dataset.color); });
   wire();
+  if (current.kind === "memory") loadExtras(current.data);
+}
+
+// ---- cause and fix, likely duplicates -----------------------------------
+
+async function loadExtras(m) {
+  const id = m.id;
+  if (extras?.id !== id) {
+    extras = { id, chain: null, dups: null };
+    const get = (what) => api(`/api/memories/${encodeURIComponent(id)}/${what}`).catch((e) => ({ error: e.message }));
+    const [chain, dups] = await Promise.all([get("chain"), get("duplicates")]);
+    if (extras?.id !== id) return; // another memory was opened meanwhile
+    extras = { id, chain, dups };
+    ctx.duplicatesFound(id, dups.duplicates || []);
+  }
+  if (current?.id !== id || !extras.chain) return;
+  renderChain(m, extras.chain);
+  renderDuplicates(m, extras.dups);
+}
+
+const forgetExtras = () => { extras = null; };
+
+// Every CAUSED_BY / RESOLVES / SUPERSEDES link reachable from this memory,
+// nearest first, so an error reads straight through to its cause and its fix.
+function renderChain(m, chain) {
+  const box = $("#p-chain");
+  if (!box) return;
+  const links = chain.links || [];
+  const label = (id) => chain.memories?.[id]?.label || labelOf(id);
+  const end = (id) => id === m.id ? `<b class="chain-self">this memory</b>`
+    : `<button class="link-like" data-goto="${esc(id)}">${esc(label(id))}</button>`;
+  if (!links.length && m.category !== "error") { box.hidden = true; return; }
+  box.hidden = false;
+  box.innerHTML = `<h3>Cause and fix</h3>` + (links.length
+    ? `<ol class="chain">${links.map((l) => `<li class="chain-${esc(l.type.toLowerCase())}">${end(l.source)}
+        <span class="rel">${esc(relPhrase(ctx.meanings(), l.type, true))}</span> ${end(l.target)}
+        ${l.note ? `<span class="note">${esc(l.note)}</span>` : ""}</li>`).join("")}</ol>`
+    : `<p class="hint">Nothing records what caused this or what fixed it. Link the fix to it with <b>resolves</b>,
+        or this to its cause with <b>was caused by</b>: in “Link to” below, or shift-drag between the two nodes on the graph.</p>`);
+  $$("[data-goto]", box).forEach((b) => b.onclick = () => ctx.select(b.dataset.goto, { center: true }));
+}
+
+// The engine's write-time conflict candidates for this memory: same project
+// and category, close in meaning, about the same subject. Never merged here
+// without a click and a confirmation; retiring keeps the old one as history.
+function renderDuplicates(m, dups) {
+  const box = $("#p-dups");
+  if (!box) return;
+  if (dups.error) {
+    box.hidden = false;
+    box.innerHTML = `<h3>Possible duplicates</h3><p class="hint">Could not check: ${esc(dups.error)}</p>`;
+    return;
+  }
+  const list = dups.duplicates || [];
+  const live = !(m.superseded_by || m.valid_to);
+  box.hidden = !list.length;
+  if (!list.length) return;
+  box.innerHTML = `<h3>Possible duplicates</h3>
+    <p class="hint">Close in meaning and about the same thing: the same fact said twice, an older version, or a neighbour.
+    If one says it all, keep it and retire the other; the retired one stays in Versions.</p>
+    <ul class="dups">${list.map((d) => `<li>
+      <button class="link-like" data-goto="${esc(d.id)}">${esc(d.summary || d.content.slice(0, 100))}</button>
+      <span class="when">${d.likely ? "likely duplicate · " : ""}similarity ${Number(d.similarity).toFixed(2)}${d.created_at ? ` · ${esc(fmtDate(d.created_at))}` : ""}</span>
+      ${live ? `<span class="dup-actions">
+        <button class="quiet" data-keep="${esc(m.id)}" data-retire="${esc(d.id)}">Keep this, retire that</button>
+        <button class="quiet" data-keep="${esc(d.id)}" data-retire="${esc(m.id)}">Keep that one</button></span>` : ""}
+    </li>`).join("")}</ul>`;
+  $$("[data-goto]", box).forEach((b) => b.onclick = () => ctx.select(b.dataset.goto, { center: true }));
+  $$("[data-keep]", box).forEach((b) => b.onclick = () => confirmSupersede(b.dataset.retire, b.dataset.keep, list));
+}
+
+function confirmSupersede(retire, keep, list) {
+  const text = (id) => {
+    const d = id === current.id ? current.data : list.find((x) => x.id === id);
+    return (d?.summary || d?.content || labelOf(id)).slice(0, 120);
+  };
+  ctx.confirm({
+    title: "Retire the duplicate?",
+    body: `“${text(retire)}” will be marked as superseded by “${text(keep)}”. It stays in the version history, and search and recall stop returning it.`,
+    ok: "Retire it",
+    danger: false,
+    run: async () => {
+      await api(`/api/memories/${encodeURIComponent(retire)}/supersede`, { method: "POST", body: { superseded_by: keep } });
+      toast("Duplicate retired");
+      forgetExtras();
+      await ctx.reload();
+      ctx.select(keep, { center: true });
+      if (current?.id === keep) render();
+    },
+  });
 }
 
 function wire() {
@@ -233,6 +326,7 @@ function wireLinkForm() {
       clearError();
       await api("/api/links", { method: "POST", body: { source_id: plan.source, target_id: plan.target, type: select.value, note: $("#link-note").value.trim() } });
       pendingTarget = null;
+      forgetExtras();
       toast("Linked");
       await ctx.reload();
       render();
@@ -244,6 +338,7 @@ async function unlink(body) {
   try {
     clearError();
     await api("/api/links", { method: "DELETE", body });
+    forgetExtras();
     toast("Link removed");
     await ctx.reload();
     render();
