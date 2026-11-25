@@ -31,8 +31,9 @@ RERANK_GATE_LOGIT = 0.0
 # "routed" arm: 3 summaries, 15 of their members, 10 other memories.
 SUMMARY_CANDIDATES = 20  # dense top-N summaries scored line by line
 # ponytail: line scoring is capped at MAX_LINE_PAIRS cross-encoder pairs per
-# search (about 0.25 s on a laptop CPU); a store whose summaries are longer
-# scores fewer of them. Embed summary lines separately if that ever bites.
+# search; a store whose summaries are longer scores fewer of them. Routing
+# measured +150 ms median per prompt recall (127 -> 279 ms, embedded, Apple
+# silicon, 60 summaries of 12 lines). Embed summary lines separately if that bites.
 MAX_SUMMARY_LINES = 60
 MAX_LINE_PAIRS = 300
 MAX_ROUTED_MEMBERS = 120

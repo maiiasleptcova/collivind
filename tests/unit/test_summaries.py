@@ -295,16 +295,16 @@ def test_mcp_read_then_write_and_batch_add_asks_for_it(mgr, monkeypatch):
 
 def test_cli_shows_members_and_saves(mgr, monkeypatch):
     from collivind.cli.commands import memory
-    from collivind.cli.main import cli
+    from collivind.cli.commands.summarize import summarize as cli  # not the root group: it reads ~/.collivind
 
     _trip_session(mgr)
     monkeypatch.setattr(memory, "_manager", lambda: mgr)
     runner = CliRunner()
-    shown = runner.invoke(cli, ["summarize", "--session", "s1", "-p", "p"])
+    shown = runner.invoke(cli, ["--session", "s1", "-p", "p"])
     assert shown.exit_code == 0 and "3 members" in shown.output and "Paris" in shown.output
-    saved = runner.invoke(cli, ["summarize", "--session", "s1", "-p", "p", "--text", "-", "--json"], input=SUMMARY)
+    saved = runner.invoke(cli, ["--session", "s1", "-p", "p", "--text", "-", "--json"], input=SUMMARY)
     assert saved.exit_code == 0 and json.loads(saved.output)["members"] == 3
-    bad = runner.invoke(cli, ["summarize", "--session", "s1", "-p", "p", "--text", "prose"])
+    bad = runner.invoke(cli, ["--session", "s1", "-p", "p", "--text", "prose"])
     assert bad.exit_code == 1 and "list of facts" in bad.output
 
 
@@ -429,6 +429,7 @@ def test_editing_a_summary_keeps_its_group_tag(mgr):
     _trip_session(mgr)
     group = summaries.Group("session", "s1")
     s = summaries.save_summary(mgr, "p", group, SUMMARY)
-    updated = mgr.update_memory(s.id, tags=["travel"])
+    # the explorer's editor posts every field, the unchanged category included
+    updated = mgr.update_memory(s.id, tags=["travel"], category=MemoryCategory.SUMMARY, content=SUMMARY + "\n- edited")
     assert updated.tags == [group.tag, "travel"]
     assert summaries.live_summary(mgr, "p", group).id == s.id

@@ -468,9 +468,13 @@ per search on Neo4j at scale.
 A summary memory is an agent-written list of dated facts over one session's
 memories (or a named topic), linked to each member by `SUMMARIZES`. At recall
 the best summaries for the query are ranked against each other by their best
-fact line, and the result is those summaries, then their most relevant
-members merged by score with the best other memories (see README, *How It
-Works*). Collivind never writes summary text: **every summary costs one agent
+fact line; those the reranker judges relevant (best-line logit at least 0)
+come first, then their most relevant members merged by score with the best
+other memories (see README, *How It Works*). This differs from the offline
+"routed" arm in the 2026-11-25 evaluation in three ways: best-line scoring
+and 20 dense summary candidates (chosen from the retrieval check below), and
+the relevance gate and score ordering (added after code review so an
+off-topic summary cannot lead a recall). Collivind never writes summary text: **every summary costs one agent
 call per session at save time** (the agent reads the session's memories with
 `collivind_summarize` and writes the facts). That cost is not in the numbers
 below.
@@ -522,8 +526,12 @@ cross-encoder pairs per search.
 **Caveats.** One reader run; the binomial 95% CI is about ±5 points overall
 and ±13 on multi-hop. Verdicts are cached by prompt, one per prompt. The
 summaries came from Sonnet 5.5 with a fixed prompt; an agent summarising
-coding sessions mid-task will write different ones. Embedded mode only;
-routing on Neo4j costs one round trip per member read (up to 120).
+coding sessions mid-task will write different ones. Measured on base `6651c12`; the later base commit
+changes a test fixture only. Embedded mode only; routing on Neo4j costs one
+round trip per member read (up to 120 per search). Routing adds about 150 ms
+median per prompt recall on a laptop (127 to 279 ms, 60 summaries in the
+project); ten unrelated prompts on the same store recalled nothing, with or
+without summaries.
 
 ## Which public memory benchmarks exist (2026-11 survey)
 

@@ -211,14 +211,17 @@ class MemoryManager:
         # left any blank-summary memory permanently unsavable from the UI.
         if content is not None and not str(content).strip():
             raise ValueError("content cannot be blank; forget the memory instead")
-        if category is not None and category == MemoryCategory.SUMMARY:
-            raise ValueError("a memory cannot be turned into a summary; use collivind_summarize")
 
         existing = self._graph_write(self.graph_store.get_memory, memory_id, outcome="nothing was updated")
         if not existing:
             return None
-        if category is not None and existing.category == MemoryCategory.SUMMARY and category != existing.category:
-            raise ValueError("a summary cannot be reclassified; forget it instead")
+        # str enum: neo4j hands the category back as a plain string
+        if category is not None and (category == MemoryCategory.SUMMARY) != (
+            existing.category == MemoryCategory.SUMMARY
+        ):
+            if existing.category == MemoryCategory.SUMMARY:
+                raise ValueError("a summary cannot be reclassified; forget it instead")
+            raise ValueError("a memory cannot be turned into a summary; use collivind_summarize")
         if tags is not None and existing.category == MemoryCategory.SUMMARY:
             # the group tag is how a rewrite finds this summary; keep it whatever the edit
             group_tags = [t for t in existing.tags if t.startswith("summary-of:")]

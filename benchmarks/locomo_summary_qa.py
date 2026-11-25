@@ -1,3 +1,4 @@
+# ruff: noqa: E501  (the reader and judge prompts are kept verbatim)
 """LoCoMo QA with and without summary memories, through the real MemoryManager.
 
 Every turn of each conversation is added with MemoryManager.add_memory (one

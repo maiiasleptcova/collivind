@@ -118,16 +118,21 @@ def member_ids(manager, summary_ids: Iterable[str]) -> Dict[str, List[str]]:
 
 def members_of(manager, summary_ids: Iterable[str], cap: Optional[int] = None) -> Dict[str, List[MemoryNode]]:
     """Live member memories of each summary, in edge order; a superseded member
-    counts as its current version. `cap` bounds the node reads per summary.
+    counts as its current version. `cap` bounds the member reads across all
+    the summaries, the first summary's members first.
 
     ponytail: one get_memory per member (a Bolt round trip in docker mode);
     add a batch read to GraphStore if routing latency on Neo4j matters.
     """
     cache: Dict[str, Optional[MemoryNode]] = {}
     out: Dict[str, List[MemoryNode]] = {}
+    budget = cap if cap else float("inf")
     for sid, mids in member_ids(manager, summary_ids).items():
         members: Dict[str, MemoryNode] = {}
-        for mid in mids[:cap] if cap else mids:
+        for mid in mids:
+            if budget <= 0:
+                break
+            budget -= 1
             if mid not in cache:
                 cache[mid] = manager.graph_store.get_memory(mid)
             m = _head(manager, cache[mid], cache)
