@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import httpx
 
@@ -9,6 +9,10 @@ from collivind.exceptions import CollivindError
 from collivind.storage.interfaces import EmbeddingProvider
 
 logger = logging.getLogger(__name__)
+
+# On the prompt path: one try, short, never the 30 s / 3-retry embed budget.
+RERANK_TIMEOUT = 3.0
+RERANK_BACKOFF = 60.0  # seconds without rerank after a failed call: a slow service must not tax every prompt
 
 
 def _retry(fn, max_retries=3, base_delay=0.5):
@@ -27,10 +31,37 @@ def _retry(fn, max_retries=3, base_delay=0.5):
 
 
 class HttpEmbeddingProvider(EmbeddingProvider):
-    def __init__(self, config: EmbeddingsConfig):
+    def __init__(self, config: EmbeddingsConfig, rerank: bool = False):
         self.config = config
         self._dimension = config.dimension
         self.client = httpx.Client(base_url=config.service_url, timeout=30.0)
+        self._rerank = rerank
+        self._rerank_missing = False  # an embeddings image built before 0.19 has no /rerank
+        self._rerank_off_until = 0.0  # monotonic
+
+    @property
+    def can_rerank(self) -> bool:
+        return self._rerank and not self._rerank_missing and time.monotonic() >= self._rerank_off_until
+
+    def rerank(self, query: str, texts: List[str]) -> Optional[List[float]]:
+        """POST /rerank on the embeddings service; None on any problem (search keeps its ranking)."""
+        if not self.can_rerank or not texts:
+            return None
+        try:
+            resp = self.client.post("/rerank", json={"query": query, "texts": texts}, timeout=RERANK_TIMEOUT)
+            if resp.status_code == 404:
+                self._rerank_missing = True
+                logger.warning("embeddings service has no /rerank; rebuild it with `collivind docker up`")
+                return None
+            resp.raise_for_status()
+            scores = resp.json()["scores"]
+            if not isinstance(scores, list) or len(scores) != len(texts):
+                return None
+            return [float(x) for x in scores]
+        except Exception as e:
+            self._rerank_off_until = time.monotonic() + RERANK_BACKOFF
+            logger.warning(f"reranker unavailable for {RERANK_BACKOFF:.0f}s, keeping first-stage ranking: {e}")
+            return None
 
     def embed(self, text: str) -> List[float]:
         def _do_embed():

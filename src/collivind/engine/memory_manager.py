@@ -486,7 +486,12 @@ class MemoryManager:
         max_tokens greedily packs results in score order using a len/4
         token estimate. Importance-aware budgeting lives in collivind-pro.
         """
-        query = SearchQuery(query=query_str, project_id=project_id, limit=limit)
+        query = SearchQuery(
+            query=query_str,
+            project_id=project_id,
+            limit=limit,
+            min_rerank_score=self.config.search.recall_min_score,
+        )
         results, degraded = self.search_with_status(query)
 
         if not results:

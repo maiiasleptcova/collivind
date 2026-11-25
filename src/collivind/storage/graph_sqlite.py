@@ -5,18 +5,39 @@ import sqlite3
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from collivind.models.entity import EntityCreate, EntityNode, EntityType, entity_slug
 from collivind.models.memory import MemoryCategory, MemoryCreate, MemoryNode, MemorySource, stored_timestamp
 from collivind.models.relationship import RelationshipCreate, RelationshipEdge, RelType
 from collivind.storage.interfaces import GraphStore
+from collivind.storage.lexical import query_terms
 
 logger = logging.getLogger(__name__)
 
 
 # far under SQLITE_MAX_VARIABLE_NUMBER even on builds that cap it at 999
 _IN_CHUNK = 500
+
+# Keyword index over memories.content. A plain (content-storing) FTS5 table
+# keyed by the memories rowid, kept in sync by triggers, so every writer,
+# including another process or an older collivind, updates it without app
+# code. Not external-content: a stale row there can corrupt the index, here
+# it is only an orphan the search join drops.
+_FTS_SCHEMA = (
+    "CREATE VIRTUAL TABLE memories_fts USING fts5(content, tokenize='unicode61')",
+    """CREATE TRIGGER memories_fts_ai AFTER INSERT ON memories BEGIN
+        INSERT OR REPLACE INTO memories_fts(rowid, content) VALUES (new.rowid, new.content);
+    END""",
+    """CREATE TRIGGER memories_fts_ad AFTER DELETE ON memories BEGIN
+        DELETE FROM memories_fts WHERE rowid = old.rowid;
+    END""",
+    """CREATE TRIGGER memories_fts_au AFTER UPDATE OF content ON memories BEGIN
+        INSERT OR REPLACE INTO memories_fts(rowid, content) VALUES (new.rowid, new.content);
+    END""",
+    # backfill: memories written before the index existed
+    "INSERT INTO memories_fts(rowid, content) SELECT rowid, content FROM memories",
+)
 
 
 def _chunks(items: List[str]) -> Iterator[List[str]]:
@@ -99,6 +120,59 @@ class SqliteGraphStore(GraphStore):
             CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(type);
         """)
         self.conn.commit()
+        self._fts = self._ensure_fts()
+
+    def _ensure_fts(self) -> bool:
+        """Create and backfill the keyword index once; False when FTS5 is unavailable.
+
+        INSERT OR REPLACE (restore_memory) deletes the old row without firing
+        DELETE triggers unless recursive_triggers is on. Table, triggers and
+        backfill commit in one IMMEDIATE transaction, so a racing process
+        either sees none of it or all of it.
+        """
+        try:
+            self.conn.execute("PRAGMA recursive_triggers=ON")
+            if self._has_fts_table():
+                return True
+            self.conn.execute("BEGIN IMMEDIATE")
+            try:
+                if not self._has_fts_table():  # lost the race: the winner already built it
+                    for statement in _FTS_SCHEMA:
+                        self.conn.execute(statement)
+                self.conn.commit()
+            except BaseException:
+                self.conn.rollback()
+                raise
+            return True
+        except sqlite3.OperationalError as e:  # e.g. an SQLite built without FTS5
+            logger.warning("keyword index unavailable, search stays dense-only: %s", e)
+            return False
+
+    def _has_fts_table(self) -> bool:
+        return bool(self.conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'memories_fts'").fetchone())
+
+    def lexical_search(
+        self, query: str, limit: int, project_id: Optional[str] = None
+    ) -> List[Tuple[MemoryNode, float]]:
+        terms = query_terms(query)
+        if not self._fts or not terms or limit <= 0:
+            return []
+        match = " OR ".join(f'"{t}"' for t in terms)  # terms are [a-z0-9]+: quoting is all the escaping needed
+        sql = """SELECT m.*, bm25(memories_fts) AS rank FROM memories_fts
+                 JOIN memories m ON m.rowid = memories_fts.rowid
+                 WHERE memories_fts MATCH ? AND m.superseded_by IS NULL AND m.valid_to IS NULL"""
+        params: List[Any] = [match]
+        if project_id:
+            sql += " AND m.project_id = ?"
+            params.append(project_id)
+        sql += " ORDER BY rank LIMIT ?"
+        params.append(limit)
+        try:
+            rows = self.conn.execute(sql, params).fetchall()
+        except sqlite3.Error as e:
+            logger.warning("keyword search failed, using dense candidates only: %s", e)
+            return []
+        return [(self._row_to_memory(row), -row["rank"]) for row in rows]  # bm25(): lower is better
 
     def create_memory(self, data: MemoryCreate) -> MemoryNode:
         now = datetime.now(timezone.utc)

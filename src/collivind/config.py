@@ -5,6 +5,13 @@ from pathlib import Path
 
 from .exceptions import ConfigurationError
 
+# Chosen from data (BENCHMARKS.md): just above the cross-encoder's floor
+# (about 1.1e-5 to 1.4e-5, where it puts text unrelated to the query).
+# LoCoMo costs nothing; a synthetic coding check keeps every target and 8 of
+# 10 unrelated prompts recall nothing. Higher values cut more noise but drop
+# indirect matches (LongMemEval preference questions) that sit at the floor.
+RECALL_MIN_SCORE_DEFAULT = 0.00002
+
 
 @dataclass
 class DockerConfig:
@@ -57,6 +64,37 @@ class SearchConfig:
     dedup_threshold: float = 0.92
     temporal_decay_rate: float = 0.01
     temporal_decay_max: float = 0.3
+    # Second-stage ranking: a local cross-encoder rescores a pool of dense +
+    # keyword candidates. rerank = false restores the dense + graph ranking
+    # exactly, and the model is then never loaded.
+    rerank: bool = True
+    rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    rerank_pool: int = 50  # candidates scored per search (at least the requested limit)
+    lexical: bool = True  # add keyword (BM25) candidates to the rerank pool
+    # Recall (get_context, i.e. the prompt hook) drops memories whose
+    # cross-encoder score is below this, so an unrelated prompt recalls
+    # nothing. 0 disables. Explicit search never applies it.
+    recall_min_score: float = RECALL_MIN_SCORE_DEFAULT
+
+    def __post_init__(self):
+        # on the prompt path: a typo must fail at config load, not mid-search
+        if (
+            isinstance(self.rerank_pool, bool)
+            or not isinstance(self.rerank_pool, int)
+            or not 1 <= self.rerank_pool <= 200
+        ):
+            raise ConfigurationError(f"[search] rerank_pool must be an integer from 1 to 200, got {self.rerank_pool!r}")
+        if (
+            isinstance(self.recall_min_score, bool)
+            or not isinstance(self.recall_min_score, (int, float))
+            or not (0.0 <= self.recall_min_score < 1.0)
+        ):
+            raise ConfigurationError(
+                f"[search] recall_min_score must be a number from 0 to below 1, got {self.recall_min_score!r}"
+            )
+        for name in ("rerank", "lexical"):
+            if not isinstance(getattr(self, name), bool):
+                raise ConfigurationError(f"[search] {name} must be true or false, got {getattr(self, name)!r}")
 
 
 @dataclass
@@ -69,6 +107,28 @@ class HooksConfig:
     # Ask the agent to checkpoint without announcing or confirming routine
     # saves; failures are still reported (#35).
     quiet_capture: bool = True
+    # memories the prompt hook recalls per prompt, packed into a token budget
+    # (len/4 estimate); `hook user-prompt --max-tokens` overrides the budget.
+    # 2400 fits about 20 coding-length memories (~120 tokens each); the recall
+    # cutoff runs first, so an unrelated prompt still injects nothing.
+    recall_limit: int = 20
+    recall_max_tokens: int = 2400
+
+    def __post_init__(self):
+        if (
+            isinstance(self.recall_limit, bool)
+            or not isinstance(self.recall_limit, int)
+            or not 1 <= self.recall_limit <= 50
+        ):
+            raise ConfigurationError(f"[hooks] recall_limit must be an integer from 1 to 50, got {self.recall_limit!r}")
+        if (
+            isinstance(self.recall_max_tokens, bool)
+            or not isinstance(self.recall_max_tokens, int)
+            or not 100 <= self.recall_max_tokens <= 20000
+        ):
+            raise ConfigurationError(
+                f"[hooks] recall_max_tokens must be an integer from 100 to 20000, got {self.recall_max_tokens!r}"
+            )
 
 
 @dataclass
@@ -83,6 +143,11 @@ class CollivindConfig:
     embeddings: EmbeddingsConfig = field(default_factory=EmbeddingsConfig)
     search: SearchConfig = field(default_factory=SearchConfig)
     hooks: HooksConfig = field(default_factory=HooksConfig)
+
+    @property
+    def active_rerank_model(self) -> str:
+        """The cross-encoder to load, or "" when rerank is off (nothing is loaded)."""
+        return self.search.rerank_model if self.search.rerank else ""
 
     @property
     def expanded_data_dir(self) -> Path:
@@ -154,6 +219,17 @@ similarity_threshold = 0.3
 dedup_threshold = 0.92
 temporal_decay_rate = 0.01
 temporal_decay_max = 0.3
+# A local cross-encoder reranks dense + keyword candidates (no API key; the
+# model, about 90 MB, downloads once). rerank = false gives the previous
+# ranking exactly. lexical adds keyword (BM25) candidates to the rerank pool.
+rerank = true
+rerank_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+rerank_pool = 50
+lexical = true
+# Recall (the prompt hook, collivind_get_context) drops memories the reranker
+# scores below this (0..1), so an unrelated prompt recalls nothing. 0 = off.
+# Explicit search never applies it.
+recall_min_score = 0.00002
 
 # --- Docker (docker mode only) ---
 # [docker]
@@ -167,6 +243,8 @@ enable_stop = true
 enable_session_start = true
 enable_user_prompt = true
 quiet_capture = true
+recall_limit = 20  # memories recalled per prompt
+recall_max_tokens = 2400  # token budget for those memories (about 20 coding-length memories)
 """
 
 

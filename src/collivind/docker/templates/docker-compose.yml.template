@@ -88,7 +88,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 768M  # bge-small + the rerank cross-encoder
     restart: unless-stopped
     # python:3.11-slim has no curl or wget either; the interpreter is the
     # one thing guaranteed to be present. The long start_period covers the

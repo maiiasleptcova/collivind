@@ -1,5 +1,6 @@
 import json
 
+import pytest
 from click.testing import CliRunner
 
 from collivind.cli.commands.hook import collivind_bin, get_state_file, hook, install_hooks
@@ -214,7 +215,7 @@ def test_user_prompt_injects_relevant_context(monkeypatch):
     payload = json.loads(result.output)
     assert payload["hookSpecificOutput"]["hookEventName"] == "UserPromptSubmit"
     assert "Postgres chosen" in payload["hookSpecificOutput"]["additionalContext"]
-    assert manager.get_context.call_args.kwargs["max_tokens"] == 800
+    assert manager.get_context.call_args.kwargs["max_tokens"] == 2400
 
 
 def test_user_prompt_silent_on_short_prompt_or_no_match(monkeypatch):
@@ -436,3 +437,60 @@ def test_user_prompt_recalls_vector_only_when_graph_is_down(monkeypatch):
     result = CliRunner().invoke(hook, ["user-prompt"], input=_prompt_payload("which database did we choose"))
     context = json.loads(result.output)["hookSpecificOutput"]["additionalContext"]
     assert "Postgres chosen" in context and "DEGRADED" in context
+
+
+def test_user_prompt_recall_depth_comes_from_config(monkeypatch):
+    from unittest.mock import MagicMock
+
+    from collivind.config import CollivindConfig
+
+    assert CollivindConfig().hooks.recall_limit == 20
+    manager = MagicMock()
+    manager.config = CollivindConfig()
+    manager.get_context.return_value = "--- Collivind Context ---\n[FACT] x"
+    monkeypatch.setattr("collivind.cli.commands.hook._load_manager", lambda: manager)
+    CliRunner().invoke(hook, ["user-prompt"], input=_prompt_payload("build the database layer for orders"))
+    assert manager.get_context.call_args.kwargs["limit"] == 20
+
+    manager.config.hooks.recall_limit = 7
+    CliRunner().invoke(hook, ["user-prompt"], input=_prompt_payload("build the database layer for orders"))
+    assert manager.get_context.call_args.kwargs["limit"] == 7
+
+
+@pytest.mark.parametrize("bad", [0, 51, "20", True])
+def test_recall_limit_is_validated(bad):
+    from collivind.config import HooksConfig
+    from collivind.exceptions import ConfigurationError
+
+    with pytest.raises(ConfigurationError):
+        HooksConfig(recall_limit=bad)
+
+
+def test_user_prompt_token_budget_config_and_flag(monkeypatch):
+    from unittest.mock import MagicMock
+
+    from collivind.config import CollivindConfig
+
+    assert CollivindConfig().hooks.recall_max_tokens == 2400
+    manager = MagicMock()
+    manager.config = CollivindConfig()
+    manager.get_context.return_value = "--- Collivind Context ---\n[FACT] x"
+    monkeypatch.setattr("collivind.cli.commands.hook._load_manager", lambda: manager)
+    prompt = _prompt_payload("build the database layer for orders")
+
+    CliRunner().invoke(hook, ["user-prompt"], input=prompt)
+    assert manager.get_context.call_args.kwargs["max_tokens"] == 2400
+    manager.config.hooks.recall_max_tokens = 1200
+    CliRunner().invoke(hook, ["user-prompt"], input=prompt)
+    assert manager.get_context.call_args.kwargs["max_tokens"] == 1200
+    CliRunner().invoke(hook, ["user-prompt", "--max-tokens", "500"], input=prompt)
+    assert manager.get_context.call_args.kwargs["max_tokens"] == 500  # the flag beats config
+
+
+@pytest.mark.parametrize("bad", [99, 20001, "2400", True])
+def test_recall_max_tokens_is_validated(bad):
+    from collivind.config import HooksConfig
+    from collivind.exceptions import ConfigurationError
+
+    with pytest.raises(ConfigurationError):
+        HooksConfig(recall_max_tokens=bad)

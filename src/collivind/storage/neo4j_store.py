@@ -3,7 +3,7 @@ import json
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from neo4j import GraphDatabase
 from neo4j import exceptions as neo4j_exceptions
@@ -15,8 +15,12 @@ from collivind.models.entity import EntityType, entity_slug
 from collivind.models.memory import MemoryCategory, MemorySource, stored_timestamp
 from collivind.models.relationship import RelType, stable_edge_id
 from collivind.storage.interfaces import GraphStore
+from collivind.storage.lexical import query_terms
 
 logger = logging.getLogger(__name__)
+
+FULLTEXT_INDEX = "memory_content_fulltext"
+_CREATE_FULLTEXT = f"CREATE FULLTEXT INDEX {FULLTEXT_INDEX} IF NOT EXISTS FOR (m:Memory) ON EACH [m.content]"
 
 
 def _retry(fn, max_retries=3, base_delay=0.5):
@@ -64,6 +68,7 @@ class Neo4jGraphStore(GraphStore):
             "CREATE CONSTRAINT memory_id IF NOT EXISTS FOR (m:Memory) REQUIRE m.id IS UNIQUE",
             "CREATE CONSTRAINT entity_id IF NOT EXISTS FOR (e:Entity) REQUIRE e.id IS UNIQUE",
             "CREATE CONSTRAINT session_id IF NOT EXISTS FOR (s:Session) REQUIRE s.id IS UNIQUE",
+            _CREATE_FULLTEXT,
         ]
         with self.driver.session(database=self.config.database) as session:
             for q in queries:
@@ -262,6 +267,54 @@ class Neo4jGraphStore(GraphStore):
         """
         with self.driver.session(database=self.config.database) as session:
             return [self._node_to_memory(r["m"]) for r in session.run(query, entity_id=entity_id, limit=limit)]
+
+    def lexical_search(
+        self, query: str, limit: int, project_id: Optional[str] = None
+    ) -> List[Tuple[MemoryNode, float]]:
+        """Keyword candidates from a Lucene full-text index on Memory.content.
+
+        Stores created before 0.19 have no index: a search that finds it
+        missing creates it (idempotent; `initialize()` does too), and Neo4j
+        populates it from the existing nodes in the background. Until it is
+        ONLINE, and on any error, this returns [] and search stays
+        dense-only. No retries: this sits on the prompt path.
+        """
+        terms = query_terms(query)
+        if not terms or limit <= 0:
+            return []
+        cypher = f"""
+        CALL db.index.fulltext.queryNodes('{FULLTEXT_INDEX}', $q) YIELD node, score
+        WHERE node.superseded_by IS NULL AND node.valid_to IS NULL
+          AND ($project_id IS NULL OR node.project_id = $project_id)
+        RETURN node, score LIMIT $limit
+        """
+        # terms are [a-z0-9]+, so quoting each one is all the Lucene escaping needed
+        lucene = " OR ".join(f'"{t}"' for t in terms)
+        try:
+            with self.driver.session(database=self.config.database) as session:
+                records = session.run(cypher, q=lucene, project_id=project_id or None, limit=limit)
+                return [(self._node_to_memory(r["node"]), float(r["score"])) for r in records]
+        except neo4j_exceptions.ClientError as e:
+            # "There is no such fulltext schema index: ..." (Neo4j 5.26): a pre-0.19 store.
+            # Not "not online" (still populating): that must not re-run the CREATE.
+            if e.code == "Neo.ClientError.Procedure.ProcedureCallFailed" and "no such fulltext" in str(e.message or ""):
+                self._create_fulltext_index()
+            else:
+                logger.warning("keyword search failed, using dense candidates only: %s", e)
+            return []
+        except Exception as e:
+            logger.warning("keyword search failed, using dense candidates only: %s", e)
+            return []
+
+    def _create_fulltext_index(self) -> None:
+        try:
+            with self.driver.session(database=self.config.database) as session:
+                session.run(_CREATE_FULLTEXT).consume()
+            logger.info(
+                "created the %s keyword index; it fills from existing memories in the background", FULLTEXT_INDEX
+            )
+        except Exception as e:
+            logger.warning("could not create the keyword index, search stays dense-only: %s", e)
 
     def get_neighbors_batch(
         self, node_ids: List[str], rel_types: List[str], direction: str = "OUT"

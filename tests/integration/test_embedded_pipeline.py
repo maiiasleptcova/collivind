@@ -31,6 +31,8 @@ class FakeEmbeddingProvider:
         norm = max(sum(v * v for v in vec) ** 0.5, 1e-9)
         return [v / norm for v in vec]
 
+    embed_query = embed  # the engine embeds queries through embed_query (pre-existing gap on main)
+
     def embed_batch(self, texts):
         return [self.embed(t) for t in texts]
 

@@ -1,7 +1,8 @@
 import logging
 import math
+from dataclasses import replace
 from datetime import datetime, timezone
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from collivind.config import SearchConfig
 from collivind.engine.conflicts import CONFLICT_THRESHOLD, MAX_CANDIDATES, is_live, same_subject
@@ -12,8 +13,58 @@ from collivind.storage.interfaces import EmbeddingProvider, GraphStore, VectorSt
 
 logger = logging.getLogger(__name__)
 
+RRF_K = 60  # reciprocal rank fusion constant (Cormack et al.)
+# ponytail: the cross-encoder reads 256 tokens of query + memory; a long
+# prompt is cut to its opening so the memory keeps most of the budget.
+RERANK_QUERY_CHARS = 1000
+# The cross-encoder's own relevance boundary. When no candidate in the pool
+# clears it, the model is saying "none of these answer the query" and its
+# order among them is noise (indirect prompts: preferences, "what should I
+# do about X"), so the first-stage ranking is served instead.
+# ponytail: tied to logit-scale models (the MS MARCO cross-encoders); a
+# custom rerank_model that outputs 0..1 scores would never trip it.
+RERANK_GATE_LOGIT = 0.0
+
+
+def _sigmoid(logit: float) -> float:
+    return 1.0 / (1.0 + math.exp(-max(-50.0, min(50.0, logit))))
+
+
+def _rrf(rankings: List[List[str]], k: int = RRF_K) -> List[str]:
+    """Reciprocal rank fusion. Ties keep first-seen order, so dense wins ties."""
+    scores: Dict[str, float] = {}
+    for ranking in rankings:
+        for rank, item in enumerate(ranking):
+            scores[item] = scores.get(item, 0.0) + 1.0 / (k + rank + 1)
+    return sorted(scores, key=lambda item: scores[item], reverse=True)
+
+
+def _payload_matches(payload: Dict[str, Any], filters: Dict[str, Any]) -> bool:
+    """The vector store's flat MatchValue filter, for candidates that did not come from it."""
+    for key, expected in filters.items():
+        value = payload.get(key)
+        if value != expected and not (isinstance(value, list) and expected in value):
+            return False
+    return True
+
 
 class SearchEngine:
+    """Dense + graph search, with an optional cross-encoder second stage.
+
+    First stage (0.18.0 ranking, and the fallback): dense top limit*3, graph
+    and entity expansion, score = (cosine * vector_weight + min(graph, 1) *
+    graph_weight) * temporal_decay.
+
+    Second stage (search.rerank, when the embedding provider has a reranker):
+    a pool of rerank_pool candidates fused by reciprocal rank from the dense
+    top rerank_pool and the keyword (BM25) top rerank_pool, plus the best
+    `limit` graph/entity-only candidates, is scored by the cross-encoder.
+    The squashed score sigmoid(logit) takes the cosine's place in the same
+    formula, so graph links and temporal decay keep their weight. When no
+    pool candidate clears the model's relevance boundary (logit 0), and on
+    any reranker problem, the first-stage ranking is returned unchanged.
+    """
+
     def __init__(
         self,
         vector_store: VectorStore,
@@ -74,9 +125,17 @@ class SearchEngine:
         if query.project_id:
             vector_filters["project_id"] = query.project_id
 
-        raw_vector_results = self.vector_store.search(
-            vector=vector, limit=query.limit * 3, filters=vector_filters, threshold=self.config.similarity_threshold
+        legacy_n = query.limit * 3
+        rerank = self._can_rerank()
+        dense = self.vector_store.search(
+            vector=vector,
+            limit=max(legacy_n, self._pool_size(query)) if rerank else legacy_n,
+            filters=vector_filters,
+            threshold=self.config.similarity_threshold,
         )
+        # the first stage sees exactly what 0.18.0 saw: dense hits are sorted,
+        # so the top limit*3 is a prefix of the larger pool fetch
+        raw_vector_results = dense[:legacy_n]
 
         now = datetime.now(timezone.utc)
         try:
@@ -103,7 +162,129 @@ class SearchEngine:
             results.append(res)
 
         results.sort(key=lambda x: x.score, reverse=True)
+        if rerank and not degraded:
+            reranked = self._rerank(query, candidates, results, dense, now)
+            if reranked is not None:
+                return reranked[: query.limit], degraded
         return results[: query.limit], degraded
+
+    def _can_rerank(self) -> bool:
+        try:
+            return bool(self.config.rerank) and getattr(self.embedding_provider, "can_rerank", False) is True
+        except Exception:
+            return False
+
+    def _pool_size(self, query: SearchQuery) -> int:
+        return max(self.config.rerank_pool, query.limit)
+
+    def _rerank(
+        self,
+        query: SearchQuery,
+        candidates: Dict[str, SearchResult],
+        first_stage: List[SearchResult],
+        dense: List[Dict[str, Any]],
+        now: datetime,
+    ) -> Optional[List[SearchResult]]:
+        """Second-stage ranking, or None to keep the first stage unchanged. Never raises.
+
+        Ordering and membership are separate decisions. The gate picks the
+        order (reranked, or first stage when no candidate is confidently
+        relevant); query.min_rerank_score then drops every result whose
+        cross-encoder score is below it, in either order, so a recall with
+        nothing relevant returns fewer results, possibly none.
+        """
+        try:
+            pool = self._rerank_pool(query, candidates, first_stage, dense, now)
+            if not pool:
+                return None
+            texts = [r.memory.content for r in pool]
+            logits = self.embedding_provider.rerank(query.query[:RERANK_QUERY_CHARS], texts)
+            if not isinstance(logits, list) or len(logits) != len(pool):
+                return None
+            if not all(isinstance(x, (int, float)) and math.isfinite(x) for x in logits):
+                return None  # a NaN would squash to 1.0 and rank first
+            cutoff = query.min_rerank_score or 0.0
+            if max(logits) < RERANK_GATE_LOGIT:
+                if not cutoff:
+                    return None
+                squashed = {r.memory.id: _sigmoid(float(x)) for r, x in zip(pool, logits)}
+                # the pool holds the whole first-stage top `limit`, so each has a score
+                return [
+                    replace(r, rerank_score=squashed[r.memory.id])
+                    for r in first_stage
+                    if squashed.get(r.memory.id, 0.0) >= cutoff
+                ]
+            out = []
+            for res, logit in zip(pool, logits):
+                rerank_score = _sigmoid(float(logit))
+                base = rerank_score * self.config.vector_weight + min(res.graph_score, 1.0) * self.config.graph_weight
+                out.append(replace(res, score=base * res.temporal_decay, rerank_score=rerank_score))
+            out.sort(key=lambda x: x.score, reverse=True)
+            return [r for r in out if (r.rerank_score or 0.0) >= cutoff]
+        except Exception as e:
+            logger.warning("rerank failed, serving first-stage ranking: %s", e)
+            return None
+
+    def _rerank_pool(
+        self,
+        query: SearchQuery,
+        candidates: Dict[str, SearchResult],
+        first_stage: List[SearchResult],
+        dense: List[Dict[str, Any]],
+        now: datetime,
+    ) -> List[SearchResult]:
+        """RRF(dense, keyword) top pool_size, plus the best `limit` graph/entity-only
+        candidates, plus the whole first-stage top `limit` (so the gate's
+        fallback order can be filtered by score too)."""
+        size = self._pool_size(query)
+        dense_scores = {r["id"]: r["score"] for r in dense}
+        lexical = self._lexical_candidates(query, size, now)
+        pool: Dict[str, SearchResult] = {}
+        for mem_id in _rrf([list(dense_scores), list(lexical)])[:size]:
+            if mem_id in candidates:
+                pool[mem_id] = candidates[mem_id]
+                continue
+            memory = lexical.get(mem_id) or self.graph_store.get_memory(mem_id)
+            if not is_live(memory) or memory is None or not self._passes_filters(memory, query, now):
+                continue
+            pool[mem_id] = SearchResult(
+                memory=memory,
+                score=0.0,
+                vector_score=dense_scores.get(mem_id, 0.0),
+                temporal_decay=self._compute_temporal_decay(memory, now),
+            )
+        graph_only = sorted(
+            (r for r in candidates.values() if r.vector_score == 0.0 and r.memory.id not in pool),
+            key=lambda r: r.score,
+            reverse=True,
+        )
+        for res in graph_only[: query.limit] + first_stage[: query.limit]:
+            pool.setdefault(res.memory.id, res)
+        return list(pool.values())
+
+    def _lexical_candidates(self, query: SearchQuery, limit: int, now: datetime) -> Dict[str, MemoryNode]:
+        """Keyword hits that pass every search filter, best first.
+
+        ponytail: project and liveness are filtered in the store before its
+        LIMIT; category/tags/session/user/dates after it, so a narrow filter
+        can leave fewer than `limit`. Push them into the store if that bites.
+        """
+        if not self.config.lexical:
+            return {}
+        try:
+            hits = self.graph_store.lexical_search(query.query, limit, project_id=query.project_id or None)
+        except Exception as e:  # the store contract says it never raises; a third-party store might
+            logger.warning("keyword search failed, using dense candidates only: %s", e)
+            return {}
+        if not isinstance(hits, list):
+            return {}
+        return {
+            memory.id: memory
+            for memory, _ in hits
+            if is_live(memory)
+            and self._passes_filters(memory, query, now)
+            and _payload_matches(memory.to_dict(), query.filters)
+        }
 
     def _graph_healthy(self) -> bool:
         try:

@@ -49,14 +49,24 @@ def test_create_embedding_provider_embedded():
     config = CollivindConfig(mode="embedded")
     with patch("collivind.storage.embedding_local.LocalEmbeddingProvider") as mock_cls:
         create_embedding_provider(config)
-        mock_cls.assert_called_once_with(config.embeddings, data_dir=config.data_dir)
+        mock_cls.assert_called_once_with(
+            config.embeddings, data_dir=config.data_dir, rerank_model="cross-encoder/ms-marco-MiniLM-L-6-v2"
+        )
+
+
+def test_rerank_off_passes_no_rerank_model():
+    config = CollivindConfig(mode="embedded")
+    config.search.rerank = False
+    with patch("collivind.storage.embedding_local.LocalEmbeddingProvider") as mock_cls:
+        create_embedding_provider(config)
+        mock_cls.assert_called_once_with(config.embeddings, data_dir=config.data_dir, rerank_model="")
 
 
 def test_create_embedding_provider_docker():
     config = CollivindConfig(mode="docker")
     with patch("collivind.storage.embedding_service.HttpEmbeddingProvider") as mock_cls:
         create_embedding_provider(config)
-        mock_cls.assert_called_once_with(config.embeddings)
+        mock_cls.assert_called_once_with(config.embeddings, rerank=True)
 
 
 def test_create_all_backends_returns_tuple():
@@ -144,7 +154,7 @@ def test_http_embedding_override():
     )
     with patch("collivind.storage.embedding_service.HttpEmbeddingProvider") as mock_cls:
         create_embedding_provider(config)
-        mock_cls.assert_called_once_with(config.embeddings)
+        mock_cls.assert_called_once_with(config.embeddings, rerank=True)
 
 
 def test_mixed_backends():

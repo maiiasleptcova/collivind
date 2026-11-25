@@ -1,0 +1,104 @@
+{
+  "questions": 90,
+  "seconds": 621,
+  "scores": {
+    "overall": {
+      "n": 90,
+      "n_with_answer_turns": 90,
+      "rerank": {
+        "session_r@5": 97.8,
+        "turn_hit@5": 75.6,
+        "turn_hit@10": 83.3
+      },
+      "no_rerank": {
+        "session_r@5": 97.8,
+        "turn_hit@5": 74.4,
+        "turn_hit@10": 83.3
+      }
+    },
+    "knowledge-update": {
+      "n": 15,
+      "n_with_answer_turns": 15,
+      "rerank": {
+        "session_r@5": 100.0,
+        "turn_hit@5": 86.7,
+        "turn_hit@10": 93.3
+      },
+      "no_rerank": {
+        "session_r@5": 100.0,
+        "turn_hit@5": 86.7,
+        "turn_hit@10": 100.0
+      }
+    },
+    "multi-session": {
+      "n": 15,
+      "n_with_answer_turns": 15,
+      "rerank": {
+        "session_r@5": 100.0,
+        "turn_hit@5": 93.3,
+        "turn_hit@10": 100.0
+      },
+      "no_rerank": {
+        "session_r@5": 100.0,
+        "turn_hit@5": 86.7,
+        "turn_hit@10": 100.0
+      }
+    },
+    "single-session-assistant": {
+      "n": 15,
+      "n_with_answer_turns": 15,
+      "rerank": {
+        "session_r@5": 100.0,
+        "turn_hit@5": 66.7,
+        "turn_hit@10": 73.3
+      },
+      "no_rerank": {
+        "session_r@5": 100.0,
+        "turn_hit@5": 60.0,
+        "turn_hit@10": 66.7
+      }
+    },
+    "single-session-preference": {
+      "n": 15,
+      "n_with_answer_turns": 15,
+      "rerank": {
+        "session_r@5": 100.0,
+        "turn_hit@5": 80.0,
+        "turn_hit@10": 93.3
+      },
+      "no_rerank": {
+        "session_r@5": 100.0,
+        "turn_hit@5": 80.0,
+        "turn_hit@10": 93.3
+      }
+    },
+    "single-session-user": {
+      "n": 15,
+      "n_with_answer_turns": 15,
+      "rerank": {
+        "session_r@5": 100.0,
+        "turn_hit@5": 66.7,
+        "turn_hit@10": 66.7
+      },
+      "no_rerank": {
+        "session_r@5": 100.0,
+        "turn_hit@5": 66.7,
+        "turn_hit@10": 66.7
+      }
+    },
+    "temporal-reasoning": {
+      "n": 15,
+      "n_with_answer_turns": 15,
+      "rerank": {
+        "session_r@5": 86.7,
+        "turn_hit@5": 60.0,
+        "turn_hit@10": 73.3
+      },
+      "no_rerank": {
+        "session_r@5": 86.7,
+        "turn_hit@5": 66.7,
+        "turn_hit@10": 73.3
+      }
+    }
+  }
+}

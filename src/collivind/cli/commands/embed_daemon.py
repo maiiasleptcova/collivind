@@ -32,7 +32,7 @@ def start(wait):
     if _info(path):
         click.echo(f"Already running on {path}")
         return
-    daemon.spawn(path, config.embeddings.model, config.embeddings.daemon_idle_timeout)
+    daemon.spawn(path, config.embeddings.model, config.embeddings.daemon_idle_timeout, config.active_rerank_model)
     deadline = time.monotonic() + wait
     while time.monotonic() < deadline:
         info = _info(path)
@@ -69,4 +69,8 @@ def status():
         else:
             click.echo(f"Not running (socket {path}).")
         return
-    click.echo(f"Running: pid {info['pid']}, collivind {info['version']}, model {info['model']}, socket {path}")
+    rerank = info.get("rerank_model") or "off"
+    click.echo(
+        f"Running: pid {info['pid']}, collivind {info['version']}, model {info['model']}, "
+        f"reranker {rerank}, socket {path}"
+    )

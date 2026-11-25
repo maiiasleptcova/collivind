@@ -518,7 +518,28 @@ def _session_id(payload: dict) -> str:
 def _load_manager():
     from collivind.cli.commands.memory import _manager
 
-    return _manager()
+    manager = _manager()
+    # A hook is a short-lived process: rerank through the resident daemon or
+    # not at all, never a cross-encoder load (or first download) in here.
+    if hasattr(manager.embedding_provider, "allow_in_process_rerank"):
+        manager.embedding_provider.allow_in_process_rerank = False
+    return manager
+
+
+def _recall_max_tokens(manager) -> int:
+    """[hooks] recall_max_tokens; the default when the manager carries no config."""
+    from collivind.config import HooksConfig
+
+    value = getattr(getattr(getattr(manager, "config", None), "hooks", None), "recall_max_tokens", None)
+    return value if isinstance(value, int) and not isinstance(value, bool) else HooksConfig().recall_max_tokens
+
+
+def _recall_limit(manager) -> int:
+    """[hooks] recall_limit; the default when the manager carries no config (test fakes, embedders)."""
+    from collivind.config import HooksConfig
+
+    limit = getattr(getattr(getattr(manager, "config", None), "hooks", None), "recall_limit", None)
+    return limit if isinstance(limit, int) and not isinstance(limit, bool) else HooksConfig().recall_limit
 
 
 PROJECT = click.option(
@@ -628,7 +649,9 @@ def _unavailable_warning(error: Exception) -> str:
 
 @hook.command(name="user-prompt")
 @PROJECT
-@click.option("--max-tokens", default=800, type=int, help="Recall context budget")
+@click.option(
+    "--max-tokens", default=None, type=int, help="Recall context budget (default: [hooks] recall_max_tokens, 2400)"
+)
 @AGENT
 def user_prompt(project, max_tokens, agent):
     """Inject memory context relevant to the submitted prompt. Never fails.
@@ -664,7 +687,12 @@ def user_prompt(project, max_tokens, agent):
                     continue
             except Exception:
                 pass
-            context = manager.get_context(prompt, project_id=project, limit=5, max_tokens=max_tokens)
+            context = manager.get_context(
+                prompt,
+                project_id=project,
+                limit=_recall_limit(manager),
+                max_tokens=max_tokens if max_tokens is not None else _recall_max_tokens(manager),
+            )
             if "No relevant context found" not in context:
                 break
         if not context:
