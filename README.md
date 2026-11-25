@@ -49,9 +49,11 @@ This uses SQLite for both vectors and the graph, and loads the embedding model d
 
 > **Concurrent sessions:** embedded mode is multi-process safe — any number of agent sessions, CLI commands, and hooks can share the store, and a write from one session is immediately visible to the others.
 >
-> **Resident model:** hooks are short-lived processes, so the first embed starts a small background process that keeps the model loaded (`~/.collivind/embed.sock`, owner-only; if the data dir path is too long for a unix socket it uses a private per-user dir under `/tmp`, which `collivind embed-daemon status` names); later hooks embed in milliseconds instead of reloading the model every prompt. It exits after 30 idle minutes (`daemon_idle_timeout` under `[embeddings]`). Manage it with `collivind embed-daemon start|stop|status`; turn it off with `daemon = false` or `COLLIVIND_EMBED_DAEMON=0`.
+> **Resident model:** hooks are short-lived processes, so the first embed starts a small background process that keeps the model loaded (`~/.collivind/embed.sock`, owner-only; if the data dir path is too long for a unix socket it uses a private per-user dir under `/tmp`, which `collivind embed-daemon status` names); later hooks embed in milliseconds instead of reloading the model every prompt. It exits after 30 idle minutes (`daemon_idle_timeout` under `[embeddings]`). Manage it with `collivind embed-daemon start|stop|status`; turn it off with `daemon = false` or `COLLIVIND_EMBED_DAEMON=0`. The same process also holds the search reranker (a second, ~90 MB model downloaded on its first start); while it is loading, searches use the first-stage ranking. With the daemon off, the reranker loads in-process on the first search. `rerank = false` under `[search]` stops it being loaded at all.
 >
 > **Upgrading from ≤ 0.1.x:** older versions kept vectors in a single-process Qdrant store (`~/.collivind/qdrant_data`). It is migrated automatically on first use and left in place as a backup; restart any agent sessions still running the old version once after upgrading. If you later downgrade, memories written after the upgrade live only in the new store — carry them over with `collivind export` / `import`.
+
+> **Docker mode reranker:** the embeddings container serves the reranker too (`POST /rerank`). An embeddings image built before 0.19 has no such endpoint, so search keeps the first-stage ranking until `collivind docker up` rebuilds it (the container's memory limit rises from 512 MB to 768 MB for the second model).
 
 ### Switching modes
 
@@ -400,7 +402,7 @@ Collivind stores memories as nodes in a knowledge graph with vector embeddings f
 
 **Relationships:** ABOUT, MENTIONS, SUPERSEDES, CONTRADICTS, RELATES_TO, CAUSED_BY, DEPENDS_ON, IMPLEMENTS, PART_OF, USES, and more
 
-**Search** combines vector similarity (70% weight) with graph proximity (30% weight) for results that understand both meaning and structure.
+**Search** runs in two stages, all local (no LLM, no API key). The first stage combines vector similarity (70% weight) with graph proximity (30% weight) and temporal decay. The second stage takes a pool of 50 candidates, fused by reciprocal rank from the dense top 50 and a keyword (BM25) top 50, plus the best graph-linked memories, and rescores each against the query with a small cross-encoder (`cross-encoder/ms-marco-MiniLM-L-6-v2`, about 90 MB, downloaded once on first use). Its score takes the vector similarity's place in the same formula, so graph links and recency still count. If the reranker is not loaded yet, fails or is turned off, search returns the first-stage ranking unchanged; it never fails or blocks a prompt. Keyword search uses SQLite FTS5 in embedded mode and a Neo4j full-text index in docker mode; both are built automatically for memories that already exist.
 
 **Deduplication and supersession** keep the store current: resubmitting identical knowledge is rejected, and storing an updated version of existing knowledge retires the stale memory (it leaves search results but stays in the version history) instead of keeping old and new side by side. **Conflicts are resolved on write**: when a new memory is close to a live one about the same subject, `collivind_add_memory`/`collivind_batch_add` return it under `possible_conflicts` with an instruction. The agent checks the code, docs or the user's words, retires the stale or wrong one with `collivind_invalidate` (history kept), and asks the user one short question only when it cannot tell. Similarity alone no longer writes CONTRADICTS edges; `collivind contradictions review` triages the ones older versions wrote (dry run by default, `--apply` re-labels or invalidates, never deletes a memory).
 
@@ -445,6 +447,10 @@ default_limit = 10
 vector_weight = 0.7
 graph_weight = 0.3
 similarity_threshold = 0.3
+rerank = true             # cross-encoder second stage; false = the pre-0.19 ranking exactly
+rerank_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"  # embedded mode (docker: COLLIVIND_RERANK_MODEL on the embeddings service)
+rerank_pool = 50          # candidates rescored per search
+lexical = true            # add keyword (BM25) candidates to the rerank pool
 
 [hooks]
 save_interval = 15        # responses between capture checkpoints, per session

@@ -15,13 +15,57 @@ logger = logging.getLogger(__name__)
 class LocalEmbeddingProvider(EmbeddingProvider):
     """Loads sentence-transformers model directly in-process. No Docker needed."""
 
-    def __init__(self, config: EmbeddingsConfig, data_dir: Optional[str] = None):
+    def __init__(self, config: EmbeddingsConfig, data_dir: Optional[str] = None, rerank_model: str = ""):
         """data_dir enables the resident embedding daemon (#16); None keeps
-        everything in-process (init's model pre-download, tests)."""
+        everything in-process (init's model pre-download, tests).
+        rerank_model "" means no cross-encoder (rerank off)."""
         self.config = config
         self._model: Any = None  # SentenceTransformer, imported lazily (optional extra)
         self._dimension = config.dimension
         self._data_dir = Path(data_dir) if data_dir else None
+        self.rerank_model = rerank_model
+        self._reranker: Any = None  # CrossEncoder, in-process mode only
+        self._reranker_failed = False
+
+    def _daemon_owns_models(self) -> bool:
+        """True when models belong in the daemon, not in this process."""
+        if self._data_dir is None or not embed_daemon.daemon_enabled(self.config.daemon):
+            return False
+        return embed_daemon.daemon_usable(embed_daemon.socket_path_for(self._data_dir))
+
+    @property
+    def can_rerank(self) -> bool:
+        return bool(self.rerank_model) and not self._reranker_failed
+
+    def rerank(self, query: str, texts: List[str]) -> Optional[List[float]]:
+        """Scores from the resident daemon, or in-process when there is no daemon.
+
+        With the daemon on, a cross-encoder is never loaded here: hooks are
+        short-lived and a load costs seconds, so a daemon that is not up yet
+        (it is started here) means this search keeps its first-stage ranking.
+        Never raises.
+        """
+        if not self.rerank_model or not texts:
+            return None
+        try:
+            if self._daemon_owns_models():
+                socket_path = embed_daemon.socket_path_for(self._data_dir)  # type: ignore[arg-type]
+                return embed_daemon.rerank_via_daemon(
+                    socket_path, self.config.model, self.rerank_model, query, texts, self.config.daemon_idle_timeout
+                )
+            if self._reranker is None:
+                if self._reranker_failed:
+                    return None
+                try:
+                    self._reranker = embed_daemon.load_cross_encoder(self.rerank_model)
+                except Exception:
+                    self._reranker_failed = True  # one failed load per process, not one per search
+                    raise
+            scores = self._reranker.predict([(query, t) for t in texts], batch_size=64, show_progress_bar=False)
+            return [float(x) for x in scores]
+        except Exception as e:
+            logger.warning(f"reranker unavailable, keeping first-stage ranking: {e}")
+            return None
 
     def _from_daemon(self, texts: List[str]) -> Optional[List[List[float]]]:
         """Never raises: any daemon problem means "embed in-process"."""
@@ -33,7 +77,9 @@ class LocalEmbeddingProvider(EmbeddingProvider):
             # resolved per call: a fallback dir under /tmp is re-checked
             # (owner, mode) before every connect/spawn, not once per process
             socket_path = embed_daemon.socket_path_for(self._data_dir)
-            return embed_daemon.embed_via_daemon(socket_path, self.config.model, texts, self.config.daemon_idle_timeout)
+            return embed_daemon.embed_via_daemon(
+                socket_path, self.config.model, texts, self.config.daemon_idle_timeout, self.rerank_model
+            )
         except Exception as e:
             logger.debug(f"embed daemon failed, embedding in-process: {e}")
             return None

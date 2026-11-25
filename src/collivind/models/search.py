@@ -29,3 +29,5 @@ class SearchResult:
     graph_score: float = 0.0
     related_entities: List[str] = field(default_factory=list)
     temporal_decay: float = 0.0
+    # sigmoid of the cross-encoder logit when the result was reranked, else None
+    rerank_score: Optional[float] = None

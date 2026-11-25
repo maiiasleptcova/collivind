@@ -128,6 +128,19 @@ class GraphStore(ABC):
         """
         return {name: self.find_related_memories(name, limit=limit) for name in dict.fromkeys(entity_names)}
 
+    def lexical_search(
+        self, query: str, limit: int, project_id: Optional[str] = None
+    ) -> List[Tuple[MemoryNode, float]]:
+        """Live memories (not superseded, no valid_to) matching the query's keywords, best first.
+
+        Returns (memory, score) pairs; higher score is better, only the order
+        is meaningful. The default has no keyword index and returns nothing,
+        so search stays dense-only; stores outside this package keep loading.
+        Must never raise for a malformed query: an empty list means "no
+        keyword candidates".
+        """
+        return []
+
     @abstractmethod
     def get_timeline(self, project_id: str, entity: Optional[str] = None, limit: int = 50) -> List[MemoryNode]:
         """Get timeline of memories."""
@@ -222,6 +235,20 @@ class EmbeddingProvider(ABC):
     def embed_batch(self, texts: List[str]) -> List[List[float]]:
         """Embed a batch of texts."""
         pass
+
+    @property
+    def can_rerank(self) -> bool:
+        """Whether rerank() may return scores; False skips building a rerank pool at all."""
+        return False
+
+    def rerank(self, query: str, texts: List[str]) -> Optional[List[float]]:
+        """Cross-encoder relevance of each text to the query (raw logits), or None.
+
+        None means "no reranker here right now" and search keeps its
+        first-stage ranking. Implementations must not raise and must not
+        block a prompt on a model load. The default has no reranker.
+        """
+        return None
 
     @abstractmethod
     def health_check(self) -> Dict[str, Any]:

@@ -86,7 +86,9 @@ def create_embedding_provider(config: CollivindConfig) -> EmbeddingProvider:
     if provider == "local":
         from collivind.storage.embedding_local import LocalEmbeddingProvider
 
-        return LocalEmbeddingProvider(config.embeddings, data_dir=config.data_dir)
+        return LocalEmbeddingProvider(
+            config.embeddings, data_dir=config.data_dir, rerank_model=config.active_rerank_model
+        )
     elif provider == "openai":
         from collivind.storage.embedding_openai import OpenAIEmbeddingProvider
 
@@ -98,7 +100,7 @@ def create_embedding_provider(config: CollivindConfig) -> EmbeddingProvider:
     else:
         from collivind.storage.embedding_service import HttpEmbeddingProvider
 
-        return HttpEmbeddingProvider(config.embeddings)
+        return HttpEmbeddingProvider(config.embeddings, rerank=bool(config.active_rerank_model))
 
 
 MODE_HINTS = {

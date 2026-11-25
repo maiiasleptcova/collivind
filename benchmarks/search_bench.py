@@ -2,9 +2,13 @@
 
 Seeds N memories, each linked to a few entities, into the embedded SQLite
 stores in a temp dir, then times SearchEngine.search with graph expansion on.
-No model is loaded: a token-hash embedder gives related texts related vectors.
+No embedding model is loaded: a token-hash embedder gives related texts
+related vectors. The rerank arm adds the real cross-encoder (search.rerank,
+loaded in-process) over the real pool: dense + keyword candidates, each text
+padded to the model's 256-token window, so its cost is the worst case.
 
-    uv run python benchmarks/search_bench.py                 # 10k memories
+    uv run python benchmarks/search_bench.py                 # 10k memories, rerank off and on
+    uv run python benchmarks/search_bench.py --no-rerank     # skip the cross-encoder arm
     uv run python benchmarks/search_bench.py --legacy        # per-item store lookups, see LegacyGraphStore
     uv run python benchmarks/search_bench.py --memories 2000 --queries 50
 
@@ -208,8 +212,28 @@ def count_statements(graph: SqliteGraphStore, engine: SearchEngine, query: str) 
     return count
 
 
-def build_engine(graph, vector, embedder) -> SearchEngine:
-    return SearchEngine(vector, graph, embedder, CollivindConfig().search)
+class RerankingHashEmbedder(TokenHashEmbedder):
+    """TokenHashEmbedder plus the real cross-encoder, fed worst-case (window-filling) texts."""
+
+    can_rerank = True
+
+    def __init__(self, model: str, dimension: int = DIM):
+        super().__init__(dimension)
+        from collivind.storage.embed_daemon import load_cross_encoder
+
+        self._reranker = load_cross_encoder(model)
+        self.pool_sizes: List[int] = []
+
+    def rerank(self, query: str, texts: List[str]) -> List[float]:
+        self.pool_sizes.append(len(texts))
+        padded = [(t + " ") * (1 + 1200 // (len(t) + 1)) for t in texts]  # >= 256 tokens: truncated to the window
+        return [float(x) for x in self._reranker.predict([(query, t) for t in padded], batch_size=64)]
+
+
+def build_engine(graph, vector, embedder, rerank: bool = False) -> SearchEngine:
+    config = CollivindConfig().search
+    config.rerank = rerank
+    return SearchEngine(vector, graph, embedder, config)
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -218,6 +242,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--queries", type=int, default=200)
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--legacy", action="store_true", help="per-item store lookups (the equivalence reference)")
+    parser.add_argument("--no-rerank", action="store_true", help="skip the cross-encoder arm")
+    parser.add_argument("--rerank-model", default=CollivindConfig().search.rerank_model)
     args = parser.parse_args(argv)
 
     with tempfile.TemporaryDirectory(prefix="collivind-bench-") as tmp:
@@ -235,6 +261,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         expanded = engine.graph_engine.get_expanded_memories([r["id"] for r in enriched])
         stats = run_queries(engine, queries)
         statements = count_statements(graph, engine, queries[0])
+        rerank_stats = None
+        if not args.no_rerank:
+            reranking = RerankingHashEmbedder(args.rerank_model)
+            reranking._cache = embedder._cache
+            rerank_stats = run_queries(build_engine(graph, vector, reranking, rerank=True), queries)
+            pool = statistics.mean(reranking.pool_sizes)
         graph.close()
         vector.close()
 
@@ -242,9 +274,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     print(f"memories={args.memories} queries={args.queries} path={path} seeded_in={seeded_s:.1f}s")
     print(f"probe: vector seeds={len(enriched)} expanded={len(expanded)} graph SQL statements/search={statements}")
     print(
-        f"p50={stats['p50_ms']:.1f}ms p95={stats['p95_ms']:.1f}ms max={stats['max_ms']:.1f}ms "
+        f"rerank off: p50={stats['p50_ms']:.1f}ms p95={stats['p95_ms']:.1f}ms max={stats['max_ms']:.1f}ms "
         f"mean_results={stats['mean_results']:.1f}"
     )
+    if rerank_stats:
+        print(
+            f"rerank on:  p50={rerank_stats['p50_ms']:.1f}ms p95={rerank_stats['p95_ms']:.1f}ms "
+            f"max={rerank_stats['max_ms']:.1f}ms mean_results={rerank_stats['mean_results']:.1f} "
+            f"(in-process {args.rerank_model}, mean pool {pool:.0f} texts at 256 tokens)"
+        )
     if not enriched or not expanded:
         print("WARNING: probe query had no vector seeds or no expansion; numbers are meaningless", file=sys.stderr)
         return 1

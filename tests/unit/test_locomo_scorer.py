@@ -80,3 +80,20 @@ def test_qa_judge_answers_then_grades():
 
 def test_parse_evidence_strips_zero_padding():
     assert bench.parse_evidence(["D30:05"]) == ["D30:5"]
+
+
+def test_strict_hit_needs_the_evidence_text_itself():
+    texts = ["[d] A: later near-duplicate", "[d] B: other", "[d] A: the evidence turn"]
+    assert bench.score_strict(texts, {"[d] A: the evidence turn"}, [1, 2, 3]) == {
+        "strict_hit@1": 0.0,
+        "strict_hit@2": 0.0,
+        "strict_hit@3": 1.0,
+    }
+
+
+def test_search_overrides_parse_bools_and_ints():
+    assert bench.parse_search_overrides(["rerank=false", "rerank_pool=30", "rerank_model=x/y"]) == {
+        "rerank": False,
+        "rerank_pool": 30,
+        "rerank_model": "x/y",
+    }

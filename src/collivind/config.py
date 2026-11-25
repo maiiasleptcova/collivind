@@ -57,6 +57,13 @@ class SearchConfig:
     dedup_threshold: float = 0.92
     temporal_decay_rate: float = 0.01
     temporal_decay_max: float = 0.3
+    # Second-stage ranking: a local cross-encoder rescores a pool of dense +
+    # keyword candidates. rerank = false restores the dense + graph ranking
+    # exactly, and the model is then never loaded.
+    rerank: bool = True
+    rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    rerank_pool: int = 50  # candidates scored per search (at least the requested limit)
+    lexical: bool = True  # add keyword (BM25) candidates to the rerank pool
 
 
 @dataclass
@@ -83,6 +90,11 @@ class CollivindConfig:
     embeddings: EmbeddingsConfig = field(default_factory=EmbeddingsConfig)
     search: SearchConfig = field(default_factory=SearchConfig)
     hooks: HooksConfig = field(default_factory=HooksConfig)
+
+    @property
+    def active_rerank_model(self) -> str:
+        """The cross-encoder to load, or "" when rerank is off (nothing is loaded)."""
+        return self.search.rerank_model if self.search.rerank else ""
 
     @property
     def expanded_data_dir(self) -> Path:
@@ -154,6 +166,13 @@ similarity_threshold = 0.3
 dedup_threshold = 0.92
 temporal_decay_rate = 0.01
 temporal_decay_max = 0.3
+# A local cross-encoder reranks dense + keyword candidates (no API key; the
+# model, about 90 MB, downloads once). rerank = false gives the previous
+# ranking exactly. lexical adds keyword (BM25) candidates to the rerank pool.
+rerank = true
+rerank_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+rerank_pool = 50
+lexical = true
 
 # --- Docker (docker mode only) ---
 # [docker]

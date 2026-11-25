@@ -67,6 +67,15 @@ def score_retrieval(ranked: Sequence[Set[str]], evidence: Set[str], ks: Sequence
     return scores
 
 
+def score_strict(texts: Sequence[str], evidence_texts: Set[str], ks: Sequence[int]) -> Dict[str, float]:
+    """strict_hit@k: a top-k memory's text IS an evidence turn's text.
+
+    hit@k credits a memory with every turn it superseded (near-duplicate
+    dedup), even though the text returned is the later turn; this does not.
+    """
+    return {f"strict_hit@{k}": float(any(t in evidence_texts for t in texts[:k])) for k in ks}
+
+
 def summarise(results: Sequence[Dict[str, Any]], metrics: Sequence[str]) -> Dict[str, Dict[str, float]]:
     """Mean of each metric per category, plus 'overall' (non-adversarial) and 'all'."""
     groups: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
@@ -98,8 +107,9 @@ def sessions_of(conversation: Dict[str, Any]) -> List[tuple]:
     return sorted(out)
 
 
-def make_manager(data_dir: str, model: str):
-    from collivind.config import CollivindConfig, EmbeddingsConfig
+def make_manager(data_dir: str, model: str, search: Optional[Dict[str, Any]] = None):
+    """search: SearchConfig overrides, e.g. {"rerank": False}."""
+    from collivind.config import CollivindConfig, EmbeddingsConfig, SearchConfig
     from collivind.engine.memory_manager import MemoryManager
     from collivind.storage.factory import create_all_backends
 
@@ -107,6 +117,7 @@ def make_manager(data_dir: str, model: str):
         data_dir=data_dir,
         mode="embedded",
         embeddings=EmbeddingsConfig(provider="local", model=model, daemon=False),
+        search=SearchConfig(**(search or {})),
     )
     vector, graph, embedder = create_all_backends(config)
     return MemoryManager(vector, graph, embedder, config)
@@ -226,6 +237,15 @@ def make_judge_client():
 # --- driver ---------------------------------------------------------------
 
 
+def parse_search_overrides(pairs: Sequence[str]) -> Dict[str, Any]:
+    """["rerank=false", "rerank_pool=30"] -> {"rerank": False, "rerank_pool": 30}."""
+    out: Dict[str, Any] = {}
+    for pair in pairs:
+        key, _, raw = pair.partition("=")
+        out[key] = json.loads(raw.lower()) if raw.lower() in ("true", "false") or raw.isdigit() else raw
+    return out
+
+
 def run(args) -> None:
     from collivind.models import SearchQuery
 
@@ -233,7 +253,7 @@ def run(args) -> None:
     ks = sorted({int(k) for k in args.top_k.split(",")})
     pairs = select_questions(data, args.limit)
     client = make_judge_client() if args.qa else None
-    metrics = [f"{m}@{k}" for k in ks for m in ("hit", "recall")] + (["correct"] if args.qa else [])
+    metrics = [f"{m}@{k}" for k in ks for m in ("hit", "strict_hit", "recall")] + (["correct"] if args.qa else [])
 
     results: List[Dict[str, Any]] = []
     skipped: Dict[str, int] = defaultdict(int)
@@ -243,7 +263,8 @@ def run(args) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory(prefix="collivind-locomo-") as tmp, out_path.open("w") as out:
-        manager = make_manager(tmp, args.model)
+        manager = make_manager(tmp, args.model, parse_search_overrides(args.search))
+        print(f"search config: {manager.config.search}", flush=True)
         ingested: Dict[str, Dict[str, Any]] = {}
         for n, (sample, qa) in enumerate(pairs, 1):
             pid = f"locomo-{sample['sample_id']}"
@@ -255,7 +276,10 @@ def run(args) -> None:
                 print(f"ingested {pid}: {ingest_stats[-1]}", flush=True)
                 if not any(Path(tmp).iterdir()):
                     raise SystemExit(f"nothing was written to {tmp}: the store is not the temp dir")
-            known = {t["dia_id"] for _, _, s in sessions_of(sample["conversation"]) for t in s}
+            turn_texts = {
+                t["dia_id"]: turn_text(t, when) for _, when, s in sessions_of(sample["conversation"]) for t in s
+            }
+            known = set(turn_texts)
             evidence = set(parse_evidence(qa.get("evidence", [])))
             if not evidence:
                 skipped["no evidence"] += 1
@@ -280,6 +304,7 @@ def run(args) -> None:
                 "evidence": sorted(evidence),
                 "retrieved": [sorted(r) for r in ranked],
                 **score_retrieval(ranked, evidence, ks),
+                **score_strict([h.memory.content for h in hits], {turn_texts[e] for e in evidence}, ks),
             }
             if client is not None and qa["category"] != ADVERSARIAL:
                 row.update(qa_judge(client, args.judge_model, sample, qa, [h.memory.content for h in hits]))
@@ -316,6 +341,13 @@ def main() -> None:
         help="per-question JSONL (default: benchmarks/results_locomo.jsonl, or benchmarks/data/ with --limit)",
     )
     parser.add_argument("--summary", default=None, help="also write the summary JSON here")
+    parser.add_argument(
+        "--search",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="[search] override, repeatable, e.g. --search rerank=false (default: the shipped defaults)",
+    )
     args = parser.parse_args()
     if args.out is None:
         # a smoke run must not overwrite the committed full-run results
