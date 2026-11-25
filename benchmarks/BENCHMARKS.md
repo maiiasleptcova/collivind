@@ -46,9 +46,9 @@ model (MiniLM baseline: [`results_longmemeval_r5.jsonl`](results_longmemeval_r5.
 measured at commit `a02bc89`). We publish the model-selection process too:
 `all-mpnet-base-v2` was screened and eliminated (81.5% on a 27-question
 subset, at ~15x the compute). No per-question tuning, no heuristics, no
-reranking anywhere. A hybrid mode (keyword + temporal boosting in the actual
-search engine) is future work and will be reported on the same split with
-the same harness.
+reranking anywhere. This harness measures the raw vector store only; the
+engine's hybrid keyword + rerank stage (0.19.0) is measured through
+`MemoryManager` in [its own section](#hybrid-candidates-and-cross-encoder-rerank-0190).
 
 ## Reproducing
 
@@ -96,7 +96,20 @@ questions have no gold answer, only `adversarial_answer`, so they are reported
 on their own row and left out of "overall", which matches how Mem0 and Zep
 report.
 
-### Results (full run, bge-small-en-v1.5, base commit `eaeacbb`, 2026-11-23)
+**strict hit@k** (added in 0.19.0) counts a hit only when a returned
+memory's text *is* an evidence turn's text. Plain hit@k credits a memory
+with every turn it superseded through near-duplicate dedup, even though the
+text returned is the later turn; strict does not.
+
+The current default (0.19.0, hybrid candidates + rerank) is in the
+[next section](#hybrid-candidates-and-cross-encoder-rerank-0190); the
+committed [`results_locomo.jsonl`](results_locomo.jsonl) and
+[`results_locomo_summary.json`](results_locomo_summary.json) are that run.
+The table below is the 0.18.0 ranking, which `[search] rerank = false`
+still reproduces question for question
+([`results_locomo_rerank_off_summary.json`](results_locomo_rerank_off_summary.json)).
+
+### Results before 0.19 (full run, bge-small-en-v1.5, base commit `eaeacbb`, 2026-11-23)
 
 | Category | Questions | hit@5 | recall@5 | hit@10 | recall@10 |
 |---|---|---|---|---|---|
@@ -108,10 +121,10 @@ report.
 | adversarial (5) | 446 | 37.2% | 36.5% | 51.8% | 51.1% |
 
 - The run took 229 s on an Apple-silicon laptop: 210 s of ingest, with local
-  embeddings and no network. Per-question rows are in
-  [`results_locomo.jsonl`](results_locomo.jsonl) and the summary is in
-  [`results_locomo_summary.json`](results_locomo_summary.json). The rows hold
-  ids and scores only: no dataset text, which is CC BY-NC.
+  embeddings and no network. The rows hold ids and scores only: no dataset
+  text, which is CC BY-NC. Strict hit@5 / hit@10 for this ranking are 57.6% /
+  67.2%: in 44 of the 1,536 questions the evidence turn's text had been
+  replaced by a later near-duplicate (cosine ≥ 0.92).
 - Of the 1,986 questions, 4 have no evidence ids and are skipped, so 1,982 are
   scored. Two more cite a turn id that does not exist; they are scored on the
   ids that do resolve. Evidence ids are normalised before matching: one entry
@@ -120,7 +133,8 @@ report.
   memories. The other 343 were rejected as exact duplicates or superseded a
   near-duplicate. The harness follows each memory's `superseded_by` chain to
   the live memory and checks that every one of the 5,882 turn ids is still
-  reachable from a live memory, so no evidence turn is lost to dedup.
+  reachable from a live memory, so no evidence turn id is lost to dedup (its
+  text can be: see strict hit@k).
 - Nothing benchmark-specific is stored. The harness keeps the
   memory→turn map on its own side, so the embedded text is exactly what that
   turn would produce for a user.
@@ -185,6 +199,151 @@ uv run --extra embedded python benchmarks/locomo_bench.py benchmarks/data/locomo
 `benchmarks/data/` is gitignored. Because of the dataset licences, LoCoMo and
 LongMemEval data are never committed.
 
+## Hybrid candidates and cross-encoder rerank (0.19.0)
+
+**What changed.** Search now has a second stage, all local (no LLM, no API
+key). A pool of 50 candidates is fused by reciprocal rank (k = 60) from the
+dense top 50 and a keyword (BM25) top 50: SQLite FTS5 in embedded mode, a
+Neo4j full-text index in docker mode. The best `limit` graph/entity-only
+candidates are added. Each pool candidate is scored against the raw query by
+`cross-encoder/ms-marco-MiniLM-L-6-v2` (22M parameters, 256-token window).
+The score is `(sigmoid(logit) × 0.7 + min(graph, 1) × 0.3) × temporal_decay`:
+the squashed cross-encoder score takes the cosine's place in the existing
+formula, so graph links and recency keep their weight. If no pool candidate
+reaches logit 0, the model's own "relevant" boundary, the first-stage
+(0.18.0) ranking is served. It is also served when the reranker is missing,
+still loading, slow, or returns an error or non-finite scores.
+`[search] rerank = false` reproduces 0.18.0 exactly; a golden test pins that,
+and on LoCoMo the rerank-off run returns the same ids as 0.18.0 for all
+1,982 questions.
+
+### LoCoMo, through `MemoryManager.search`, 1,536 non-adversarial questions
+
+| Arm | strict hit@5 | strict hit@10 | hit@5 | hit@10 | recall@5 | recall@10 |
+|---|---|---|---|---|---|---|
+| 0.18.0 ranking (`rerank = false`) | 57.6 | 67.2 | 59.8 | 70.1 | 52.7 | 62.9 |
+| rerank, dense-only pool (`lexical = false`) | 70.6 | 76.1 | 73.1 | 79.2 | 65.7 | 72.0 |
+| **0.19.0 default (hybrid pool + rerank)** | **72.3** | **77.5** | **74.6** | **80.4** | **67.1** | **73.3** |
+
+| Category (0.19.0 default) | n | strict hit@5 | strict hit@10 | before (strict) |
+|---|---|---|---|---|
+| single-hop | 841 | 75.9 | 81.1 | 59.2 / 68.6 |
+| multi-hop | 282 | 68.8 | 75.2 | 57.8 / 69.1 |
+| temporal | 321 | 74.1 | 77.6 | 58.9 / 67.6 |
+| open-domain | 92 | 43.5 | 51.1 | 38.0 / 46.7 |
+| adversarial (5, not in overall) | 446 | 55.4 | 65.9 | 35.9 / 49.1 |
+
+Run on the final commit, 2026-11-25, Apple-silicon laptop, embed daemon off
+(the reranker loads in-process), `HF_HUB_OFFLINE=1`: 363 s against 171 s for
+rerank off. Reproduce with
+`uv run --extra embedded python benchmarks/locomo_bench.py benchmarks/data/locomo10.json`
+and `--search rerank=false` / `--search lexical=false` for the other arms.
+
+An offline estimate over raw turns (reranking an RRF(dense, BM25) top 50)
+was 76.4 / 82.2. The gap has known parts. In 36 (hit@5) and 45 (hit@10)
+questions the evidence turn's text was replaced by a near-duplicate at
+ingest; those count as hits by id but not by text (2.3 and 2.9 points). The
+relevance gate costs another 0.9 / 0.6 points here (below).
+
+**How the gate was chosen.** With the plain formula, LongMemEval turn hit@10
+fell (83.3 → 80.0, 5 losses against 2 wins). In the losses the cross-encoder
+scored every candidate near 0 (sigmoid ≤ 0.003). The questions were indirect
+("any tips on what to look for in a new guitar?" where the answer turn is the
+user's earlier mention of their guitars), and the model's order among texts
+it found irrelevant threw away a dense ranking that had the answer at rank
+0–8. Coding prompts are often indirect in the same way. Two fixes were
+declared before looking at any pool data: the gate above, and a blend of
+cosine back into the score at a fixed weight of 0.5. Both were scored offline
+on logged pools, with no sweep. Strict hit@5 / hit@10:
+
+| Formula | LoCoMo (1,536) | LongMemEval seed 0 (90) | LongMemEval seed 1 (90, 69 unseen) |
+|---|---|---|---|
+| first stage (0.18.0) | 57.6 / 67.2 | 74.4 / 83.3 | 82.2 / 91.1 |
+| rerank, plain formula | 73.2 / 78.1 | 74.4 / 80.0 | 85.6 / 91.1 |
+| rerank + gate (shipped) | 72.3 / 77.5 | 75.6 / 83.3 | 86.7 / 93.3 |
+| rerank + cosine blend | 71.7 / 78.4 | 74.4 / 83.3 | 86.7 / 92.2 |
+
+The gate was kept because it is best at k = 5 (what the prompt hook injects)
+on all three sets, and because it reuses the fallback path that is already
+tested. LongMemEval "seed 1" is a second stratified sample (seed 1); 21 of
+its 90 questions overlap seed 0.
+
+### LongMemEval-S through `MemoryManager`, turn level
+
+Session R@5 is saturated (about 98%) and cannot show a ranking change.
+[`longmemeval_engine.py`](longmemeval_engine.py) adds **turn_hit@k**: one of
+the dataset's `has_answer` turns, by text, is among the top-k memories.
+Every turn is stored with `add_memory`; the sample is 15 questions per type
+(seed 0, abstention excluded, 90 questions), the same sample as the
+2026-11-25 evaluation. Both arms search the same store.
+
+| Arm (90 questions) | session R@5 | turn hit@5 | turn hit@10 |
+|---|---|---|---|
+| rerank off (0.18.0 ranking) | 97.8 | 74.4 | 83.3 |
+| **0.19.0 default** | **97.8** | **75.6** | **83.3** |
+
+| Type (15 each) | session R@5 on / off | turn hit@5 on / off | turn hit@10 on / off |
+|---|---|---|---|
+| knowledge-update | 100.0 / 100.0 | 86.7 / 86.7 | 93.3 / 100.0 |
+| multi-session | 100.0 / 100.0 | 93.3 / 86.7 | 100.0 / 100.0 |
+| single-session-assistant | 100.0 / 100.0 | 66.7 / 60.0 | 73.3 / 66.7 |
+| single-session-preference | 100.0 / 100.0 | 80.0 / 80.0 | 93.3 / 93.3 |
+| single-session-user | 100.0 / 100.0 | 66.7 / 66.7 | 66.7 / 66.7 |
+| temporal-reasoning | 86.7 / 86.7 | 60.0 / 66.7 | 73.3 / 73.3 |
+
+630 s for both arms. Reproduce with
+`uv run --extra embedded python benchmarks/longmemeval_engine.py benchmarks/data/longmemeval_s.json --per-type 15`.
+
+Rows (ids and scores only):
+[`results_longmemeval_engine.jsonl`](results_longmemeval_engine.jsonl),
+summary [`results_longmemeval_engine_summary.json`](results_longmemeval_engine_summary.json).
+With 90 questions one question is 1.1 points.
+
+### End-to-end QA on LoCoMo (300-question sample, from the 2026-11-25 evaluation)
+
+**Not comparable to vendor-published LoCoMo scores.** This is a 300-question
+sample (seed 0, categories 1–4). The reader and the judge are both Claude
+Sonnet 5.5; Mem0's published runs use gpt-4o-mini. The judge prompt is
+Mem0's `ACCURACY_PROMPT` verbatim, and there is one reader call per question.
+The binomial 95% CI is about ±5 points. "Hybrid + rerank" here is the
+offline estimate over raw turns (RRF(dense, BM25) top 50 reranked by the
+same cross-encoder, no gate), not 0.19.0's engine path.
+
+| Context given to the reader | overall | single-hop | multi-hop | temporal | open-domain |
+|---|---|---|---|---|---|
+| n | 300 | 167 | 57 | 54 | 22 |
+| collivind top 5 (what the UserPromptSubmit hook injects) | 60.7 | 72.5 | 33.3 | 57.4 | 50.0 |
+| hybrid + rerank, top 5 | 71.7 | 82.6 | 38.6 | 74.1 | 68.2 |
+| collivind top 10 (search default) | 66.0 | 76.6 | 38.6 | 68.5 | 50.0 |
+| hybrid + rerank, top 10 | 73.3 | 83.2 | 47.4 | 74.1 | 63.6 |
+| collivind top 30 | 76.3 | 84.4 | 52.6 | 77.8 | 72.7 |
+| hybrid + rerank, top 30 | 78.0 | 89.2 | 49.1 | 77.8 | 68.2 |
+| collivind top 50 | 77.3 | 84.4 | 59.6 | 81.5 | 59.1 |
+| hybrid + rerank, top 50 | 77.0 | 86.8 | 52.6 | 79.6 | 59.1 |
+| full conversation in context | 86.0 | 92.8 | 77.2 | 83.3 | 63.6 |
+| oracle (gold evidence turns only) | 88.7 | 94.6 | 68.4 | 90.7 | 90.9 |
+
+Paired exact McNemar tests on the same questions: at top 5, rerank beats
+the engine (45 wins to 12, p = 0.00001); at top 10 too (p = 0.005). At top
+30 (p = 0.49) and top 50 (p = 0.88) there is no difference. So rerank
+matters at small k, and context depth is a separate lever.
+
+### Docker mode
+
+The keyword channel is a Neo4j full-text index on `Memory.content`
+(`memory_content_fulltext`). `initialize()` creates it, and a search on an
+older store that finds it missing creates it too; Neo4j fills it from the
+existing memories in the background. The reranker is `POST /rerank` on the
+embeddings container. An image built before 0.19 has no such endpoint and
+search keeps the first-stage ranking until `collivind docker up` rebuilds
+it. Checked end to end on throwaway containers (Neo4j 5.26, Qdrant 1.19.2,
+the rebuilt embeddings image, 768 MB limit, about 455 MB resident with both
+models): the keyword-only hit comes back reranked, 57–72 ms per search
+warm, `/rerank` of 50 texts about 64 ms. The LoCoMo and LongMemEval numbers
+above are embedded mode only; docker-mode accuracy was not benchmarked, and
+neither was the cost of the extra `get_memory` round trips (up to about 50)
+per search on Neo4j at scale.
+
 ## Which public memory benchmarks exist (2026-11 survey)
 
 | Benchmark | License | Size | Measures | Gold ids for retrieval | Official scoring |
@@ -232,5 +391,21 @@ first (vector cache load) out.
 | docker (Neo4j 5.26 + Qdrant 1.12) | 1804 ms | 2120 ms | 65 ms | 81 ms |
 
 "Before" is origin/main at v0.11.0; "after" is the batched graph expansion.
+
+**With rerank (0.19.0).** The same script now runs a second arm with the
+real cross-encoder loaded in-process over the real pool (dense + keyword
+top 50 plus graph-only candidates, 60 texts on average). Each text is padded
+to fill the model's 256-token window, so this is the worst case: real
+memories are shorter. Embedded SQLite, 10k memories, 200 queries,
+2026-11-25, Apple silicon:
+
+| Arm | p50 | p95 | max |
+|---|---|---|---|
+| rerank off | 32.6 ms | 40.2 ms | 88.5 ms |
+| rerank on (worst-case text length) | 184.1 ms | 202.9 ms | 259.9 ms |
+
+Through the resident embed daemon (what hooks use), a 50-text rerank of
+LoCoMo-length turns took about 25 ms warm. The first request after the
+daemon starts took about 1 s.
 Both were measured 2026-11-19 on an Apple-silicon laptop. The docker row uses
 the same data set, 30 queries per pass, against throwaway containers.

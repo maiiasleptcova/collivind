@@ -412,8 +412,10 @@ Collivind stores memories as nodes in a knowledge graph with vector embeddings f
 standard split, raw mode — local embeddings, no LLM, no reranking, no API
 keys). Fully reproducible: methodology, per-question results, and honest
 caveats in [benchmarks/BENCHMARKS.md](benchmarks/BENCHMARKS.md).
-**LoCoMo turn-level retrieval through the full engine, hit@10: 70.1%**
-(1,536 non-adversarial questions; a much harder, turn-level task, same doc).
+**LoCoMo turn-level retrieval through the full engine: strict hit@5 72.3%,
+hit@10 77.5%** with the 0.19 hybrid keyword + cross-encoder rerank stage
+(0.18: 57.6% / 67.2%; 1,536 non-adversarial questions, a much harder,
+turn-level task, same doc).
 We publish
 no side-by-side numbers against other memory tools — different projects
 measure different things on different splits.
