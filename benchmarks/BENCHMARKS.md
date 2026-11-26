@@ -107,6 +107,37 @@ for session ranking, where the rerank pool is larger and turn hit is 72.9 /
 pool is `top_k * 3`); the row above uses a requested depth of 50, the most
 favourable to it, and its exact `--top-k 10` run scores 58.6 / 66.1.
 
+### What moves collivind's number without changing the engine
+
+Two things outside the search engine change the turn-level result by more than
+anything else measured so far. Neither is the shipped default, so neither is
+the headline. Split into the seven conversations used for exploration (dev) and
+three held out (conv-48, conv-49, conv-50).
+
+| Memory wording | Near-duplicate merging | all 1,536 | dev (1,033) | held out (503) |
+|---|---|---|---|---|
+| transcript: `[date] Speaker: text` | 0.92 (shipped default) | 72.4 / 77.5 | 72.0 / 77.0 | 73.2 / 78.7 |
+| transcript | 0.98 | 76.0 / 81.7 | 76.0 / 81.5 | 76.1 / 82.1 |
+| sentence: `On date, Speaker said, "text"` | 0.92 | 75.7 / 81.6 | 74.9 / 81.1 | 77.1 / 82.5 |
+| sentence | 0.98 | 77.7 / 83.4 | 77.2 / 82.9 | 78.7 / 84.5 |
+
+(strict turn hit@5 / hit@10; `LOCOMO_TEMPLATE=sentence` and
+`--search dedup_threshold=0.98` on `locomo_bench.py`.)
+
+- **Wording.** The harness stores each turn as transcript text. Wording the
+  same information as a sentence lifts first-stage dense recall by about 6
+  points (56.8 / 66.2 to 62.3 / 73.3 with bge-small) and the engine's final
+  result by 3 to 4. MemPalace's script already uses a sentence form, which is
+  part of why its raw mode beat this file's dense baseline with the same
+  embedder. For users this means memories written as full sentences that name
+  who and when retrieve better than log-style lines.
+- **Merging.** The 0.92 near-duplicate supersession removes distinct turns;
+  see the caveats.
+- With both, collivind is at 77.7 / 83.4 against MemPalace hybrid with the same
+  embedder at 67.8 / 76.8. That comparison is fairer on wording (both
+  sentence-style) but the wording was chosen after seeing dev results, so the
+  held-out column is the one to read.
+
 ### LoCoMo, session level
 
 | System | Stored unit | session hit@5 | session hit@10 |

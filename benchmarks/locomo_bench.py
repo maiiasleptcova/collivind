@@ -91,10 +91,16 @@ def summarise(results: Sequence[Dict[str, Any]], metrics: Sequence[str]) -> Dict
 
 
 def turn_text(turn: Dict[str, Any], when: str) -> str:
-    text = f"[{when}] {turn['speaker']}: {turn['text']}"
-    if turn.get("blip_caption"):
-        text += f" [shares a photo: {turn['blip_caption']}]"
-    return text
+    """The memory text for one turn.
+
+    LOCOMO_TEMPLATE=sentence words it as a sentence (`On <date>, <speaker> said, "<text>"`),
+    which is closer to how an agent writes a memory; the default keeps the transcript
+    form the published numbers use. Same information either way.
+    """
+    caption = f" [shares a photo: {turn['blip_caption']}]" if turn.get("blip_caption") else ""
+    if os.environ.get("LOCOMO_TEMPLATE") == "sentence":
+        return f'On {when}, {turn["speaker"]} said, "{turn["text"]}"{caption}'
+    return f"[{when}] {turn['speaker']}: {turn['text']}{caption}"
 
 
 def sessions_of(conversation: Dict[str, Any]) -> List[tuple]:
