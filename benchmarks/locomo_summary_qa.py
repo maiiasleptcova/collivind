@@ -50,7 +50,7 @@ ARMS = ("turns50", "routed", "hook_turns", "hook_summ")
 # 0.21 re-benchmark arms: the old hook setting, the shipped hook default (read from
 # config), search at 30, each without and with summaries, and two references that
 # never touch the engine (the whole conversation; the gold evidence turns only).
-EXTRA_ARMS = ("hook_old", "hook_default", "search30", "hook_default_summ", "search30_summ", "full", "oracle")
+EXTRA_ARMS = ("hook_old", "hook_default", "search30", "hook_default_summ", "search30_summ", "full", "oracle", "none")
 
 READER = """You are an intelligent memory assistant answering a question about a long conversation between {a} and {b}.
 
@@ -145,6 +145,7 @@ def build_contexts(data: Dict[str, dict], summaries: dict, sample: List[tuple]) 
                 ]
                 known = {d for d, _ in turns}
                 gold_turns = sorted(set(parse_evidence(data[sid]["qa"][i].get("evidence", []))) & known)
+                out[f"{sid}:{i}"]["none"] = ["(no memory was retrieved)"]  # no memory tool at all
                 out[f"{sid}:{i}"]["full"] = [text for _, text in turns]
                 out[f"{sid}:{i}"]["oracle"] = [dict(turns)[d] for d in gold_turns]
             for number, when, _ in sessions_of(data[sid]["conversation"]):

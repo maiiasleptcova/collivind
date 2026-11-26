@@ -2,6 +2,18 @@
   "n": 300,
   "model": "haiku",
   "arms": {
+    "none": {
+      "words": 4,
+      "overall": 10.0,
+      "multi-hop": 8.8,
+      "n_multi-hop": 57,
+      "temporal": 1.9,
+      "n_temporal": 54,
+      "open-domain": 22.7,
+      "n_open-domain": 22,
+      "single-hop": 11.4,
+      "n_single-hop": 167
+    },
     "hook_old": {
       "words": 215,
       "overall": 67.33333333333333,
@@ -111,6 +123,7 @@
   },
   "per_question": {
     "conv-44:94": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -120,6 +133,7 @@
       "oracle": true
     },
     "conv-44:61": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -129,6 +143,7 @@
       "oracle": true
     },
     "conv-26:14": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": false,
@@ -138,6 +153,7 @@
       "oracle": true
     },
     "conv-30:2": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -147,6 +163,7 @@
       "oracle": true
     },
     "conv-30:4": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": false,
@@ -156,6 +173,7 @@
       "oracle": false
     },
     "conv-47:59": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": true,
@@ -165,6 +183,7 @@
       "oracle": true
     },
     "conv-47:94": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -174,6 +193,7 @@
       "oracle": true
     },
     "conv-48:190": {
+      "none": true,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -183,6 +203,7 @@
       "oracle": true
     },
     "conv-26:38": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -192,6 +213,7 @@
       "oracle": true
     },
     "conv-41:86": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -201,6 +223,7 @@
       "oracle": true
     },
     "conv-43:59": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -210,6 +233,7 @@
       "oracle": false
     },
     "conv-50:26": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -219,6 +243,7 @@
       "oracle": true
     },
     "conv-43:136": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -228,6 +253,7 @@
       "oracle": true
     },
     "conv-42:93": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": true,
@@ -237,6 +263,7 @@
       "oracle": true
     },
     "conv-49:118": {
+      "none": false,
       "hook_old": true,
       "hook_default": false,
       "search30": true,
@@ -246,6 +273,7 @@
       "oracle": true
     },
     "conv-42:182": {
+      "none": false,
       "hook_old": true,
       "hook_default": false,
       "search30": true,
@@ -255,6 +283,7 @@
       "oracle": true
     },
     "conv-50:13": {
+      "none": true,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -264,6 +293,7 @@
       "oracle": true
     },
     "conv-41:128": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -273,6 +303,7 @@
       "oracle": true
     },
     "conv-26:15": {
+      "none": true,
       "hook_old": false,
       "hook_default": false,
       "search30": true,
@@ -282,6 +313,7 @@
       "oracle": false
     },
     "conv-30:31": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -291,6 +323,7 @@
       "oracle": false
     },
     "conv-47:123": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -300,6 +333,7 @@
       "oracle": true
     },
     "conv-44:59": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": true,
@@ -309,6 +343,7 @@
       "oracle": true
     },
     "conv-50:49": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -318,6 +353,7 @@
       "oracle": true
     },
     "conv-43:72": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -327,6 +363,7 @@
       "oracle": true
     },
     "conv-48:160": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -336,6 +373,7 @@
       "oracle": true
     },
     "conv-41:39": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -345,6 +383,7 @@
       "oracle": true
     },
     "conv-49:92": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -354,6 +393,7 @@
       "oracle": true
     },
     "conv-41:113": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": false,
@@ -363,6 +403,7 @@
       "oracle": true
     },
     "conv-43:52": {
+      "none": true,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -372,6 +413,7 @@
       "oracle": true
     },
     "conv-43:29": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -381,6 +423,7 @@
       "oracle": false
     },
     "conv-50:90": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -390,6 +433,7 @@
       "oracle": true
     },
     "conv-26:87": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -399,6 +443,7 @@
       "oracle": true
     },
     "conv-43:88": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": true,
@@ -408,6 +453,7 @@
       "oracle": false
     },
     "conv-42:1": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": false,
@@ -417,6 +463,7 @@
       "oracle": true
     },
     "conv-41:50": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": true,
@@ -426,6 +473,7 @@
       "oracle": false
     },
     "conv-43:71": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -435,6 +483,7 @@
       "oracle": true
     },
     "conv-42:85": {
+      "none": true,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -444,6 +493,7 @@
       "oracle": true
     },
     "conv-26:140": {
+      "none": false,
       "hook_old": true,
       "hook_default": false,
       "search30": true,
@@ -453,6 +503,7 @@
       "oracle": true
     },
     "conv-26:53": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -462,6 +513,7 @@
       "oracle": true
     },
     "conv-49:109": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -471,6 +523,7 @@
       "oracle": true
     },
     "conv-42:174": {
+      "none": false,
       "hook_old": true,
       "hook_default": false,
       "search30": false,
@@ -480,6 +533,7 @@
       "oracle": true
     },
     "conv-42:11": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": true,
@@ -489,6 +543,7 @@
       "oracle": false
     },
     "conv-48:134": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": true,
@@ -498,6 +553,7 @@
       "oracle": true
     },
     "conv-42:170": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -507,6 +563,7 @@
       "oracle": true
     },
     "conv-26:98": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -516,6 +573,7 @@
       "oracle": true
     },
     "conv-50:124": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": true,
@@ -525,6 +583,7 @@
       "oracle": true
     },
     "conv-43:8": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -534,6 +593,7 @@
       "oracle": false
     },
     "conv-44:84": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -543,6 +603,7 @@
       "oracle": true
     },
     "conv-43:165": {
+      "none": true,
       "hook_old": false,
       "hook_default": true,
       "search30": true,
@@ -552,6 +613,7 @@
       "oracle": false
     },
     "conv-42:178": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -561,6 +623,7 @@
       "oracle": true
     },
     "conv-42:36": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -570,6 +633,7 @@
       "oracle": true
     },
     "conv-26:93": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -579,6 +643,7 @@
       "oracle": true
     },
     "conv-47:53": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -588,6 +653,7 @@
       "oracle": false
     },
     "conv-47:81": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -597,6 +663,7 @@
       "oracle": true
     },
     "conv-48:112": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -606,6 +673,7 @@
       "oracle": true
     },
     "conv-47:52": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -615,6 +683,7 @@
       "oracle": true
     },
     "conv-49:1": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -624,6 +693,7 @@
       "oracle": true
     },
     "conv-41:28": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": true,
@@ -633,6 +703,7 @@
       "oracle": true
     },
     "conv-42:50": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": false,
@@ -642,6 +713,7 @@
       "oracle": true
     },
     "conv-42:189": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -651,6 +723,7 @@
       "oracle": true
     },
     "conv-42:160": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -660,6 +733,7 @@
       "oracle": true
     },
     "conv-47:51": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -669,6 +743,7 @@
       "oracle": false
     },
     "conv-43:144": {
+      "none": true,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -678,6 +753,7 @@
       "oracle": true
     },
     "conv-49:75": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": true,
@@ -687,6 +763,7 @@
       "oracle": true
     },
     "conv-48:176": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -696,6 +773,7 @@
       "oracle": true
     },
     "conv-42:144": {
+      "none": true,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -705,6 +783,7 @@
       "oracle": true
     },
     "conv-50:61": {
+      "none": false,
       "hook_old": true,
       "hook_default": false,
       "search30": false,
@@ -714,6 +793,7 @@
       "oracle": true
     },
     "conv-26:51": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -723,6 +803,7 @@
       "oracle": false
     },
     "conv-50:118": {
+      "none": false,
       "hook_old": true,
       "hook_default": false,
       "search30": true,
@@ -732,6 +813,7 @@
       "oracle": true
     },
     "conv-42:176": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -741,6 +823,7 @@
       "oracle": true
     },
     "conv-48:28": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -750,6 +833,7 @@
       "oracle": true
     },
     "conv-26:133": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": false,
@@ -759,6 +843,7 @@
       "oracle": false
     },
     "conv-48:157": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -768,6 +853,7 @@
       "oracle": true
     },
     "conv-43:93": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -777,6 +863,7 @@
       "oracle": true
     },
     "conv-42:19": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -786,6 +873,7 @@
       "oracle": true
     },
     "conv-30:19": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -795,6 +883,7 @@
       "oracle": true
     },
     "conv-48:12": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -804,6 +893,7 @@
       "oracle": true
     },
     "conv-47:107": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": true,
@@ -813,6 +903,7 @@
       "oracle": true
     },
     "conv-44:120": {
+      "none": true,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -822,6 +913,7 @@
       "oracle": true
     },
     "conv-49:13": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -831,6 +923,7 @@
       "oracle": true
     },
     "conv-43:168": {
+      "none": true,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -840,6 +933,7 @@
       "oracle": true
     },
     "conv-43:21": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": true,
@@ -849,6 +943,7 @@
       "oracle": true
     },
     "conv-44:77": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -858,6 +953,7 @@
       "oracle": true
     },
     "conv-48:125": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -867,6 +963,7 @@
       "oracle": true
     },
     "conv-42:56": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -876,6 +973,7 @@
       "oracle": true
     },
     "conv-48:151": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -885,6 +983,7 @@
       "oracle": true
     },
     "conv-42:52": {
+      "none": false,
       "hook_old": true,
       "hook_default": false,
       "search30": false,
@@ -894,6 +993,7 @@
       "oracle": true
     },
     "conv-49:93": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -903,6 +1003,7 @@
       "oracle": true
     },
     "conv-41:89": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -912,6 +1013,7 @@
       "oracle": true
     },
     "conv-49:37": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": false,
@@ -921,6 +1023,7 @@
       "oracle": true
     },
     "conv-41:111": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -930,6 +1033,7 @@
       "oracle": true
     },
     "conv-44:72": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -939,6 +1043,7 @@
       "oracle": false
     },
     "conv-26:59": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": true,
@@ -948,6 +1053,7 @@
       "oracle": false
     },
     "conv-26:101": {
+      "none": true,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -957,6 +1063,7 @@
       "oracle": true
     },
     "conv-41:0": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -966,6 +1073,7 @@
       "oracle": true
     },
     "conv-50:73": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -975,6 +1083,7 @@
       "oracle": true
     },
     "conv-48:120": {
+      "none": false,
       "hook_old": true,
       "hook_default": false,
       "search30": false,
@@ -984,6 +1093,7 @@
       "oracle": true
     },
     "conv-26:36": {
+      "none": false,
       "hook_old": true,
       "hook_default": false,
       "search30": true,
@@ -993,6 +1103,7 @@
       "oracle": true
     },
     "conv-50:48": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -1002,6 +1113,7 @@
       "oracle": true
     },
     "conv-41:16": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1011,6 +1123,7 @@
       "oracle": false
     },
     "conv-50:101": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1020,6 +1133,7 @@
       "oracle": true
     },
     "conv-48:93": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1029,6 +1143,7 @@
       "oracle": true
     },
     "conv-44:20": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": true,
@@ -1038,6 +1153,7 @@
       "oracle": true
     },
     "conv-49:104": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1047,6 +1163,7 @@
       "oracle": true
     },
     "conv-26:65": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1056,6 +1173,7 @@
       "oracle": true
     },
     "conv-26:91": {
+      "none": true,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1065,6 +1183,7 @@
       "oracle": true
     },
     "conv-48:111": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1074,6 +1193,7 @@
       "oracle": true
     },
     "conv-43:138": {
+      "none": true,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1083,6 +1203,7 @@
       "oracle": true
     },
     "conv-47:11": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -1092,6 +1213,7 @@
       "oracle": false
     },
     "conv-26:24": {
+      "none": true,
       "hook_old": true,
       "hook_default": true,
       "search30": false,
@@ -1101,6 +1223,7 @@
       "oracle": false
     },
     "conv-48:178": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1110,6 +1233,7 @@
       "oracle": true
     },
     "conv-41:140": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": true,
@@ -1119,6 +1243,7 @@
       "oracle": true
     },
     "conv-47:7": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -1128,6 +1253,7 @@
       "oracle": true
     },
     "conv-49:136": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -1137,6 +1263,7 @@
       "oracle": false
     },
     "conv-49:67": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -1146,6 +1273,7 @@
       "oracle": true
     },
     "conv-49:79": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1155,6 +1283,7 @@
       "oracle": true
     },
     "conv-41:119": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1164,6 +1293,7 @@
       "oracle": true
     },
     "conv-43:32": {
+      "none": true,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1173,6 +1303,7 @@
       "oracle": true
     },
     "conv-49:34": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1182,6 +1313,7 @@
       "oracle": true
     },
     "conv-42:132": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1191,6 +1323,7 @@
       "oracle": true
     },
     "conv-44:33": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -1200,6 +1333,7 @@
       "oracle": false
     },
     "conv-26:54": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1209,6 +1343,7 @@
       "oracle": true
     },
     "conv-44:66": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1218,6 +1353,7 @@
       "oracle": true
     },
     "conv-49:57": {
+      "none": true,
       "hook_old": true,
       "hook_default": false,
       "search30": false,
@@ -1227,6 +1363,7 @@
       "oracle": true
     },
     "conv-44:81": {
+      "none": false,
       "hook_old": true,
       "hook_default": false,
       "search30": false,
@@ -1236,6 +1373,7 @@
       "oracle": true
     },
     "conv-41:49": {
+      "none": false,
       "hook_old": true,
       "hook_default": false,
       "search30": true,
@@ -1245,6 +1383,7 @@
       "oracle": false
     },
     "conv-47:26": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -1254,6 +1393,7 @@
       "oracle": false
     },
     "conv-50:65": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1263,6 +1403,7 @@
       "oracle": true
     },
     "conv-50:31": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": false,
@@ -1272,6 +1413,7 @@
       "oracle": true
     },
     "conv-43:171": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1281,6 +1423,7 @@
       "oracle": true
     },
     "conv-50:56": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -1290,6 +1433,7 @@
       "oracle": true
     },
     "conv-41:56": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": true,
@@ -1299,6 +1443,7 @@
       "oracle": true
     },
     "conv-48:100": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1308,6 +1453,7 @@
       "oracle": true
     },
     "conv-47:78": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -1317,6 +1463,7 @@
       "oracle": true
     },
     "conv-48:136": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -1326,6 +1473,7 @@
       "oracle": true
     },
     "conv-44:85": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1335,6 +1483,7 @@
       "oracle": true
     },
     "conv-26:83": {
+      "none": true,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1344,6 +1493,7 @@
       "oracle": true
     },
     "conv-48:11": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1353,6 +1503,7 @@
       "oracle": true
     },
     "conv-48:163": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1362,6 +1513,7 @@
       "oracle": true
     },
     "conv-42:84": {
+      "none": true,
       "hook_old": true,
       "hook_default": true,
       "search30": false,
@@ -1371,6 +1523,7 @@
       "oracle": true
     },
     "conv-42:34": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -1380,6 +1533,7 @@
       "oracle": false
     },
     "conv-48:99": {
+      "none": false,
       "hook_old": true,
       "hook_default": false,
       "search30": false,
@@ -1389,6 +1543,7 @@
       "oracle": true
     },
     "conv-42:28": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -1398,6 +1553,7 @@
       "oracle": true
     },
     "conv-47:118": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1407,6 +1563,7 @@
       "oracle": true
     },
     "conv-41:13": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1416,6 +1573,7 @@
       "oracle": true
     },
     "conv-49:36": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": true,
@@ -1425,6 +1583,7 @@
       "oracle": true
     },
     "conv-50:146": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1434,6 +1593,7 @@
       "oracle": true
     },
     "conv-30:54": {
+      "none": false,
       "hook_old": true,
       "hook_default": false,
       "search30": true,
@@ -1443,6 +1603,7 @@
       "oracle": true
     },
     "conv-43:155": {
+      "none": true,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1452,6 +1613,7 @@
       "oracle": true
     },
     "conv-44:13": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1461,6 +1623,7 @@
       "oracle": true
     },
     "conv-44:92": {
+      "none": true,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1470,6 +1633,7 @@
       "oracle": true
     },
     "conv-49:84": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -1479,6 +1643,7 @@
       "oracle": true
     },
     "conv-47:20": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1488,6 +1653,7 @@
       "oracle": false
     },
     "conv-48:183": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1497,6 +1663,7 @@
       "oracle": true
     },
     "conv-49:44": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1506,6 +1673,7 @@
       "oracle": true
     },
     "conv-49:132": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1515,6 +1683,7 @@
       "oracle": true
     },
     "conv-42:185": {
+      "none": true,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1524,6 +1693,7 @@
       "oracle": true
     },
     "conv-26:73": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1533,6 +1703,7 @@
       "oracle": true
     },
     "conv-26:110": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1542,6 +1713,7 @@
       "oracle": true
     },
     "conv-49:102": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1551,6 +1723,7 @@
       "oracle": true
     },
     "conv-26:17": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1560,6 +1733,7 @@
       "oracle": true
     },
     "conv-42:134": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": false,
@@ -1569,6 +1743,7 @@
       "oracle": false
     },
     "conv-41:102": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1578,6 +1753,7 @@
       "oracle": true
     },
     "conv-47:68": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": true,
@@ -1587,6 +1763,7 @@
       "oracle": true
     },
     "conv-43:154": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1596,6 +1773,7 @@
       "oracle": true
     },
     "conv-43:160": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -1605,6 +1783,7 @@
       "oracle": true
     },
     "conv-41:18": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1614,6 +1793,7 @@
       "oracle": true
     },
     "conv-26:33": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -1623,6 +1803,7 @@
       "oracle": true
     },
     "conv-42:133": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1632,6 +1813,7 @@
       "oracle": true
     },
     "conv-42:89": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1641,6 +1823,7 @@
       "oracle": true
     },
     "conv-42:63": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1650,6 +1833,7 @@
       "oracle": true
     },
     "conv-44:105": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1659,6 +1843,7 @@
       "oracle": true
     },
     "conv-49:77": {
+      "none": true,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -1668,6 +1853,7 @@
       "oracle": true
     },
     "conv-42:186": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1677,6 +1863,7 @@
       "oracle": true
     },
     "conv-48:53": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1686,6 +1873,7 @@
       "oracle": true
     },
     "conv-30:3": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -1695,6 +1883,7 @@
       "oracle": true
     },
     "conv-42:164": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1704,6 +1893,7 @@
       "oracle": true
     },
     "conv-30:74": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -1713,6 +1903,7 @@
       "oracle": false
     },
     "conv-43:58": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1722,6 +1913,7 @@
       "oracle": true
     },
     "conv-47:120": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1731,6 +1923,7 @@
       "oracle": true
     },
     "conv-50:62": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -1740,6 +1933,7 @@
       "oracle": false
     },
     "conv-43:17": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -1749,6 +1943,7 @@
       "oracle": false
     },
     "conv-48:32": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1758,6 +1953,7 @@
       "oracle": true
     },
     "conv-41:109": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1767,6 +1963,7 @@
       "oracle": true
     },
     "conv-30:40": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1776,6 +1973,7 @@
       "oracle": true
     },
     "conv-48:149": {
+      "none": false,
       "hook_old": true,
       "hook_default": false,
       "search30": false,
@@ -1785,6 +1983,7 @@
       "oracle": true
     },
     "conv-50:138": {
+      "none": true,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1794,6 +1993,7 @@
       "oracle": true
     },
     "conv-49:59": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1803,6 +2003,7 @@
       "oracle": true
     },
     "conv-50:105": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1812,6 +2013,7 @@
       "oracle": false
     },
     "conv-41:61": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1821,6 +2023,7 @@
       "oracle": true
     },
     "conv-49:72": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1830,6 +2033,7 @@
       "oracle": true
     },
     "conv-42:127": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1839,6 +2043,7 @@
       "oracle": true
     },
     "conv-43:24": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1848,6 +2053,7 @@
       "oracle": true
     },
     "conv-44:6": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1857,6 +2063,7 @@
       "oracle": true
     },
     "conv-48:64": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1866,6 +2073,7 @@
       "oracle": true
     },
     "conv-44:70": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": true,
@@ -1875,6 +2083,7 @@
       "oracle": true
     },
     "conv-44:103": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1884,6 +2093,7 @@
       "oracle": false
     },
     "conv-44:73": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1893,6 +2103,7 @@
       "oracle": true
     },
     "conv-42:5": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": false,
@@ -1902,6 +2113,7 @@
       "oracle": true
     },
     "conv-48:158": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -1911,6 +2123,7 @@
       "oracle": true
     },
     "conv-47:64": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": true,
@@ -1920,6 +2133,7 @@
       "oracle": false
     },
     "conv-48:6": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": true,
@@ -1929,6 +2143,7 @@
       "oracle": true
     },
     "conv-43:129": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -1938,6 +2153,7 @@
       "oracle": true
     },
     "conv-49:49": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -1947,6 +2163,7 @@
       "oracle": false
     },
     "conv-50:137": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -1956,6 +2173,7 @@
       "oracle": false
     },
     "conv-47:144": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": true,
@@ -1965,6 +2183,7 @@
       "oracle": true
     },
     "conv-47:126": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -1974,6 +2193,7 @@
       "oracle": true
     },
     "conv-48:86": {
+      "none": false,
       "hook_old": true,
       "hook_default": false,
       "search30": false,
@@ -1983,6 +2203,7 @@
       "oracle": true
     },
     "conv-30:60": {
+      "none": true,
       "hook_old": false,
       "hook_default": false,
       "search30": true,
@@ -1992,6 +2213,7 @@
       "oracle": false
     },
     "conv-41:64": {
+      "none": false,
       "hook_old": true,
       "hook_default": false,
       "search30": false,
@@ -2001,6 +2223,7 @@
       "oracle": true
     },
     "conv-48:31": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2010,6 +2233,7 @@
       "oracle": true
     },
     "conv-48:21": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": true,
@@ -2019,6 +2243,7 @@
       "oracle": false
     },
     "conv-42:139": {
+      "none": false,
       "hook_old": true,
       "hook_default": false,
       "search30": true,
@@ -2028,6 +2253,7 @@
       "oracle": true
     },
     "conv-30:48": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2037,6 +2263,7 @@
       "oracle": true
     },
     "conv-30:29": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2046,6 +2273,7 @@
       "oracle": true
     },
     "conv-26:150": {
+      "none": true,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2055,6 +2283,7 @@
       "oracle": true
     },
     "conv-30:67": {
+      "none": false,
       "hook_old": true,
       "hook_default": false,
       "search30": true,
@@ -2064,6 +2293,7 @@
       "oracle": true
     },
     "conv-48:55": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2073,6 +2303,7 @@
       "oracle": false
     },
     "conv-42:102": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2082,6 +2313,7 @@
       "oracle": true
     },
     "conv-43:6": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -2091,6 +2323,7 @@
       "oracle": false
     },
     "conv-44:8": {
+      "none": false,
       "hook_old": true,
       "hook_default": false,
       "search30": true,
@@ -2100,6 +2333,7 @@
       "oracle": true
     },
     "conv-41:137": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2109,6 +2343,7 @@
       "oracle": true
     },
     "conv-26:5": {
+      "none": true,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -2118,6 +2353,7 @@
       "oracle": false
     },
     "conv-47:62": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -2127,6 +2363,7 @@
       "oracle": false
     },
     "conv-44:67": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2136,6 +2373,7 @@
       "oracle": true
     },
     "conv-50:153": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2145,6 +2383,7 @@
       "oracle": true
     },
     "conv-41:21": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2154,6 +2393,7 @@
       "oracle": true
     },
     "conv-49:110": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2163,6 +2403,7 @@
       "oracle": true
     },
     "conv-30:34": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2172,6 +2413,7 @@
       "oracle": true
     },
     "conv-50:71": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2181,6 +2423,7 @@
       "oracle": true
     },
     "conv-47:38": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2190,6 +2433,7 @@
       "oracle": true
     },
     "conv-48:13": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2199,6 +2443,7 @@
       "oracle": true
     },
     "conv-48:96": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2208,6 +2453,7 @@
       "oracle": true
     },
     "conv-44:43": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -2217,6 +2463,7 @@
       "oracle": false
     },
     "conv-48:25": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": false,
@@ -2226,6 +2473,7 @@
       "oracle": true
     },
     "conv-43:87": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": false,
@@ -2235,6 +2483,7 @@
       "oracle": true
     },
     "conv-26:138": {
+      "none": false,
       "hook_old": true,
       "hook_default": false,
       "search30": false,
@@ -2244,6 +2493,7 @@
       "oracle": false
     },
     "conv-42:171": {
+      "none": true,
       "hook_old": false,
       "hook_default": true,
       "search30": true,
@@ -2253,6 +2503,7 @@
       "oracle": true
     },
     "conv-47:109": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2262,6 +2513,7 @@
       "oracle": true
     },
     "conv-50:115": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": true,
@@ -2271,6 +2523,7 @@
       "oracle": true
     },
     "conv-26:142": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2280,6 +2533,7 @@
       "oracle": true
     },
     "conv-47:147": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -2289,6 +2543,7 @@
       "oracle": true
     },
     "conv-30:81": {
+      "none": true,
       "hook_old": false,
       "hook_default": false,
       "search30": true,
@@ -2298,6 +2553,7 @@
       "oracle": true
     },
     "conv-41:66": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": true,
@@ -2307,6 +2563,7 @@
       "oracle": true
     },
     "conv-47:90": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2316,6 +2573,7 @@
       "oracle": true
     },
     "conv-42:60": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -2325,6 +2583,7 @@
       "oracle": false
     },
     "conv-26:102": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2334,6 +2593,7 @@
       "oracle": true
     },
     "conv-41:10": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2343,6 +2603,7 @@
       "oracle": false
     },
     "conv-41:47": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": false,
@@ -2352,6 +2613,7 @@
       "oracle": true
     },
     "conv-41:120": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2361,6 +2623,7 @@
       "oracle": true
     },
     "conv-47:141": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -2370,6 +2633,7 @@
       "oracle": true
     },
     "conv-41:44": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2379,6 +2643,7 @@
       "oracle": false
     },
     "conv-47:111": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2388,6 +2653,7 @@
       "oracle": true
     },
     "conv-50:52": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2397,6 +2663,7 @@
       "oracle": true
     },
     "conv-44:64": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2406,6 +2673,7 @@
       "oracle": true
     },
     "conv-43:81": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2415,6 +2683,7 @@
       "oracle": true
     },
     "conv-47:122": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2424,6 +2693,7 @@
       "oracle": true
     },
     "conv-44:31": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": false,
@@ -2433,6 +2703,7 @@
       "oracle": true
     },
     "conv-49:71": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2442,6 +2713,7 @@
       "oracle": true
     },
     "conv-42:167": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2451,6 +2723,7 @@
       "oracle": true
     },
     "conv-49:105": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2460,6 +2733,7 @@
       "oracle": false
     },
     "conv-50:83": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2469,6 +2743,7 @@
       "oracle": true
     },
     "conv-48:131": {
+      "none": true,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2478,6 +2753,7 @@
       "oracle": true
     },
     "conv-50:130": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -2487,6 +2763,7 @@
       "oracle": true
     },
     "conv-48:168": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2496,6 +2773,7 @@
       "oracle": true
     },
     "conv-43:9": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": true,
@@ -2505,6 +2783,7 @@
       "oracle": true
     },
     "conv-50:38": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2514,6 +2793,7 @@
       "oracle": true
     },
     "conv-30:24": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -2523,6 +2803,7 @@
       "oracle": false
     },
     "conv-26:131": {
+      "none": false,
       "hook_old": true,
       "hook_default": false,
       "search30": true,
@@ -2532,6 +2813,7 @@
       "oracle": true
     },
     "conv-49:151": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2541,6 +2823,7 @@
       "oracle": true
     },
     "conv-26:78": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": true,
@@ -2550,6 +2833,7 @@
       "oracle": true
     },
     "conv-41:3": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2559,6 +2843,7 @@
       "oracle": true
     },
     "conv-42:184": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2568,6 +2853,7 @@
       "oracle": true
     },
     "conv-42:113": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": false,
@@ -2577,6 +2863,7 @@
       "oracle": true
     },
     "conv-41:51": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2586,6 +2873,7 @@
       "oracle": true
     },
     "conv-48:36": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -2595,6 +2883,7 @@
       "oracle": true
     },
     "conv-48:23": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -2604,6 +2893,7 @@
       "oracle": true
     },
     "conv-42:78": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -2613,6 +2903,7 @@
       "oracle": true
     },
     "conv-48:138": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2622,6 +2913,7 @@
       "oracle": true
     },
     "conv-44:86": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2631,6 +2923,7 @@
       "oracle": true
     },
     "conv-43:118": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2640,6 +2933,7 @@
       "oracle": true
     },
     "conv-48:177": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -2649,6 +2943,7 @@
       "oracle": true
     },
     "conv-41:124": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2658,6 +2953,7 @@
       "oracle": true
     },
     "conv-26:77": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": true,
@@ -2667,6 +2963,7 @@
       "oracle": true
     },
     "conv-50:143": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2676,6 +2973,7 @@
       "oracle": true
     },
     "conv-47:4": {
+      "none": false,
       "hook_old": false,
       "hook_default": true,
       "search30": true,
@@ -2685,6 +2983,7 @@
       "oracle": true
     },
     "conv-41:25": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2694,6 +2993,7 @@
       "oracle": true
     },
     "conv-47:24": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -2703,6 +3003,7 @@
       "oracle": false
     },
     "conv-48:118": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2712,6 +3013,7 @@
       "oracle": true
     },
     "conv-48:71": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": true,
@@ -2721,6 +3023,7 @@
       "oracle": true
     },
     "conv-42:26": {
+      "none": false,
       "hook_old": true,
       "hook_default": false,
       "search30": false,
@@ -2730,6 +3033,7 @@
       "oracle": true
     },
     "conv-43:22": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2739,6 +3043,7 @@
       "oracle": true
     },
     "conv-50:84": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2748,6 +3053,7 @@
       "oracle": true
     },
     "conv-50:109": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": false,
@@ -2757,6 +3063,7 @@
       "oracle": true
     },
     "conv-42:80": {
+      "none": false,
       "hook_old": false,
       "hook_default": false,
       "search30": false,
@@ -2766,6 +3073,7 @@
       "oracle": true
     },
     "conv-49:101": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2775,6 +3083,7 @@
       "oracle": true
     },
     "conv-49:3": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2784,6 +3093,7 @@
       "oracle": true
     },
     "conv-44:51": {
+      "none": true,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2793,6 +3103,7 @@
       "oracle": false
     },
     "conv-48:162": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,
@@ -2802,6 +3113,7 @@
       "oracle": true
     },
     "conv-49:21": {
+      "none": false,
       "hook_old": true,
       "hook_default": true,
       "search30": true,

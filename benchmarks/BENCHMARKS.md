@@ -1,8 +1,9 @@
 # Collivind Benchmarks
 
-Every number measured here is reproducible from this repository with the
-commands below, and names the version, sample size and commit it was measured
-on. Result files hold ids and scores only (LoCoMo is CC BY-NC; no dataset text
+Every retrieval number measured here is reproducible from this repository
+with the commands below, and names the version, sample size and commit it was
+measured on. The QA rows additionally need a model subscription and, for the
+summary rows, a file of agent-written summaries that is not committed. Result files hold ids and scores only (LoCoMo is CC BY-NC; no dataset text
 is committed).
 
 Current release measured: **v0.21.0** (commit `9480b04`), embedded mode, default
@@ -15,18 +16,31 @@ config, `BAAI/bge-small-en-v1.5`, 2026-11-26, Apple-silicon laptop.
   **77.5%**. On the same harness, MemPalace's hybrid mode stored per turn gets
   60.5% / 69.5%, plain dense search 56.8% / 66.2%, BM25 57.9% / 65.4%.
 - **LoCoMo, find the right session**: collivind 91.9% (top 5) / 96.2% (top 10);
-  MemPalace hybrid, its published per-session configuration, 70.4% / 91.9%. A
-  random ranking already scores 23.6% / 44.0%, so this metric separates systems
-  poorly at top 10.
+  BM25 89.8% / 95.4%; MemPalace hybrid 82.3% / 92.3% stored per session and
+  85.5% / 93.2% stored per turn. A random ranking already scores 23.6% / 44.0%.
+  At top 10 collivind is not distinguishable from BM25 (p = 0.33).
 - **LongMemEval-S, find the right session** (500 questions): every system here
   is between 94.8% and 98.2% at top 5. This benchmark is saturated for
   retrieval and should not be used to rank memory tools.
 - **LoCoMo end-to-end answers** (300 questions, Claude Haiku 5.5 as reader and
   judge, scored twice): the prompt hook's default recall answers 70-72%
-  correctly; with agent-written summary memories 79-80%; the whole conversation
-  in context 76%; the gold evidence alone 84%.
+  correctly; with summary memories about 79%; the whole conversation in context
+  76%; the gold evidence alone 84%. The summaries were written by Claude Sonnet
+  5.5. Summaries against the whole conversation is not a significant difference
+  (p = 0.22), and with a stronger reader (Sonnet 5.5, earlier runs below) the
+  whole conversation scored higher than summaries.
+- **How much of the gap is the engine**: not isolated. The systems use
+  different embedders (bge-small against MiniLM) and index different text
+  (collivind and the baselines include the session date and photo captions;
+  MemPalace's script does not). See the notes under the tables.
+- **Cost**: collivind's default recall hands the answering model about 1,600
+  tokens a question against about 41,500 for pasting the whole conversation,
+  and scores about 6 points lower (70% against 76%, p = 0.09); with summaries
+  it uses about 3,300 tokens and scores 80%. With no memory the model answers
+  10%. See the cost section.
 - **Where collivind is behind or unproven**: open-domain questions (44.6%
   strict hit@5); multi-hop answers (47-63% depending on run and summaries);
+  at session level BM25 is ahead on single-hop and open-domain at top 10;
   search p95 goes from about 40 ms to about 214 ms with the reranker; docker
   mode has no accuracy benchmark; Mem0, Zep, Letta and LangMem were not run
   here (see below).
@@ -45,7 +59,10 @@ that reason has not gone away.
 
 Scoring is [`compare.py`](compare.py): one definition per metric, applied to
 every system's ids-only ranking file. Per-system scores are in
-[`results_comparison.json`](results_comparison.json).
+[`results_comparison.json`](results_comparison.json). Collivind's headline
+turn-level figures come from its own `limit=10` run
+([`results_locomo_summary.json`](results_locomo_summary.json)), which is the
+shipped behaviour and slightly lower than its `limit=50` row in that file.
 
 - **turn hit@k**: a gold evidence turn is among the top k units. For collivind
   this is the *strict* variant (the returned memory's text is an evidence
@@ -68,7 +85,9 @@ every system's ids-only ranking file. Per-system scores are in
 
 Paired exact McNemar tests, collivind default against each other row, give
 p < 1e-11 at both depths (for example against MemPalace hybrid at top 5:
-collivind alone right on 269 questions, MemPalace alone on 87).
+collivind alone right on 269 questions, MemPalace alone on 87). These pair
+collivind's `limit=10` run with the other system's deepest run, which is the
+conservative pairing for collivind.
 
 Collivind's numbers are `MemoryManager.search(limit=10)` through the recall
 path ([`results_locomo_summary.json`](results_locomo_summary.json)); the
@@ -83,23 +102,33 @@ favourable to it, and its exact `--top-k 10` run scores 58.6 / 66.1.
 | System | Stored unit | session hit@5 | session hit@10 |
 |---|---|---|---|
 | *random ranking (expected)* | | *23.6* | *44.0* |
-| **collivind 0.21.0, default** | turn | **91.9** | **96.2** |
+| collivind 0.21.0, default | turn | 91.9 | 96.2 |
 | collivind 0.21.0, `rerank = false` | turn | 86.1 | 94.0 |
 | BM25 | turn | 89.8 | 95.4 |
 | plain dense cosine, bge-small | turn | 85.5 | 93.9 |
 | MemPalace hybrid v5, per turn | turn | 85.5 | 93.2 |
 | MemPalace raw, per turn | turn | 78.3 | 89.4 |
-| MemPalace hybrid v5, per session (published configuration) | session | 70.4 | 91.9 |
-| MemPalace raw, per session (published configuration) | session | 51.9 | 65.8 |
+| MemPalace hybrid v5, per session | session | 82.3 | 92.3 |
+| MemPalace raw, per session | session | 51.9 | 65.8 |
 
-Conversations have 19 to 32 sessions, hence the high chance floor. Collivind's
-session ranking is derived from `search(limit=50)` (each returned memory's own
-session, in order). MemPalace's per-session rows use its own `--top-k 5` and
-`--top-k 10` runs; with a requested depth of 50 its hybrid mode scores
-82.3 / 92.3. Its published figures use fractional recall over all five
+Conversations have 19 to 32 sessions, hence the high chance floor. Every row
+is ranked at a requested depth of 50: collivind from `search(limit=50)` (each
+returned memory's own session, in order), MemPalace from `--top-k 50`. That is
+the most favourable depth for MemPalace's hybrid mode, whose ranking depends on
+the requested depth: its `--top-k 10` run scores 82.2 / 91.9 and its `--top-k 5`
+run 70.4 at top 5.
+
+Collivind against BM25 at session level is close: paired McNemar p = 0.021 at
+top 5 (collivind alone right on 106 questions, BM25 alone on 74) and p = 0.33
+at top 10. By category BM25 is ahead at top 10 on single-hop (98.5 against
+97.4) and open-domain (84.8 against 82.6).
+
+MemPalace's published LoCoMo figures use fractional recall over all five
 categories including four empty-evidence questions scored as hits: 60.3% raw
-and 88.9% hybrid at R@10. Both were reproduced exactly with its unmodified
-scripts before anything here was scored.
+and 88.9% hybrid v5 at R@10. Both were reproduced exactly with its unmodified
+scripts before anything here was scored. Its published hybrid R@5 of 83.7% was
+not reproduced by any configuration run here, and its published 92.4% (hybrid
+with a bge-large embedder, top 10) was not run.
 
 ### LongMemEval-S, session level, all 500 questions
 
@@ -116,8 +145,10 @@ sample only: 97.8% at top 5, rerank on or off; on those same 90 questions
 dense scores 97.8, MemPalace hybrid v4 97.8, MemPalace raw 95.6, BM25 91.1.
 With 90 questions one question is 1.1 points. MemPalace's own notes say
 hybrid v4 was tuned on three named test questions. Its raw figure here is
-96.4% against a published 96.6%: 14 questions in this copy of the dataset carry
-one or two extra haystack sessions, and one flips.
+96.4% against a published 96.6%; the likely cause, not confirmed against its
+cleaned dataset file, is that 14 questions in this copy of the dataset carry
+one or two extra haystack sessions and one of them flips. Units also differ:
+MemPalace's raw mode indexes user turns only, the baselines index every turn.
 
 ### What "MemPalace" means in these rows
 
@@ -127,23 +158,45 @@ and none of its CLI installers. Its benchmark scripts do not import the
 default all-MiniLM-L6-v2 embedder, and the hybrid heuristics (keyword,
 quoted-phrase, name and temporal boosts) exist only in those scripts. So these
 rows measure MemPalace's published benchmark pipeline, not its shipped product
-path, which chunks conversations differently. Modes that need an LLM
-(`--llm-rerank`, `diary`, `palace`, `rooms`) were not run. The embedders differ
-(bge-small against MiniLM), which is part of each system's default and part of
-the gap: collivind's own raw store scored 91.8% on LongMemEval with MiniLM and
-98.0% with bge-small.
+path, which chunks conversations differently.
+
+Not run: the modes that need an LLM (`--llm-rerank`, `diary`, `palace`); and,
+although they need no LLM, `rooms` (it routes on the dataset's own LLM-written
+session summaries), `aaak`, the older LongMemEval hybrid versions, and
+`--embed-model` with a bge embedder, which would have given an equal-embedder
+row and was left out for time.
+
+Two differences besides the engine sit inside the gap, and no row isolates
+them:
+
+- **Embedder.** Collivind and the dense baseline use bge-small; MemPalace's
+  scripts use all-MiniLM-L6-v2. On LoCoMo, plain dense search with bge-small
+  (56.8 / 66.2) is already about 7 points above MemPalace raw with MiniLM
+  (49.6 / 58.5) with no engine at all. In the other direction, with the same
+  MiniLM embedder on LongMemEval, MemPalace raw (96.4%) is above collivind's
+  own raw store (91.8%).
+- **Indexed text.** Collivind and both baselines index
+  `[session date] speaker: text [shares a photo: caption]`; MemPalace's
+  per-turn documents are `speaker said, "text"` with no date and no caption.
+  701 of the 1,536 questions have an evidence turn with a caption. The gap to
+  MemPalace hybrid at top 5 is 13.6 points on those questions and 10.4 on the
+  rest, so it persists without captions but is larger with them.
 
 ### LoCoMo end-to-end QA, collivind only
 
 300 questions (categories 1-4, seed 0), every turn stored through
 `add_memory`, one reader call per question, reader and judge **Claude Haiku
-5.5** through the Claude CLI, judge prompt Mem0's `ACCURACY_PROMPT`.
+5.5** through the Claude CLI, judge prompt Mem0's `ACCURACY_PROMPT`. The
+summary memories (one per session, 272, about 330 words each) were written by
+**Claude Sonnet 5.5** from the session text without seeing the questions; a
+stronger model than the reader prepared them, and that file is not committed.
 [`locomo_summary_qa.py`](locomo_summary_qa.py), `--model haiku`. Run 2 repeats
 reader and judge with an independent cache on identical contexts, to show
 run-to-run variation.
 
 | Context given to the reader | words | run 1 | run 2 | multi-hop (run 1 / run 2) |
 |---|---|---|---|---|
+| nothing (question only, no memory) | 4 | 10.0 | | 8.8 |
 | prompt hook, old setting (5 memories, 800 tokens) | 215 | 67.3 | 68.0 | 42.1 / 43.9 |
 | prompt hook, shipped default (20 memories, 2,400 tokens) | 764 | 70.3 | 72.0 | 52.6 / 47.4 |
 | `search(limit=30)` | 1,015 | 71.3 | | 47.4 |
@@ -155,37 +208,115 @@ run-to-run variation.
 - The deeper hook default is 3-4 points above the old setting; that is **not**
   significant in either run (paired McNemar p = 0.28 and 0.11).
 - Summary memories add 7-9 points and are significant in both runs
-  (p = 0.0009 and 0.014). They are written by the agent, one call per session
-  at save time; collivind itself runs no model.
+  (p = 0.0009 and 0.014). The summary rows also carry about twice the context
+  (1,558 against 764 words), so depth and summaries are not separated here.
+  They are written by the agent, one call per session at save time; collivind
+  itself runs no model.
 - With this reader, collivind with summaries scores above the whole
-  conversation in context; the difference is not significant (p = 0.22).
+  conversation in context; the difference is not significant (p = 0.22, one
+  run). With Claude Sonnet 5.5 as reader (earlier runs, below) the order was
+  the other way: whole conversation 86.0%, summaries 81-84%.
 - Earlier QA tables further down used Claude Sonnet 5.5 and are not comparable
   with this one: the reader changes every row.
 
 No other system was run for QA. MemPalace's benchmark scripts are retrieval
-only, and the tools that publish QA scores need an LLM at write time.
+only, and the tools that publish QA scores were not run (see below).
+
+## Cost: what the reader model has to read
+
+Same 300 LoCoMo questions and Haiku 5.5 run 1 as the QA table above, now with
+the size of the context each option hands the answering model, and a "no
+memory" row where the model gets the question alone. Tokens are estimated as
+words x 2.1, calibrated against the model's own usage accounting on five
+contexts (ratios 1.97 to 2.48). Dollar figures are input tokens only at list
+price per million (Haiku 5.5 $0.10, Sonnet 5.5 $2, Opus 5.5 $4; prices as of
+2026-11), with no prompt caching; the answers are a few tokens each.
+
+| What the model is given | tokens per question | correct | per 1,000 questions: Haiku | Sonnet | Opus | tokens per correct answer |
+|---|---|---|---|---|---|---|
+| nothing (no memory tool) | 8 | 10.0% | $0.00 | $0.02 | $0.03 | n/a |
+| collivind hook, old setting (5 memories) | 450 | 67.3% | $0.05 | $0.90 | $1.81 | 670 |
+| collivind hook, shipped default (20 memories) | 1,600 | 70.3% | $0.16 | $3.21 | $6.42 | 2,280 |
+| collivind hook default, with summary memories | 3,270 | 79.7% | $0.33 | $6.54 | $13.09 | 4,110 |
+| whole conversation pasted in | 41,500 | 76.0% | $4.15 | $83.02 | $166.04 | 54,600 |
+| gold evidence only (ideal retrieval) | 150 | 83.7% | $0.02 | $0.31 | $0.61 | 180 |
+
+- **Against no memory**: the model answers 10% of these questions from the
+  question alone. Recall costs 450 to 3,300 tokens a question and takes that to
+  67-80%.
+- **Against pasting the whole history**: collivind's default recall uses about
+  4% of the tokens (1,600 against 41,500) and scores 70.3% against 76.0%: about
+  6 points lower (paired p = 0.09, short of significance on 300 questions, but
+  the whole conversation is ahead). With summaries it uses about 8% of the
+  tokens and scores 79.7% against 76.0% (p = 0.22, not significant). So the
+  saving is roughly 12x to 26x in reader input, at a cost of a few points
+  without summaries and none measurable with them; with a stronger reader
+  (Sonnet 5.5, earlier runs) the whole conversation scored 2 to 5 points higher
+  than recall with summaries.
+- **Depth is not free**: going from 5 to 20 memories costs 3.6x the tokens for
+  3 points that are not significant. The cheapest tokens per correct answer are
+  at the old 5-memory setting; the default was raised for stores of longer
+  memories, where 5 memories covered less.
+- **The ceiling is retrieval quality, not context size**: the gold evidence
+  alone is 150 tokens and scores highest.
+- **Prompt caching narrows the gap but does not close it**: if the same
+  conversation is re-read from cache at about a tenth of the input price, the
+  whole-conversation row costs about 4,150 token-equivalents a question, still
+  above collivind's default, and only while the cache stays warm.
+
+### Cost at write time
+
+| System | Model calls to store a conversation | Measured here |
+|---|---|---|
+| collivind, turns only | none (local embedding, about 28 turns a second) | yes |
+| collivind with summary memories | one agent call per session | yes: 272 calls for 10 conversations |
+| MemPalace, raw or hybrid | none (local embedding) | yes |
+| Mem0, Zep, Letta, LangMem | LLM extraction or agent work on write | not run |
+
+Summaries for one LoCoMo conversation (27 sessions on average) take about
+28,000 input and 19,000 output tokens (session text about 490 words in, summary
+about 330 words out). At Sonnet 5.5 list price that is about $0.24 per
+conversation, or about $0.01 with Haiku 5.5. Against pasting the whole
+conversation into a Sonnet reader, that is repaid after about three questions.
+
+### What this does not measure
+
+This is a question-answering benchmark over chat logs. It does not measure what
+a coding agent saves by not re-reading files or re-deriving a decision, which
+is the product's actual use and depends on the session. On a real store the
+prompt hook's cost is capped by `[hooks] recall_max_tokens` (2,400 tokens per
+prompt by default, about one cent per prompt at Opus 5.5 list price before
+caching), and the recall cutoff makes it zero for prompts nothing matches.
+Other tools' QA cost was not measured: MemPalace's scripts are retrieval only
+(injecting its top 10 whole sessions would be roughly 10,000 tokens a
+question, computed from session length, not run), and the LLM-at-write-time
+tools were not run.
 
 ## Published by others, different setups
 
-Not measured here, not comparable with the tables above or with each other.
-Collected from the linked sources on 2026-11-25; check the source for current
-figures.
+Not measured here, not comparable with the tables above or with each other,
+and every figure is the publishing project's own. Collected on 2026-11-25.
+Cells marked † were taken from a third-party summary of the source
+([table](https://huggingface.co/datasets/rovemark/locomo-benchmark-results))
+and not checked against the source itself.
 
 | System | Benchmark and figure | Reader / judge | Retrieval depth | Source |
 |---|---|---|---|---|
-| Mem0 | LoCoMo LLM-judge 66.9 (graph variant 68.4) | gpt-4o-mini | 30 memories per speaker | [paper](https://arxiv.org/abs/2504.19413) |
-| full-context baseline | LoCoMo LLM-judge 72.9 | gpt-4o-mini | whole conversation | same paper |
-| Zep | LoCoMo 66.0 in Mem0's paper; 75.1 by Zep's count | see sources | see sources | [Zep blog](https://www.getzep.com/blog/lies-damn-lies-statistics-is-mem0-really-sota-in-agent-memory/) |
+| Mem0 | LoCoMo LLM-judge 66.9 (graph variant 68.4) | gpt-4o-mini | 30 memories per speaker (default in its eval code) | [paper](https://arxiv.org/abs/2504.19413) |
+| full-context baseline in Mem0's paper | LoCoMo LLM-judge 72.9 † | gpt-4o-mini | whole conversation | same paper |
+| Zep | LoCoMo 66.0 † in Mem0's paper; 75.1 by Zep's count | see sources | see sources | [Zep blog](https://www.getzep.com/blog/lies-damn-lies-statistics-is-mem0-really-sota-in-agent-memory/) |
 | Letta filesystem agent | LoCoMo 74.0 | see source | agentic file search | [Letta blog](https://www.letta.com/blog/benchmarking-ai-agent-memory) |
-| LangMem | LoCoMo LLM-judge 58.1 | gpt-4o-mini | see source | Mem0 paper |
-| Mem0 (2026 algorithm) | LoCoMo 92.5, LongMemEval 94.4, vendor claim | see source | see source | [Mem0 blog](https://mem0.ai/blog/ai-memory-benchmarks-in-2026) |
-| MemPalace | LongMemEval-S R@5 96.6 raw; LoCoMo session R@10 60.3 raw, 88.9 hybrid | none (retrieval) | top 5 / top 10 of 19-32 sessions | [README](https://github.com/MemPalace/mempalace) (reproduced above) |
+| LangMem | LoCoMo LLM-judge 58.1 † | gpt-4o-mini | see source | Mem0 paper |
+| Mem0 (2026 algorithm) | LoCoMo 92.5, LongMemEval 94.4 (from a web search summary of the page) | see source | see source | [Mem0 blog](https://mem0.ai/blog/ai-memory-benchmarks-in-2026) |
+| MemPalace | LongMemEval-S R@5 96.6 raw (96.4 here), 98.4 hybrid v4 held-out (reproduced); LoCoMo session R@10 60.3 raw and 88.9 hybrid v5 (both reproduced), R@5 83.7 hybrid (not reproduced), R@10 92.4 with bge-large (not run) | none (retrieval) | top 5 / top 10 of 19-32 sessions | [README](https://github.com/MemPalace/mempalace) |
 
-Mem0, Zep, Letta and LangMem extract or organise memories with an LLM at write
-time or run as a hosted service, so they could not be run on this machine,
-which has no model API key. Nothing here says how collivind would rank against
-them; the only way to know is to run them through the same harness with the
-same reader. LoCoMo also has known label noise: a
+Mem0, Zep, Letta and LangMem were not run. Each needs its own model
+configuration, thousands of model calls to ingest the conversations or a hosted
+service, and this pass had no API key to give them. Nothing here says how
+collivind would rank against them; the only way to know is to run them through
+the same harness with the same reader. Note that the full-context figure in
+Mem0's paper (72.9, gpt-4o-mini) and the full-context row above (76.0, Claude
+Haiku 5.5) are different readers and must not be compared. LoCoMo also has known label noise: a
 [third-party audit](https://dev.to/penfieldlabs/we-audited-locomo-64-of-the-answer-key-is-wrong-and-the-judge-accepts-up-to-63-of-intentionally-33lg)
 found about 6% of the answer keys wrong.
 
@@ -204,7 +335,8 @@ found about 6% of the answer keys wrong.
   length). A re-run at 0.21.0 on a heavily loaded machine gave 82 / 158 ms and
   334 / 449 ms and is not a usable measurement.
 - Docker mode (Qdrant + Neo4j + HTTP embeddings) has no accuracy benchmark.
-- QA scores move 1-2 points between runs with identical contexts.
+- QA scores move 1-2 points overall between runs with identical contexts, and
+  up to 5 points on the 57 multi-hop questions.
 
 ## Reproducing the comparison
 
@@ -334,7 +466,8 @@ memory's text *is* an evidence turn's text. Plain hit@k credits a memory
 with every turn it superseded through near-duplicate dedup, even though the
 text returned is the later turn; strict does not.
 
-The current default (0.19.0, hybrid candidates + rerank) is in the
+The current default (hybrid candidates + rerank, introduced in 0.19.0 and
+unchanged through 0.21.0) is in the
 [next section](#hybrid-candidates-and-cross-encoder-rerank-0190); the
 committed [`results_locomo.jsonl`](results_locomo.jsonl) and
 [`results_locomo_summary.json`](results_locomo_summary.json) are that run.
@@ -383,7 +516,9 @@ The two harnesses differ in granularity and in pipeline: per session through
 the raw vector store, against per turn through the full engine. A free check
 separates the two. Map each of the top-k LoCoMo turns to its session, and the
 same run scores **84.6% at k=5 and 92.4% at k=10** (the session of an evidence
-turn is among the sessions of the top-k turns). Most of the gap is therefore
+turn is among the sessions of the top-k turns; a different definition from the
+session hit@k in the comparison tables at the top, which ranks sessions and
+takes the top k of them). Most of the gap is therefore
 the stricter turn-level target, not the engine. That figure is still not the
 same metric as LongMemEval's top-5-sessions R@5. The obvious ways to improve
 turn-level hit rate are a hybrid keyword channel, query-time date handling
@@ -397,11 +532,12 @@ Published LoCoMo figures are **QA accuracy**: Mem0's LLM-judge J score of
 ([blog](https://www.getzep.com/blog/lies-damn-lies-statistics-is-mem0-really-sota-in-agent-memory/)),
 and Letta's filesystem agent at 74.0 ([blog](https://www.letta.com/blog/benchmarking-ai-agent-memory)). Those measure an answering model on top of retrieval, each with its
 own prompts, judge and reader model. **Retrieval hit@k is not comparable to
-them**, and we do not put the numbers side by side. The dataset also has known
+them**; since 0.21.0 they are listed in a separate table at the top and never
+ranked against measured rows. The dataset also has known
 label noise: a [third-party audit](https://dev.to/penfieldlabs/we-audited-locomo-64-of-the-answer-key-is-wrong-and-the-judge-accepts-up-to-63-of-intentionally-33lg)
 found about 6% of the answer keys wrong.
 
-### Optional QA mode (not run)
+### Optional QA mode in `locomo_bench.py` (not run; the QA numbers in this file come from `locomo_summary_qa.py`)
 
 ```bash
 uv pip install anthropic
@@ -411,8 +547,8 @@ ANTHROPIC_API_KEY=... uv run python benchmarks/locomo_bench.py benchmarks/data/l
 For each non-adversarial question, QA mode sends the top-k retrieved turns to
 a Claude model for a short answer. A second call to the same model then grades
 that answer against the gold answer (CORRECT/WRONG), and the result is
-reported as `correct`. QA mode is off by default and has **not been run for
-this document**. With the default `claude-haiku-5-5` ($0.10/$0.50 per M
+reported as `correct`. This `--qa` mode of `locomo_bench.py` needs an API key, is off by default and
+has **not been run for this document**. With the default `claude-haiku-5-5` ($0.10/$0.50 per M
 tokens), a full run makes about 3,100 calls. At roughly 1.5k input and ≤0.5k
 output tokens per call, that is about **$1–2**. With `claude-opus-5-5` the
 same run would cost about $40–80. Even then, the prompts and the judge differ
@@ -729,7 +865,7 @@ only) in `results_locomo_summary_qa.json`.
 | n | | 300 | 167 | 57 | 54 | 22 |
 | turns only, `search(limit=50)` | 1,648 | 75.7 | 85.6 | 56.1 | 72.2 | 59.1 |
 | with summaries, `search(limit=28)`: 3 summaries + their best members + other turns | 1,803 | **83.7** | 93.4 | 57.9 | 85.2 | 72.7 |
-| prompt hook at 800 tokens (`get_context`, limit 20; the old default), turns only | 560 | 74.3 | 84.4 | 49.1 | 74.1 | 63.6 |
+| prompt hook at 800 tokens (`get_context`, limit 20; never a shipped default: 0.18 used limit 5 at 800 tokens, 0.19+ uses limit 20 at 2,400), turns only | 560 | 74.3 | 84.4 | 49.1 | 74.1 | 63.6 |
 | prompt hook at 800 tokens, with summaries | 569 | **81.3** | 93.4 | 47.4 | 85.2 | 68.2 |
 
 Paired exact McNemar: with summaries vs turns only, 32 questions to 8,
@@ -772,7 +908,7 @@ without summaries.
 
 | Benchmark | License | Size | Measures | Gold ids for retrieval | Official scoring |
 |---|---|---|---|---|---|
-| [LoCoMo](https://github.com/snap-research/locomo) | CC BY-NC 4.0 | 10 convs, ~600 turns each, 1,986 Qs (1,540 non-adversarial) | single-hop, multi-hop, temporal, open-domain, adversarial | yes, turn-level | LLM judge in published work (Mem0 J score) |
+| [LoCoMo](https://github.com/snap-research/locomo) | CC BY-NC 4.0 | 10 convs, ~600 turns each, 1,986 Qs (1,540 non-adversarial, 1,536 of them with usable evidence ids) | single-hop, multi-hop, temporal, open-domain, adversarial | yes, turn-level | LLM judge in published work (Mem0 J score) |
 | [LongMemEval](https://github.com/xiaowu0162/LongMemEval) | MIT | 500 Qs; S ≈115k tokens / ~40–50 sessions per Q, M ≈1.5M tokens | extraction, multi-session, temporal, knowledge update, abstention | yes, session-level (and `has_answer` turns) | GPT-4o judge |
 | [MemoryAgentBench](https://github.com/HUST-AI-HYZ/MemoryAgentBench) | MIT | 146 long-context rows, each with many queries (77 MB) | accurate retrieval, test-time learning, long-range understanding, conflict resolution | not documented | mostly EM / substring EM; LLM judge for some splits |
 | [BEAM](https://github.com/mohammadtavakoli78/BEAM) | data CC BY-SA 4.0, code MIT | 100 convs, 2,000 Qs, 128K–10M tokens | 10 abilities, including contradiction resolution, event ordering, knowledge update, abstention | the paper mentions source ids; not confirmed in the release | LLM-judged nugget scoring |

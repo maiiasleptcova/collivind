@@ -456,30 +456,42 @@ reproduction steps are in [benchmarks/BENCHMARKS.md](benchmarks/BENCHMARKS.md).
 
 **LoCoMo, find the exact evidence turn** (1,536 questions, no LLM):
 
-| System | top 5 | top 10 |
-|---|---|---|
-| **collivind 0.21.0** (hybrid candidates + local reranker) | **72.4%** | **77.5%** |
-| MemPalace 3.12.0, hybrid v5, stored per turn | 60.5% | 69.5% |
-| BM25 | 57.9% | 65.4% |
-| plain dense search (bge-small) | 56.8% | 66.2% |
-| MemPalace 3.12.0, raw, stored per turn | 49.6% | 58.5% |
+| System | Embedder | top 5 | top 10 |
+|---|---|---|---|
+| **collivind 0.21.0** (hybrid candidates + local reranker) | bge-small | **72.4%** | **77.5%** |
+| MemPalace 3.12.0, hybrid v5, stored per turn | all-MiniLM-L6-v2 | 60.5% | 69.5% |
+| BM25 | none | 57.9% | 65.4% |
+| plain dense search | bge-small | 56.8% | 66.2% |
+| MemPalace 3.12.0, raw, stored per turn | all-MiniLM-L6-v2 | 49.6% | 58.5% |
 
-The MemPalace rows are its published benchmark pipeline (its own scripts and
-embedder), not its product path; details in the benchmark notes.
+Read the gap with care. The MemPalace rows are its published benchmark
+pipeline (its own scripts), not its product path. The systems use different
+embedders and index different text (collivind includes the session date and
+photo captions, MemPalace's script does not), so the gap is not the engine
+alone; no row isolates it. At session level the systems are much closer
+(collivind 91.9% / 96.2%, BM25 89.8% / 95.4%, MemPalace hybrid 82.3% / 92.3%).
 
-**LongMemEval-S, find the right session**: every system above scores 94.8% to
-98.2% at top 5 (collivind 97.8% through the engine on a 90-question sample,
-98.0% through the raw vector store on all 500). The benchmark is saturated for
-retrieval and does not separate memory tools.
+**LongMemEval-S, find the right session**: collivind, MemPalace, dense search
+and BM25 all score 94.8% to 98.2% at top 5 (collivind 97.8% through the engine
+on a 90-question sample, 98.0% through the raw vector store on all 500). The
+benchmark is saturated for retrieval and does not separate memory tools.
 
 **LoCoMo answers end to end** (300 questions, Claude Haiku 5.5 as reader and
 judge, scored twice): the prompt hook's default recall answers 70-72%; with
-agent-written summary memories 79-80%; the whole conversation in context 76%.
-Summaries cost one agent call per session at save time.
+summary memories about 79%; the whole conversation in context 76%. The
+summaries-against-whole-conversation difference is not significant, and with a
+stronger reader the whole conversation scored higher. Summaries cost one agent
+call per session at save time.
 
-Mem0, Zep, Letta and LangMem need an LLM at write time and were not run here;
-their own published figures are listed separately in the benchmark notes and
-are not comparable with the table above.
+**Cost**: default recall gives the answering model about 1,600 tokens per
+question, against about 41,500 for pasting the whole conversation (roughly
+$3 against $83 per 1,000 questions at Sonnet 5.5 list price) and answers 70%
+against 76%; with summary memories about 3,300 tokens and 80%. With no memory
+at all the model answers 10%.
+
+Mem0, Zep, Letta and LangMem were not run here; their own published figures are
+listed separately in the benchmark notes and are not comparable with the table
+above.
 
 ## Architecture
 

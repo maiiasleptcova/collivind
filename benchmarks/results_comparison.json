@@ -48,7 +48,7 @@
       "chance_session_hit@10": 43.975466392129555,
       "turn_hit@10": 65.36458333333333
     },
-    "MemPalace raw, per session": {
+    "MemPalace raw, per session (its --top-k 5 / 10 runs)": {
       "n": 1536,
       "session_hit@5": 51.888020833333336,
       "session_recall@5": 45.81258783895502,
@@ -57,7 +57,7 @@
       "session_recall@10": 59.72062045304233,
       "chance_session_hit@10": 43.975466392129555
     },
-    "MemPalace hybrid v5, per session": {
+    "MemPalace hybrid v5, per session (its --top-k 5 / 10 runs)": {
       "n": 1536,
       "session_hit@5": 70.44270833333333,
       "session_recall@5": 63.7772300760582,
@@ -73,6 +73,15 @@
       "chance_session_hit@5": 23.63368946140571,
       "session_hit@10": 92.25260416666667,
       "session_recall@10": 87.4181030919312,
+      "chance_session_hit@10": 43.975466392129555
+    },
+    "MemPalace raw, per session (requested 50)": {
+      "n": 1536,
+      "session_hit@5": 51.888020833333336,
+      "session_recall@5": 45.81258783895502,
+      "chance_session_hit@5": 23.63368946140571,
+      "session_hit@10": 65.8203125,
+      "session_recall@10": 59.72062045304233,
       "chance_session_hit@10": 43.975466392129555
     },
     "MemPalace raw, per turn": {
@@ -121,8 +130,7 @@
     },
     "collivind raw vector store (bypasses the engine)": {
       "n": 500,
-      "session_hit@5": 98.0,
-      "session_hit@10": 98.0
+      "session_hit@5": 98.0
     }
   },
   "longmemeval_sample": {
@@ -148,8 +156,7 @@
     },
     "collivind raw vector store (bypasses the engine)": {
       "n": 90,
-      "session_hit@5": 97.77777777777777,
-      "session_hit@10": 97.77777777777777
+      "session_hit@5": 97.77777777777777
     }
   },
   "longmemeval_sample_ids": 90

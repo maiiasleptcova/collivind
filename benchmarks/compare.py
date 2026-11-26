@@ -22,7 +22,8 @@ import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
 from locomo_bench import parse_evidence, sessions_of  # noqa: E402
 
 
@@ -94,21 +95,18 @@ def score_locomo(rows, gold, n_sessions, ks=(5, 10)):
 
 
 def score_lme(rows, gold, subset=None, ks=(5, 10)):
+    """A depth is reported only if the file holds at least that many sessions for most questions."""
     idx = {r["question_id"]: r for r in rows}
-    out = {}
     qids = [q for q in gold if (subset is None or q in subset) and q in idx]
-    out["n"] = len(qids)
+    out = {"n": len(qids)}
+
+    def ranked(q):
+        r = idx[q]
+        return r.get("ranked_sessions") or distinct(r.get("unit_sessions") or r.get("top_sessions") or [])
+
     for k in ks:
-        hits = []
-        for q in qids:
-            r = idx[q]
-            ranked = r.get("ranked_sessions") or distinct(r.get("unit_sessions") or r.get("top_sessions") or [])
-            hits.append(bool(set(ranked[:k]) & gold[q]))
-        if qids and all(
-            len((idx[q].get("ranked_sessions") or idx[q].get("unit_sessions") or idx[q].get("top_sessions") or [])) >= 1
-            for q in qids
-        ):
-            out[f"session_hit@{k}"] = 100 * sum(hits) / len(hits)
+        if qids and sorted(len(ranked(q)) for q in qids)[len(qids) // 2] >= k:
+            out[f"session_hit@{k}"] = 100 * sum(bool(set(ranked(q)[:k]) & gold[q]) for q in qids) / len(qids)
     return out
 
 
@@ -126,15 +124,16 @@ def main():
         "collivind, rerank off": load_rows(d / "collivind_norerank_locomo_top50.jsonl"),
         "dense bge-small, per turn": load_rows(d / "locomo_dense.json"),
         "BM25, per turn": load_rows(d / "locomo_bm25.json"),
-        "MemPalace raw, per session": {
+        "MemPalace raw, per session (its --top-k 5 / 10 runs)": {
             5: load_rows(d / "mempalace_locomo_raw_top5run.json"),
             10: load_rows(d / "mempalace_locomo_raw_top10run.json"),
         },
-        "MemPalace hybrid v5, per session": {
+        "MemPalace hybrid v5, per session (its --top-k 5 / 10 runs)": {
             5: load_rows(d / "mempalace_locomo_hybrid_top5run.json"),
             10: load_rows(d / "mempalace_locomo_hybrid_top10run.json"),
         },
         "MemPalace hybrid v5, per session (requested 50)": load_rows(d / "mempalace_locomo_hybrid.json"),
+        "MemPalace raw, per session (requested 50)": load_rows(d / "mempalace_locomo_raw.json"),
         "MemPalace raw, per turn": load_rows(d / "mempalace_locomo_raw_turns.json"),
         "MemPalace hybrid v5, per turn": load_rows(d / "mempalace_locomo_hybrid_turns.json"),
     }  # fmt: skip
@@ -142,7 +141,7 @@ def main():
 
     lme_data = json.loads(Path(args.lme).read_text())
     lme_gold = {q["question_id"]: set(q["answer_session_ids"]) for q in lme_data}
-    engine_rows = load_rows(Path("benchmarks/results_longmemeval_engine.jsonl"))
+    engine_rows = load_rows(HERE / "results_longmemeval_engine.jsonl")
     sample = {r["question_id"] for r in engine_rows}
     lme = {
         "dense bge-small, per turn": load_rows(d / "lme_dense.json"),
