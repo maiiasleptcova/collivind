@@ -1137,6 +1137,11 @@
     "neg_empty": 56.0,
     "cut": 44.91
    }
+  },
+  "coding_tuning_closest_to_90_95": {
+   "rule": "regime rel -6 cap 10 | fb 5 cos>=0.7",
+   "unrelated_empty": 92.0,
+   "relevant_kept": 90.8
   }
  },
  "dev_retrieval_real_path": {
@@ -1214,7 +1219,18 @@
   "label_changes_after_blind_audit": [
    "p001: [] -> [m174, m175, m004]",
    "p105: + m045"
-  ]
+  ],
+  "no_confident_match_prompts": {
+   "tuning": {
+    "relevant": "11/65",
+    "unrelated": "48/50"
+   },
+   "blind confirm": {
+    "relevant": "20/54",
+    "unrelated": "47/48"
+   }
+  },
+  "note": "relevant_kept counts prompts for which at least one labelled relevant memory appears in the printed context"
  },
  "longmemeval_engine": {
   "n": 90,
@@ -1446,14 +1462,15 @@
   "arm_meaning": {
    "hook_old": "0.18 hook: 5 memories, 800 tokens",
    "hook_021": "0.21 hook: 20 memories, 2,400 tokens, cutoff only",
-   "hook_default": "candidate: recall_limit 10, recall_window 12 (the defaults at the time of the run)",
+   "hook_default": "the candidate (recall_limit 10, recall_window 12, no floor): the defaults at the time of the run; reproduce with the pinned hook_w12 arm",
    "_summ": "same, with one agent-written summary memory per session in the store"
   },
   "calls": {
    "run1_cache_new_lines": 2442,
    "run2_cache_new_lines": 319,
    "total": 2761
-  }
+  },
+  "heldout_runs_note": "held-out questions were scored in three runs (all_503 run 1, then sample_100 run 1, then sample_100 run 2) on the same frozen candidate; no setting changed in between. run 2 re-asked every candidate prompt into a second cache; its 0.21 answers come from the 0.21 comparison's second run"
  },
  "latency_search_bench_10k": {
   "this branch": {

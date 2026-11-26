@@ -53,9 +53,11 @@ ARMS = ("turns50", "routed", "hook_turns", "hook_summ")
 # config), search at 30, each without and with summaries, and two references that
 # never touch the engine (the whole conversation; the gold evidence turns only).
 EXTRA_ARMS = ("hook_old", "hook_default", "search30", "hook_default_summ", "search30_summ", "full", "oracle", "none",
-              "hook_021", "hook_021_summ")  # fmt: skip
+              "hook_021", "hook_021_summ", "hook_w12", "hook_w12_summ")  # fmt: skip
 # hook_default* read the shipped defaults; hook_021* pin the 0.21 hook (20 memories,
-# 2,400 tokens, cutoff only), so the two stay comparable after the defaults change.
+# 2,400 tokens, cutoff only) and hook_w12* the 0.22 candidate (window 12, 10 memories),
+# so each stays reproducible whatever the defaults are. In the 0.22 study the candidate
+# ran as hook_default (it was the default then); its contexts equal hook_w12's.
 
 READER = """You are an intelligent memory assistant answering a question about a long conversation between {a} and {b}.
 
@@ -119,6 +121,10 @@ def sample_questions(data: List[dict], n: int) -> List[tuple]:
 # The 0.21 recall: the cutoff alone, no stopping rule. Every arm measured before
 # 0.22 runs under it, so its contexts (and cached answers) stay the same.
 LEGACY_SEARCH = {"recall_window": 0.0, "recall_fallback_min_score": 0.0}
+# The candidate measured for 0.22 (BENCHMARKS.md, "Recall precision"): window 12,
+# no floor, 10 memories. Pinned so the measurement reproduces whatever the defaults are.
+CANDIDATE_SEARCH = {"recall_window": 12.0, "recall_fallback_min_score": 0.0}
+CANDIDATE_LIMIT = 10
 
 
 @contextmanager
@@ -164,6 +170,8 @@ def build_contexts(data: Dict[str, dict], summaries: dict, sample: List[tuple]) 
                     row["hook_021"] = hook(q, pid, 20, 2400)  # the 0.21 hook default
                     row["search30"] = search(q, pid, 30)[0]
                 row["hook_default"] = hook(q, pid, hooks.recall_limit, hooks.recall_max_tokens)
+                with search_settings(manager, **CANDIDATE_SEARCH):
+                    row["hook_w12"] = hook(q, pid, CANDIDATE_LIMIT, 2400)
                 turns = [
                     (t["dia_id"], turn_text(t, when))
                     for _, when, ts in sessions_of(data[sid]["conversation"])
@@ -190,6 +198,8 @@ def build_contexts(data: Dict[str, dict], summaries: dict, sample: List[tuple]) 
                     row["hook_021_summ"] = hook(q, pid, 20, 2400)
                     row["search30_summ"] = search(q, pid, 30)[0]
                 row["hook_default_summ"] = hook(q, pid, hooks.recall_limit, hooks.recall_max_tokens)
+                with search_settings(manager, **CANDIDATE_SEARCH):
+                    row["hook_w12_summ"] = hook(q, pid, CANDIDATE_LIMIT, 2400)
                 gold = {int(e[1:].split(":")[0]) for e in parse_evidence(data[sid]["qa"][i].get("evidence", []))}
                 routed = {h.memory.session_id for h in hits if h.memory.category == "summary"}
                 stats["routed_searches"] += bool(routed)
@@ -278,6 +288,7 @@ def run_qa(data, sample, contexts, model, cache_path: Path, arms) -> dict:
     pairs = (("routed", "turns50"), ("hook_summ", "hook_turns"), ("hook_default", "hook_old"),
              ("hook_default_summ", "hook_default"), ("search30_summ", "search30"), ("full", "hook_default_summ"),
              ("hook_default", "hook_021"), ("hook_default_summ", "hook_021_summ"),
+             ("hook_w12", "hook_021"), ("hook_w12_summ", "hook_021_summ"),
              ("hook_021", "hook_old"), ("hook_default", "hook_old"))  # fmt: skip
     for a, b in pairs:
         if a in arms and b in arms:

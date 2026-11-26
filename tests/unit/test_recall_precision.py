@@ -56,12 +56,17 @@ def test_floor_does_not_touch_a_confident_ranking(stores):  # noqa: F811
 @pytest.mark.parametrize(
     "logits", [{"alpha": 4.0, "beta": 1.0, "gamma": -8.0}, {"alpha": -1.0, "beta": -4.0, "gamma": -9.0}]
 )
-def test_off_reproduces_todays_recall_exactly(stores, logits):  # noqa: F811
+def test_off_reproduces_the_untrimmed_recall_exactly(stores, logits, monkeypatch):  # noqa: F811
+    """0.21 is this engine without _recall_trim: the off settings must give the same list."""
+    from collivind.engine import search_engine
+
     graph, vector, emb, _ = _scored(stores, logits)
     engine = _engine(graph, vector, emb)
-    today = [(r.memory.id, round(r.score, 6), r.rerank_score) for r in engine.search(Q)]
-    for off in (replace(Q, rerank_window=0.0, fallback_min_score=0.0), replace(Q, rerank_window=None)):
-        assert [(r.memory.id, round(r.score, 6), r.rerank_score) for r in engine.search(off)] == today
+    off = [replace(Q, rerank_window=0.0, fallback_min_score=0.0), replace(Q, rerank_window=None)]
+    got = [[(r.memory.id, round(r.score, 6), r.rerank_score) for r in engine.search(q)] for q in off]
+    monkeypatch.setattr(search_engine, "_recall_trim", lambda results, query: results)
+    untrimmed = [(r.memory.id, round(r.score, 6), r.rerank_score) for r in engine.search(Q)]
+    assert len(untrimmed) == 3 and got == [untrimmed, untrimmed]
 
 
 def test_never_applies_without_a_reranker(stores):  # noqa: F811
@@ -96,24 +101,19 @@ def test_get_context_uses_the_recall_settings_and_search_does_not(tmp_path):
     vector.close()
 
 
-def test_get_context_off_switch_reproduces_todays_output(tmp_path):
+def test_get_context_off_switch_reproduces_the_untrimmed_output(tmp_path, monkeypatch):
+    from collivind.engine import search_engine
+
     manager, graph, vector, emb = _manager(tmp_path)  # the defaults are the off switch
     for w in ("alpha", "beta", "gamma"):
         _store(graph, vector, emb, f"deploy helm {w}")
-    emb.rerank = lambda q, texts: [-2.0 if "alpha" in t else -9.0 for t in texts]
-    ctx = manager.get_context("deploy helm", project_id="p", limit=10)
-    assert all(w in ctx for w in ("alpha", "beta", "gamma"))  # only the 0.00002 cutoff, as before
-    graph.close()
-    vector.close()
-
-
-def test_get_context_with_nothing_that_fits_the_budget_is_empty(tmp_path):
-    manager, graph, vector, emb = _manager(tmp_path)
-    _store(graph, vector, emb, "deploy helm " + "x" * 2000)
-    emb.rerank = lambda q, texts: [5.0] * len(texts)
-    assert manager.get_context("deploy helm", project_id="p", max_tokens=100) == (
-        "No relevant context found in Collivind."
-    )
+    for logits in ((-2.0, -9.0), (5.0, -9.0)):  # no confident match; one confident match
+        emb.rerank = lambda q, texts, hi=logits[0], lo=logits[1]: [hi if "alpha" in t else lo for t in texts]
+        ctx = manager.get_context("deploy helm", project_id="p", limit=10)
+        with monkeypatch.context() as m:
+            m.setattr(search_engine, "_recall_trim", lambda results, query: results)
+            assert manager.get_context("deploy helm", project_id="p", limit=10) == ctx
+        assert all(w in ctx for w in ("alpha", "beta", "gamma"))
     graph.close()
     vector.close()
 

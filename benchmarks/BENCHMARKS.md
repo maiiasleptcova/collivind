@@ -1083,8 +1083,10 @@ retires the first), surfaced (both kept and the first returned in
 
 Goal: the prompt hook should give the same answers for clearly fewer tokens
 and inject nothing when nothing is relevant. Split fixed before tuning:
-LoCoMo conv-26/30/41/42/43/44/47 for development, conv-48/49/50 held out
-and used once; LongMemEval never tuned on. Tools:
+LoCoMo conv-26/30/41/42/43/44/47 for development, conv-48/49/50 held out:
+no setting was chosen or changed after held-out questions were scored (they
+were scored in three QA runs listed below, all on the same frozen candidate);
+LongMemEval never tuned on. Tools:
 [`recall_log.py`](recall_log.py), [`recall_sweep.py`](recall_sweep.py),
 [`coding_recall.py`](coding_recall.py); all numbers in
 [`results_recall_precision.json`](results_recall_precision.json).
@@ -1094,29 +1096,41 @@ logit 0, recall serves the dense order and the 0.00002 cutoff keeps nearly
 everything (combined scores ≈ 0.7 × cosine, the flat "score 0.4x" blocks seen
 on real stores). A synthetic coding store written for this
 ([`coding_recall_check.json`](coding_recall_check.json): 356 memories, 6
-projects, 115 prompts) has 49 of 51 unrelated prompts on that path, but
-indirect relevant prompts land there too, about a third of a second prompt
-set written blind to the scores
+projects, 115 prompts) has 48 of 50 unrelated prompts on that path, but
+relevant prompts land there too: 11 of 65 in that set, and 20 of 54 in a
+second prompt set written blind to the scores
 ([`coding_recall_confirm.json`](coding_recall_confirm.json), 102 prompts).
+Two labels in the first set were changed after a blind audit, before the
+rules were compared on it: p001 went from no relevant memory to
+[m174, m175, m004] and p105 gained m045; every coding number here uses the
+corrected labels, and the blind set's labels were never changed.
 
 **Rule tried.** With a confident match, keep memories within
 `recall_window` = 12 logits of the best; recall at most 10. With none,
 optionally keep only scores ≥ `recall_fallback_min_score` = 0.001. Chosen on
 dev and the first coding set; no rule there met both "90% of unrelated
-prompts empty" and "95% of relevant kept" (the closest was 92% / 91%).
+prompts empty" and "95% of relevant kept" (the closest, which also needed a
+dense-cosine floor of 0.7, was 92% / 90.8%). The sweep simulated the rule on
+a logged top 20 and capped the no-match case at 5; the code checks for a
+confident match on the returned list and has no such cap. Every row below
+was measured through the code, not the sweep.
 
 | Through the real recall path | 0.21 (20, cutoff only) | window 12, limit 10 | + floor 0.001 |
 |---|---|---|---|
 | LoCoMo dev: memories / chars per question | 19.9 / 3,698 | 9.6 / 1,903 | – |
 | LoCoMo dev: strict hit@10 (kept of 0.21's hits) | 77.1 | 77.0 (795/796) | – |
-| Coding, blind set: relevant kept (of 54) | 53 | 53 | 46 |
+| Coding, blind set: relevant prompts that keep a relevant memory (of 54) | 53 | 53 | 46 |
 | Coding, blind set: tokens, relevant prompts | 2,169 | 1,291 | 932 |
 | Coding, blind set: unrelated prompts empty (of 48) / tokens | 1 / 1,360 | 1 / 907 | 24 / 263 |
 | LongMemEval (90 q): turn hit@5 / @10, memories returned at 10 | 75.6 / 83.3, 9.3 | 75.6 / 83.3, 8.1 | – |
 
-**QA (Haiku 5.5 reader and judge, the harness above; tokens = words × 2.1).**
-Paired with the 0.21 hook on the same questions; 0.21 contexts were
-regenerated and matched the cached ones (300/300), so cached answers pair.
+**QA (Haiku 5.5 reader and judge, the harness above; tokens = words × 2.1,
+the convention of the 0.21 comparison).** Paired with the 0.21 hook on the
+same questions; 0.21 contexts were regenerated and matched the cached ones
+(300/300), so cached answers pair. The candidate ran as `hook_default`; the
+script now also pins it as `hook_w12`. Run 2 is a second answer cache: each
+candidate prompt was asked again, while the 0.21 arms' run-2 answers come
+from the 0.21 comparison's own second run.
 
 | Set | Arm | tokens | accuracy | tokens per correct | vs 0.21 (McNemar) |
 |---|---|---|---|---|---|
@@ -1129,15 +1143,18 @@ regenerated and matched the cached ones (300/300), so cached answers pair.
 | held-out, 100 q, run 1 / run 2 | 0.21 + summaries | 3,310 | 86.0 / 86.0 | 3,848 | |
 | | window 12, limit 10 + summaries | 2,054 | 79.0 / 83.0 | 2,600 / 2,474 | −7.0 (p = 0.09) / −3.0 (p = 0.55) |
 
-On the held-out conversations the rule halves recall tokens (−47%) but
-loses 3.4 points (95% CI −6.7 to −0.1), outside the 1.5-point tolerance set
-in advance; the dev drop carried over. The likely cost is depth (memories
-11–20 held the only gold turn for about 4.5% of dev questions), not the
-window (LongMemEval and strict hit@10 do not move), but a window-only variant
-was not confirmed on held-out data and is not claimed. The floor empties half
-of unrelated coding prompts at a cost of 1 in 8 relevant memories.
+On the held-out conversations the candidate halves recall tokens (−47%);
+its accuracy point estimate is 3.4 points lower (normal-approximation 95% CI
+−6.7 to −0.1; exact McNemar p = 0.057). The criterion set in advance was
+"not more than 1.5 points lower", and the interval's lower end is well past
+that, so it is not met; the dev drop pointed the same way. Which part costs
+the answers is not measured: depth is a plausible suspect (on dev, memories
+11–20 held the only strict gold turn for 4.4% of questions), but no
+window-only arm was run on held-out data, so nothing is claimed for it. The
+floor empties about half of unrelated coding prompts, but 7 of the 54
+relevant blind prompts (13%) lost every relevant memory.
 **So 0.22.0 ships both settings off** (`recall_window = 0`,
-`recall_fallback_min_score = 0`, `recall_limit = 20`: 0.21 exactly) as
-opt-ins for anyone who prefers fewer tokens. Latency is unchanged (search
+`recall_fallback_min_score = 0`, `recall_limit = 20`, which returns exactly
+what 0.21 returned) as opt-ins for anyone who prefers fewer tokens. Latency is unchanged (search
 bench, 10k memories, p95 192.6 ms rerank on vs 192.5 ms on 0.21 code, same
 run). QA spend: 2,761 reader and judge calls.

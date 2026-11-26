@@ -156,10 +156,12 @@ def main() -> None:
     parser.add_argument("--summary", default=None)
     args = parser.parse_args()
 
-    # rerank = the shipped defaults; rerank_021 = the 0.21 recall (cutoff only, no window or floor)
+    # rerank = the shipped defaults; rerank_021 = the 0.21 recall (cutoff only, no window or
+    # floor); rerank_w12 = the 0.22 candidate's window (the 0.22 study ran it as "rerank")
     arms = {
         "rerank": {},
         "rerank_021": {"recall_window": 0.0, "recall_fallback_min_score": 0.0},
+        "rerank_w12": {"recall_window": 12.0, "recall_fallback_min_score": 0.0},  # the 0.22 candidate
         "no_rerank": {"rerank": False},
     }
     picked = pick(json.loads(Path(args.dataset).read_text()), args.per_type)

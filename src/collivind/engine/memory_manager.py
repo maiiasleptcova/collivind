@@ -542,8 +542,6 @@ class MemoryManager:
                 budget -= cost
             context_parts.append(part)
 
-        if len(context_parts) == 1:  # nothing fit the budget: say so, so the hook stays silent
-            return "No relevant context found in Collivind." + (f"\n{DEGRADED_NOTE}" if degraded else "")
         return "\n".join(context_parts)
 
     def get_entity(self, name: str) -> Optional[Dict[str, Any]]:

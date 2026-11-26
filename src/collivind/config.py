@@ -13,9 +13,10 @@ from .exceptions import ConfigurationError
 RECALL_MIN_SCORE_DEFAULT = 0.00002
 # Recall stopping rule, off by default (BENCHMARKS.md, "Recall precision").
 # recall_window = 12 with recall_limit = 10 halved recall tokens on held-out
-# LoCoMo but cost 3.4 points of QA accuracy (95% CI -6.7 to -0.1); the floor
-# at 0.001 emptied half the unrelated coding prompts but dropped 1 in 8
-# relevant memories on prompts written blind to the scores.
+# LoCoMo, but QA accuracy came out 3.4 points lower (95% CI -6.7 to -0.1), so
+# staying within 1.5 points was not shown. The floor at 0.001 emptied half the
+# unrelated coding prompts, but 13% of relevant prompts written blind to the
+# scores lost every relevant memory.
 RECALL_WINDOW_DEFAULT = 0.0
 RECALL_FALLBACK_MIN_SCORE_DEFAULT = 0.0
 
@@ -158,8 +159,9 @@ class HooksConfig:
     # memories the prompt hook recalls per prompt, packed into a token budget
     # (len/4 estimate); `hook user-prompt --max-tokens` overrides the budget.
     # 2400 fits about 20 coding-length memories (~120 tokens each); the recall
-    # cutoff runs first. 10 halves the tokens but cost 3.4 points of LoCoMo QA
-    # accuracy on held-out conversations (BENCHMARKS.md, "Recall precision").
+    # cutoff runs first. 10 together with [search] recall_window = 12 halved the
+    # tokens, but held-out LoCoMo QA came out 3.4 points lower (BENCHMARKS.md,
+    # "Recall precision").
     recall_limit: int = 20
     recall_max_tokens: int = 2400
     # Ask the agent for a session summary once a session holds this many
