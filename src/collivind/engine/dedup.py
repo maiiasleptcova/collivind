@@ -32,7 +32,7 @@ from collivind.storage.interfaces import EmbeddingProvider, VectorStore
 # ponytail: tuned on tests/fixtures/dedup_pairs.json; lower it if restatements
 # with very different wording slip through, at one summary embed per neighbour.
 NEIGHBOUR_FLOOR = 0.75
-SUMMARY_THRESHOLD = 0.90
+SUMMARY_THRESHOLD = 0.80
 MAX_NEIGHBOURS = 8
 
 

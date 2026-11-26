@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from collivind.config import CollivindConfig
-from collivind.engine.dedup import DuplicateMatch
+from collivind.engine.dedup import Neighbour
 from collivind.engine.memory_manager import LINKABLE, MemoryManager
 from collivind.models import MemoryCreate, RelationshipCreate, RelType
 from collivind.models.memory import MemoryCategory
@@ -167,8 +167,8 @@ def test_target_index_outside_a_batch_is_refused():
 def test_a_duplicate_fix_still_records_its_link(manager):
     """The fix text was saved before; the RESOLVES edge stated now must not vanish with the duplicate."""
     fix = manager.batch_add_memories([_item("resized the colima disk to 80 GB", "decision")])[0]
-    manager.deduplicator.find_duplicate_detailed = lambda vector, project: (
-        DuplicateMatch(fix, 0.99, True) if vector == "dup" else None
+    manager.deduplicator.neighbours = lambda vector, project: (
+        [Neighbour(fix, 0.99, {"content": "resized the colima disk to 80 GB"})] if vector == "dup" else []
     )
     manager.embedding_provider.embed.side_effect = lambda text: "dup" if "colima" in text else [0.1]
     ids = manager.batch_add_memories(
