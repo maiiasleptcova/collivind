@@ -523,6 +523,8 @@ class MemoryManager:
             project_id=project_id,
             limit=limit,
             min_rerank_score=self.config.search.recall_min_score,
+            rerank_window=self.config.search.recall_window,
+            fallback_min_score=self.config.search.recall_fallback_min_score,
         )
         results, degraded = self.search_with_status(query)
 
@@ -548,6 +550,8 @@ class MemoryManager:
                 budget -= cost
             context_parts.append(part)
 
+        if len(context_parts) == 1:  # nothing fit the budget: say so, so the hook stays silent
+            return "No relevant context found in Collivind." + (f"\n{DEGRADED_NOTE}" if degraded else "")
         return "\n".join(context_parts)
 
     def get_entity(self, name: str) -> Optional[Dict[str, Any]]:

@@ -11,6 +11,11 @@ from .exceptions import ConfigurationError
 # 10 unrelated prompts recall nothing. Higher values cut more noise but drop
 # indirect matches (LongMemEval preference questions) that sit at the floor.
 RECALL_MIN_SCORE_DEFAULT = 0.00002
+# Recall stopping rule, chosen on LoCoMo dev conversations and a synthetic
+# coding store (BENCHMARKS.md, "Recall precision"): with a confident match keep
+# what is within 12 logits of it; with none, keep only scores >= 0.001.
+RECALL_WINDOW_DEFAULT = 12.0
+RECALL_FALLBACK_MIN_SCORE_DEFAULT = 0.001
 
 
 @dataclass
@@ -78,6 +83,13 @@ class SearchConfig:
     # cross-encoder score is below this, so an unrelated prompt recalls
     # nothing. 0 disables. Explicit search never applies it.
     recall_min_score: float = RECALL_MIN_SCORE_DEFAULT
+    # Recall only, after the cutoff. When some memory clears the reranker's
+    # relevance boundary, drop memories more than recall_window logits below
+    # the best one. When none does (the reranker finds nothing relevant),
+    # keep only memories scoring at least recall_fallback_min_score, so an
+    # unrelated prompt usually recalls nothing. Both 0 = the 0.21 behaviour.
+    recall_window: float = RECALL_WINDOW_DEFAULT
+    recall_fallback_min_score: float = RECALL_FALLBACK_MIN_SCORE_DEFAULT
     # When a summary memory is among the reranked candidates, return the top
     # `summary_routes` summaries followed by their best member memories (and
     # the best other memories); 0 treats summaries as ordinary results.
@@ -108,6 +120,23 @@ class SearchConfig:
             raise ConfigurationError(
                 f"[search] recall_min_score must be a number from 0 to below 1, got {self.recall_min_score!r}"
             )
+        if (
+            isinstance(self.recall_window, bool)
+            or not isinstance(self.recall_window, (int, float))
+            or not (0.0 <= self.recall_window <= 50.0)
+        ):
+            raise ConfigurationError(
+                f"[search] recall_window must be a number from 0 to 50, got {self.recall_window!r}"
+            )
+        if (
+            isinstance(self.recall_fallback_min_score, bool)
+            or not isinstance(self.recall_fallback_min_score, (int, float))
+            or not (0.0 <= self.recall_fallback_min_score < 1.0)
+        ):
+            raise ConfigurationError(
+                "[search] recall_fallback_min_score must be a number from 0 to below 1, "
+                f"got {self.recall_fallback_min_score!r}"
+            )
         for name in ("rerank", "lexical"):
             if not isinstance(getattr(self, name), bool):
                 raise ConfigurationError(f"[search] {name} must be true or false, got {getattr(self, name)!r}")
@@ -125,9 +154,11 @@ class HooksConfig:
     quiet_capture: bool = True
     # memories the prompt hook recalls per prompt, packed into a token budget
     # (len/4 estimate); `hook user-prompt --max-tokens` overrides the budget.
-    # 2400 fits about 20 coding-length memories (~120 tokens each); the recall
-    # cutoff runs first, so an unrelated prompt still injects nothing.
-    recall_limit: int = 20
+    # 10 since 0.22 (was 20): on LoCoMo dev the extra 10 held 1% of the gold
+    # turns the top 10 did not, at twice the tokens. The budget mostly binds
+    # on summary memories; the recall rules run first, so an unrelated prompt
+    # usually injects nothing.
+    recall_limit: int = 10
     recall_max_tokens: int = 2400
     # Ask the agent for a session summary once a session holds this many
     # memories no summary covers yet; 0 never asks.
@@ -255,6 +286,11 @@ lexical = true
 # scores below this (0..1), so an unrelated prompt recalls nothing. 0 = off.
 # Explicit search never applies it.
 recall_min_score = 0.00002
+# Recall stopping rule: with a confident match, drop memories more than
+# recall_window logits below the best; with none, keep only memories scoring
+# at least recall_fallback_min_score. Set both to 0 for the 0.21 behaviour.
+recall_window = 12.0
+recall_fallback_min_score = 0.001
 # A summary among the candidates returns the top N summaries plus their most
 # relevant member memories. 0 = treat summaries as ordinary results.
 summary_routes = 3
@@ -271,8 +307,8 @@ enable_stop = true
 enable_session_start = true
 enable_user_prompt = true
 quiet_capture = true
-recall_limit = 20  # memories recalled per prompt
-recall_max_tokens = 2400  # token budget for those memories (about 20 coding-length memories)
+recall_limit = 10  # memories recalled per prompt (at most)
+recall_max_tokens = 2400  # token budget for those memories
 summary_after = 8  # ask the agent for a session summary after this many new memories (0 = never)
 """
 
