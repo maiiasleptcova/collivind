@@ -288,7 +288,11 @@ is the product's actual use and depends on the session. On a real store the
 prompt hook's cost is capped by `[hooks] recall_max_tokens` (2,400 tokens per
 prompt by default, about one cent per prompt at Opus 5.5 list price before
 caching), and the recall cutoff makes it zero for prompts nothing matches.
-Other tools' QA cost was not measured: MemPalace's scripts are retrieval only
+For scale only, and not comparable (different reader, split and method):
+Mem0's paper reports 1,764 context tokens per question for Mem0 and 26,031 for
+full context with gpt-4o-mini, a ratio of about 15x, against 26x (default
+recall) and 13x (with summaries) here. Other tools' QA cost was not measured
+here: MemPalace's scripts are retrieval only
 (injecting its top 10 whole sessions would be roughly 10,000 tokens a
 question, computed from session length, not run), and the LLM-at-write-time
 tools were not run.
@@ -296,20 +300,25 @@ tools were not run.
 ## Published by others, different setups
 
 Not measured here, not comparable with the tables above or with each other,
-and every figure is the publishing project's own. Collected on 2026-11-25.
-Cells marked † were taken from a third-party summary of the source
-([table](https://huggingface.co/datasets/rovemark/locomo-benchmark-results))
-and not checked against the source itself.
+and every figure is the publishing project's own. Each was checked against the
+linked source on 2026-11-26.
 
-| System | Benchmark and figure | Reader / judge | Retrieval depth | Source |
+| System | Benchmark and figure | Answering model | Context per question | Source |
 |---|---|---|---|---|
-| Mem0 | LoCoMo LLM-judge 66.9 (graph variant 68.4) | gpt-4o-mini | 30 memories per speaker (default in its eval code) | [paper](https://arxiv.org/abs/2504.19413) |
-| full-context baseline in Mem0's paper | LoCoMo LLM-judge 72.9 † | gpt-4o-mini | whole conversation | same paper |
-| Zep | LoCoMo 66.0 † in Mem0's paper; 75.1 by Zep's count | see sources | see sources | [Zep blog](https://www.getzep.com/blog/lies-damn-lies-statistics-is-mem0-really-sota-in-agent-memory/) |
-| Letta filesystem agent | LoCoMo 74.0 | see source | agentic file search | [Letta blog](https://www.letta.com/blog/benchmarking-ai-agent-memory) |
-| LangMem | LoCoMo LLM-judge 58.1 † | gpt-4o-mini | see source | Mem0 paper |
-| Mem0 (2026 algorithm) | LoCoMo 92.5, LongMemEval 94.4 (from a web search summary of the page) | see source | see source | [Mem0 blog](https://mem0.ai/blog/ai-memory-benchmarks-in-2026) |
-| MemPalace | LongMemEval-S R@5 96.6 raw (96.4 here), 98.4 hybrid v4 held-out (reproduced); LoCoMo session R@10 60.3 raw and 88.9 hybrid v5 (both reproduced), R@5 83.7 hybrid (not reproduced), R@10 92.4 with bge-large (not run) | none (retrieval) | top 5 / top 10 of 19-32 sessions | [README](https://github.com/MemPalace/mempalace) |
+| Mem0 | LoCoMo LLM-judge 66.88 (graph variant 68.44) | gpt-4o-mini | 1,764 tokens (graph 3,616) | [paper](https://arxiv.org/abs/2504.19413), Table 2 |
+| full-context baseline in Mem0's paper | LoCoMo LLM-judge 72.90 | gpt-4o-mini | 26,031 tokens | same table |
+| Zep, as run in Mem0's paper | LoCoMo LLM-judge 65.99 | gpt-4o-mini | 3,911 tokens | same table |
+| LangMem, as run in Mem0's paper | LoCoMo LLM-judge 58.10 | gpt-4o-mini | 127 tokens | same table |
+| Zep, by its own count | LoCoMo 75.14 | not stated | not stated | [Zep blog](https://www.getzep.com/blog/lies-damn-lies-statistics-is-mem0-really-sota-in-agent-memory/) |
+| Letta filesystem agent | LoCoMo 74.0 | gpt-4o-mini | agentic file search | [Letta blog](https://www.letta.com/blog/benchmarking-ai-agent-memory) |
+| Mem0, 2026 algorithm | LoCoMo 92.5, LongMemEval 94.4 | not stated | about 7,000 tokens | [Mem0 blog](https://mem0.ai/blog/ai-memory-benchmarks-in-2026) |
+| MemPalace | LongMemEval-S R@5 96.6 raw (96.4 here), 98.4 hybrid v4 held-out (reproduced); LoCoMo session R@10 60.3 raw and 88.9 hybrid v5 (both reproduced), R@5 83.7 hybrid (not reproduced), R@10 92.4 with bge-large (not run) | none (retrieval recall, not QA) | top 5 / top 10 of 19-32 sessions | [README](https://github.com/MemPalace/mempalace) |
+
+Notes on the Mem0 paper: its scores are the mean of ten runs; the judge model
+is described but not named; it does not state how many memories are retrieved
+per question (its published eval code defaults to 30 per speaker). It reports
+search latency p95 of 0.20 s and total p95 of 1.44 s for Mem0, against 17.1 s
+total for full context.
 
 Mem0, Zep, Letta and LangMem were not run. Each needs its own model
 configuration, thousands of model calls to ingest the conversations or a hosted
