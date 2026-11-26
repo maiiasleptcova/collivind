@@ -270,6 +270,8 @@ Call `collivind_batch_add` ONCE with `checkpoint_id: "{checkpoint_id}"` and the 
    `collivind_summarize` (no `summary`) to read them, then call it again with `summary` and the `member_ids`
    it returned. The summary is a list of self-contained dated facts ("- " per line), detailed enough that
    each member's key point survives; it is what recall reads first.
+8. If the response has `description_due`, those topics have enough memories but no description: call
+   `collivind_describe_topic` for each with one or two sentences on what it is and what it is for here.
 If nothing new is worth saving, still call `collivind_batch_add` with `checkpoint_id: "{checkpoint_id}"` and
 an empty `memories` list, so the checkpoint is recorded as checked.
 {tone}

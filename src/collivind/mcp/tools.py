@@ -3,7 +3,7 @@ from dataclasses import replace
 from typing import Any, Dict, List, Optional
 
 from collivind import capture
-from collivind.engine import summaries
+from collivind.engine import descriptions, summaries
 from collivind.engine.conflicts import CONFLICT_INSTRUCTION
 from collivind.engine.extractor import build_extraction_prompt, parse_extraction_response
 from collivind.engine.memory_manager import DEGRADED_NOTE, MemoryManager
@@ -158,6 +158,9 @@ class CollivindTools:
         due = self._summary_due(ids, memories)
         if due:
             result["summary_due"] = due
+        undescribed = self._description_due(ids)
+        if undescribed:
+            result["description_due"] = undescribed
         return json.dumps(_with_conflicts(result, conflicts))
 
     def _summarize(self, args: Dict[str, Any]) -> str:
@@ -198,6 +201,25 @@ class CollivindTools:
             return summaries.summary_due(self.memory_manager, project, session, threshold)
         except Exception:
             return None  # the save succeeded; a failed check must not turn it into an error
+
+    def _description_due(self, ids: List[str]) -> Optional[Dict[str, Any]]:
+        """Ask for a topic description once a topic has enough memories and none (engine/descriptions.py)."""
+        try:
+            threshold = self.memory_manager.config.hooks.describe_after
+            if not ids or not isinstance(threshold, int):
+                return None
+            return descriptions.description_due(self.memory_manager, ids, threshold)
+        except Exception:
+            return None  # the save succeeded; a failed check must not turn it into an error
+
+    def _describe(self, args: Dict[str, Any]) -> str:
+        try:
+            result = descriptions.describe_entity(
+                self.memory_manager, args.get("entity_name") or "", args.get("description")
+            )
+        except (LookupError, ValueError) as e:
+            return json.dumps({"error": str(e.args[0])})
+        return json.dumps({"status": "success", **result})
 
     def _record(self, checkpoint_id, ok, ids, **kw) -> None:
         try:
@@ -331,6 +353,26 @@ class CollivindTools:
                     "type": "object",
                     "properties": {"entity_name": {"type": "string"}},
                     "required": ["entity_name"],
+                },
+            },
+            {
+                "name": "collivind_describe_topic",
+                "description": (
+                    "Store what a topic (an entity: a service, library, file, concept ...) is, in one or two "
+                    "sentences: what it is and what it is for in this project. The memory wiki opens the topic's "
+                    "page with it. Call it when a save returns `description_due`, or when a stored description "
+                    "is wrong. Replaces the previous description."
+                ),
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "entity_name": {"type": "string"},
+                        "description": {
+                            "type": "string",
+                            "description": "One or two sentences, at most 400 characters",
+                        },
+                    },
+                    "required": ["entity_name", "description"],
                 },
             },
             {
@@ -642,6 +684,8 @@ class CollivindTools:
 
             elif name == "collivind_summarize":
                 return self._summarize(args)
+            elif name == "collivind_describe_topic":
+                return self._describe(args)
 
             elif name == "collivind_get_version_chain":
                 chain = self.memory_manager.get_version_chain(args["memory_id"])

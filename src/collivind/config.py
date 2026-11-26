@@ -167,12 +167,15 @@ class HooksConfig:
     # Ask the agent for a session summary once a session holds this many
     # memories no summary covers yet; 0 never asks.
     summary_after: int = 8
+    # Ask the agent to describe a topic (an entity) once this many memories are
+    # about it and it has no description; the memory wiki opens with it. 0 never asks.
+    describe_after: int = 5
 
     def __post_init__(self):
-        if isinstance(self.summary_after, bool) or not isinstance(self.summary_after, int) or self.summary_after < 0:
-            raise ConfigurationError(
-                f"[hooks] summary_after must be a non-negative integer, got {self.summary_after!r}"
-            )
+        for key in ("summary_after", "describe_after"):
+            value = getattr(self, key)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ConfigurationError(f"[hooks] {key} must be a non-negative integer, got {value!r}")
         if (
             isinstance(self.recall_limit, bool)
             or not isinstance(self.recall_limit, int)
@@ -315,6 +318,7 @@ quiet_capture = true
 recall_limit = 20  # memories recalled per prompt
 recall_max_tokens = 2400  # token budget for those memories (about 20 coding-length memories)
 summary_after = 8  # ask the agent for a session summary after this many new memories (0 = never)
+describe_after = 5  # ask the agent to describe a topic once this many memories are about it (0 = never)
 """
 
 

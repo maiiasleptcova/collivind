@@ -3,6 +3,7 @@ import click
 from collivind.cli.commands.agent_commands import commands
 from collivind.cli.commands.backup import export_cmd, import_cmd
 from collivind.cli.commands.contradictions import contradictions
+from collivind.cli.commands.describe import describe
 from collivind.cli.commands.docker import docker
 from collivind.cli.commands.embed_daemon import embed_daemon
 from collivind.cli.commands.hook import hook
@@ -68,6 +69,7 @@ cli.add_command(commands)
 cli.add_command(embed_daemon)
 cli.add_command(projects)
 cli.add_command(summarize)
+cli.add_command(describe)
 
 
 if __name__ == "__main__":

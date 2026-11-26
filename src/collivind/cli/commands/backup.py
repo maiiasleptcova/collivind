@@ -5,6 +5,7 @@ Export is never gated: a user's memory is theirs to take elsewhere.
 
 import json
 import sys
+from pathlib import Path
 
 import click
 
@@ -31,9 +32,22 @@ def _close(stores) -> None:
 @click.option("--project", "-p", default=None, help="Only this project (default: every project)")
 @click.option("--output", "-o", type=click.File("w"), default="-", help="File path or - for stdout")
 @click.option("--vectors", is_flag=True, help="Include embedding vectors (large; re-embedded on import if omitted)")
-def export_cmd(project, output, vectors):
-    """Back up memories, entities, relationships and version history as JSONL."""
+@click.option(
+    "--okf",
+    "okf_dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Instead of a backup, write the memory wiki as Open Knowledge Format Markdown into this directory",
+)
+def export_cmd(project, output, vectors, okf_dir):
+    """Back up memories, entities, relationships and version history as JSONL.
+
+    With --okf DIR, write one Markdown page per topic (entity, summary, project)
+    instead: readable, diffable, and openable in OKF tools such as `openwiki visualize`.
+    """
     config = load_config()
+    if okf_dir is not None:
+        return _export_okf(config, okf_dir, project)
     stores = _open(config, "Export")  # strict: a backup taken with the graph down would be partial
     try:
         counts, skipped = export_bundle(stores, output, space=_space(config, stores), project=project, vectors=vectors)
@@ -52,6 +66,42 @@ def export_cmd(project, output, vectors):
             fg="yellow",
             err=True,
         )
+
+
+def _open_graph(config):
+    """The graph store alone: the wiki reads no vectors, so no embedding model is loaded or required."""
+    from collivind.storage.factory import create_graph_store
+
+    try:
+        graph = create_graph_store(config)
+        graph.initialize()
+        return graph
+    except Exception as e:
+        _fail(f"Export mode {config.mode!r} is not reachable; nothing was written. {e}")
+
+
+def _export_okf(config, okf_dir: Path, project) -> None:
+    from collivind.web.okf import export_okf
+
+    graph = _open_graph(config)
+    try:
+        counts = export_okf(graph, okf_dir, project=project)
+    except FileExistsError as e:
+        _fail(str(e))
+        return
+    except Exception as e:
+        _fail(f"Export failed: {e}")
+        return
+    finally:
+        graph.close()
+    click.secho(
+        f"Wrote {counts['files']} files to {okf_dir}: {counts['entity']} topics, {counts['summary']} summaries, "
+        f"{counts['project']} projects.",
+        fg="green",
+        err=True,
+    )
+    if project and not counts["project"]:
+        click.secho(f"Project '{project}' has no memories; the wiki is empty. Typo?", fg="yellow", err=True)
 
 
 @click.command(name="import")
