@@ -14,7 +14,10 @@ config, `BAAI/bge-small-en-v1.5`, 2026-11-26, Apple-silicon laptop.
 - **LoCoMo, find the exact turn** (1,536 questions, no LLM): collivind returns
   an evidence turn in its top 5 for **72.4%** of questions and in its top 10 for
   **77.5%**. On the same harness, MemPalace's hybrid mode stored per turn gets
-  60.5% / 69.5%, plain dense search 56.8% / 66.2%, BM25 57.9% / 65.4%.
+  60.5% / 69.5% with its default embedder and **67.8% / 76.8% with collivind's
+  embedder**; plain dense search 56.8% / 66.2%, BM25 57.9% / 65.4%. With equal
+  embedders collivind's lead is 4.6 points at top 5 (significant) and 0.7 at
+  top 10 (not significant).
 - **LoCoMo, find the right session**: collivind 91.9% (top 5) / 96.2% (top 10);
   BM25 89.8% / 95.4%; MemPalace hybrid 82.3% / 92.3% stored per session and
   85.5% / 93.2% stored per turn. A random ranking already scores 23.6% / 44.0%.
@@ -79,14 +82,20 @@ shipped behaviour and slightly lower than its `limit=50` row in that file.
 |---|---|---|---|
 | **collivind 0.21.0, default** (hybrid candidates + rerank) | bge-small | **72.4** | **77.5** |
 | collivind 0.21.0, `rerank = false` | bge-small | 57.6 | 67.2 |
-| MemPalace 3.12.0, hybrid v5, `--granularity dialog` | all-MiniLM-L6-v2 | 60.5 | 69.5 |
-| MemPalace 3.12.0, raw, `--granularity dialog` | all-MiniLM-L6-v2 | 49.6 | 58.5 |
+| MemPalace 3.12.0, hybrid v5, `--granularity dialog`, `--embed-model` bge-small | bge-small (fastembed ONNX) | 67.8 | 76.8 |
+| MemPalace 3.12.0, raw, `--granularity dialog`, `--embed-model` bge-small | bge-small (fastembed ONNX) | 62.8 | 72.3 |
+| MemPalace 3.12.0, hybrid v5, `--granularity dialog` | all-MiniLM-L6-v2 (its default) | 60.5 | 69.5 |
+| MemPalace 3.12.0, raw, `--granularity dialog` | all-MiniLM-L6-v2 (its default) | 49.6 | 58.5 |
 | plain dense cosine | bge-small | 56.8 | 66.2 |
 | BM25 | none | 57.9 | 65.4 |
 
-Paired exact McNemar tests, collivind default against each other row, give
-p < 1e-11 at both depths (for example against MemPalace hybrid at top 5:
-collivind alone right on 269 questions, MemPalace alone on 87). These pair
+Paired exact McNemar tests, collivind default against each row that uses a
+system's own default, give p < 1e-11 at both depths (for example against
+MemPalace hybrid with MiniLM at top 5: collivind alone right on 269 questions,
+MemPalace alone on 87). Against MemPalace hybrid with the same bge-small
+embedder the picture is different: at top 5 collivind alone is right on 176
+questions and MemPalace alone on 106 (p = 0.00004); at top 10, 128 against 116
+(p = 0.48, no measurable difference). These pair
 collivind's `limit=10` run with the other system's deepest run, which is the
 conservative pairing for collivind.
 
@@ -104,6 +113,8 @@ favourable to it, and its exact `--top-k 10` run scores 58.6 / 66.1.
 |---|---|---|---|
 | *random ranking (expected)* | | *23.6* | *44.0* |
 | collivind 0.21.0, default | turn | 91.9 | 96.2 |
+| MemPalace hybrid v5, per turn, bge-small | turn | 89.8 | 95.0 |
+| MemPalace hybrid v5, per session, bge-small | session | 87.4 | 94.8 |
 | collivind 0.21.0, `rerank = false` | turn | 86.1 | 94.0 |
 | BM25 | turn | 89.8 | 95.4 |
 | plain dense cosine, bge-small | turn | 85.5 | 93.9 |
@@ -164,14 +175,20 @@ path, which chunks conversations differently.
 Not run: the modes that need an LLM (`--llm-rerank`, `diary`, `palace`); and,
 although they need no LLM, `rooms` (it routes on the dataset's own LLM-written
 session summaries), `aaak`, the older LongMemEval hybrid versions, and
-`--embed-model` with a bge embedder, which would have given an equal-embedder
-row and was left out for time.
+`--embed-model` with bge-large (its published 92.4% configuration; the model
+download failed twice).
 
 Two differences besides the engine sit inside the gap, and no row isolates
 them:
 
 - **Embedder.** Collivind and the dense baseline use bge-small; MemPalace's
-  scripts use all-MiniLM-L6-v2. On LoCoMo, plain dense search with bge-small
+  scripts default to all-MiniLM-L6-v2. The bge-small rows above remove most of
+  that difference (not all: MemPalace's run uses fastembed's quantised ONNX
+  export, a 512-token window, and no query prefix, where collivind prefixes
+  queries). They also show something about collivind: MemPalace's raw mode with
+  bge-small (62.8 / 72.3) is well above this file's plain dense baseline with
+  the same model (56.8 / 66.2), so the text template or the query prefix that
+  collivind uses is costing first-stage recall. On LoCoMo, plain dense search with bge-small
   (56.8 / 66.2) is already about 7 points above MemPalace raw with MiniLM
   (49.6 / 58.5) with no engine at all. In the other direction, with the same
   MiniLM embedder on LongMemEval, MemPalace raw (96.4%) is above collivind's

@@ -459,17 +459,19 @@ reproduction steps are in [benchmarks/BENCHMARKS.md](benchmarks/BENCHMARKS.md).
 | System | Embedder | top 5 | top 10 |
 |---|---|---|---|
 | **collivind 0.21.0** (hybrid candidates + local reranker) | bge-small | **72.4%** | **77.5%** |
-| MemPalace 3.12.0, hybrid v5, stored per turn | all-MiniLM-L6-v2 | 60.5% | 69.5% |
+| MemPalace 3.12.0, hybrid v5, stored per turn, same embedder | bge-small | 67.8% | 76.8% |
+| MemPalace 3.12.0, hybrid v5, stored per turn, its default embedder | all-MiniLM-L6-v2 | 60.5% | 69.5% |
 | BM25 | none | 57.9% | 65.4% |
 | plain dense search | bge-small | 56.8% | 66.2% |
 | MemPalace 3.12.0, raw, stored per turn | all-MiniLM-L6-v2 | 49.6% | 58.5% |
 
 Read the gap with care. The MemPalace rows are its published benchmark
-pipeline (its own scripts), not its product path. The systems use different
-embedders and index different text (collivind includes the session date and
-photo captions, MemPalace's script does not), so the gap is not the engine
-alone; no row isolates it. At session level the systems are much closer
-(collivind 91.9% / 96.2%, BM25 89.8% / 95.4%, MemPalace hybrid 82.3% / 92.3%).
+pipeline (its own scripts), not its product path. With the same embedder,
+collivind's lead over MemPalace's hybrid mode is 4.6 points at top 5
+(significant) and 0.7 at top 10 (not significant). The systems also index
+different text (collivind includes the session date and photo captions). At
+session level they are closer still (collivind 91.9% / 96.2%, MemPalace hybrid
+with the same embedder 89.8% / 95.0%, BM25 89.8% / 95.4%).
 
 **LongMemEval-S, find the right session**: collivind, MemPalace, dense search
 and BM25 all score 94.8% to 98.2% at top 5 (collivind 97.8% through the engine

@@ -136,6 +136,10 @@ def main():
         "MemPalace raw, per session (requested 50)": load_rows(d / "mempalace_locomo_raw.json"),
         "MemPalace raw, per turn": load_rows(d / "mempalace_locomo_raw_turns.json"),
         "MemPalace hybrid v5, per turn": load_rows(d / "mempalace_locomo_hybrid_turns.json"),
+        "MemPalace raw, per turn, bge-small": load_rows(d / "mempalace_locomo_raw_turns_bgesmall.json"),
+        "MemPalace hybrid v5, per turn, bge-small": load_rows(d / "mempalace_locomo_hybrid_turns_bgesmall.json"),
+        "MemPalace raw, per session, bge-small": load_rows(d / "mempalace_locomo_raw_bgesmall.json"),
+        "MemPalace hybrid v5, per session, bge-small": load_rows(d / "mempalace_locomo_hybrid_bgesmall.json"),
     }  # fmt: skip
     report = {"locomo": {name: score_locomo(rows, gold, n_sessions) for name, rows in lo.items()}}
 
