@@ -1,0 +1,145 @@
+{
+  "questions": 1982,
+  "skipped": {
+    "no evidence": 4,
+    "some unresolvable evidence ids (scored on the rest)": 2
+  },
+  "seconds": 369.8,
+  "ingest": [
+    {
+      "project": "locomo-conv-26",
+      "turns": 419,
+      "live_memories": 419,
+      "turns_reachable": 419,
+      "seconds": 18.4
+    },
+    {
+      "project": "locomo-conv-30",
+      "turns": 369,
+      "live_memories": 369,
+      "turns_reachable": 369,
+      "seconds": 5.2
+    },
+    {
+      "project": "locomo-conv-41",
+      "turns": 663,
+      "live_memories": 663,
+      "turns_reachable": 663,
+      "seconds": 11.5
+    },
+    {
+      "project": "locomo-conv-42",
+      "turns": 629,
+      "live_memories": 629,
+      "turns_reachable": 629,
+      "seconds": 13.1
+    },
+    {
+      "project": "locomo-conv-43",
+      "turns": 680,
+      "live_memories": 680,
+      "turns_reachable": 680,
+      "seconds": 17.0
+    },
+    {
+      "project": "locomo-conv-44",
+      "turns": 675,
+      "live_memories": 675,
+      "turns_reachable": 675,
+      "seconds": 19.8
+    },
+    {
+      "project": "locomo-conv-47",
+      "turns": 689,
+      "live_memories": 689,
+      "turns_reachable": 689,
+      "seconds": 23.0
+    },
+    {
+      "project": "locomo-conv-48",
+      "turns": 681,
+      "live_memories": 681,
+      "turns_reachable": 681,
+      "seconds": 24.8
+    },
+    {
+      "project": "locomo-conv-49",
+      "turns": 509,
+      "live_memories": 509,
+      "turns_reachable": 509,
+      "seconds": 20.2
+    },
+    {
+      "project": "locomo-conv-50",
+      "turns": 568,
+      "live_memories": 568,
+      "turns_reachable": 568,
+      "seconds": 24.3
+    }
+  ],
+  "scores": {
+    "temporal": {
+      "n": 321.0,
+      "hit@5": 0.8068535825545171,
+      "strict_hit@5": 0.8068535825545171,
+      "recall@5": 0.773883696780893,
+      "hit@10": 0.8473520249221184,
+      "strict_hit@10": 0.8473520249221184,
+      "recall@10": 0.8185358255451713
+    },
+    "all": {
+      "n": 1982.0,
+      "hit@5": 0.7230070635721494,
+      "strict_hit@5": 0.7230070635721494,
+      "recall@5": 0.664826511244935,
+      "hit@10": 0.7885973763874874,
+      "strict_hit@10": 0.7885973763874874,
+      "recall@10": 0.7332976012486342
+    },
+    "overall": {
+      "n": 1536.0,
+      "hit@5": 0.7604166666666666,
+      "strict_hit@5": 0.7604166666666666,
+      "recall@5": 0.6872956675048575,
+      "hit@10": 0.8170572916666666,
+      "strict_hit@10": 0.8170572916666666,
+      "recall@10": 0.7476535453611933
+    },
+    "open-domain": {
+      "n": 92.0,
+      "hit@5": 0.4673913043478261,
+      "strict_hit@5": 0.4673913043478261,
+      "recall@5": 0.34873188405797106,
+      "hit@10": 0.5434782608695652,
+      "strict_hit@10": 0.5434782608695652,
+      "recall@10": 0.4375
+    },
+    "multi-hop": {
+      "n": 282.0,
+      "hit@5": 0.7056737588652482,
+      "strict_hit@5": 0.7056737588652482,
+      "recall@5": 0.4190998059839045,
+      "hit@10": 0.7730496453900709,
+      "strict_hit@10": 0.7730496453900709,
+      "recall@10": 0.49844862532432527
+    },
+    "single-hop": {
+      "n": 841.0,
+      "hit@5": 0.7931034482758621,
+      "strict_hit@5": 0.7931034482758621,
+      "recall@5": 0.7812128418549346,
+      "hit@10": 0.8501783590963139,
+      "strict_hit@10": 0.8501783590963139,
+      "recall@10": 0.8380895759017044
+    },
+    "adversarial": {
+      "n": 446.0,
+      "hit@5": 0.594170403587444,
+      "strict_hit@5": 0.594170403587444,
+      "recall@5": 0.5874439461883408,
+      "hit@10": 0.6905829596412556,
+      "strict_hit@10": 0.6905829596412556,
+      "recall@10": 0.6838565022421524
+    }
+  }
+}
