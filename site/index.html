@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Collivind: local graph memory for AI coding agents</title>
-<meta name="description" content="Collivind gives Claude Code, Codex, opencode and GitHub Copilot a memory that carries over between sessions: a local knowledge graph with vector search, recalled on every prompt in Claude Code, Codex, opencode and GitHub Copilot. Open source, MIT.">
+<meta name="description" content="Collivind gives Claude Code, Codex, opencode and GitHub Copilot a memory that carries over between sessions: a local knowledge graph with vector search, recalled on every prompt. Open source, MIT.">
 <link rel="canonical" href="https://maiiasleptcova.github.io/collivind/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Collivind">
@@ -45,7 +45,7 @@
           <a class="btn btn-primary" href="#install">Install in two commands</a>
           <a class="btn btn-ghost" href="https://github.com/maiiasleptcova/collivind">View source on GitHub</a>
         </div>
-        <p class="hero-note">Automatic recall in Claude Code, Codex, opencode and GitHub Copilot (preview hooks). MIT licensed. Runs on your machine.</p>
+        <p class="hero-note">Automatic recall in Claude Code, Codex, opencode and GitHub Copilot (preview hooks, not yet verified in a live Copilot run). MIT licensed. Runs on your machine.</p>
       </div>
       <figure class="frame-fig">
         <div class="frame">
@@ -86,21 +86,21 @@ Integration tests use a throwaway Neo4j 5.26 container, never the live stack.</d
       <ol class="steps">
         <li>
           <h3>Recall on every prompt</h3>
-          <p>In Claude Code and Codex, a hook at session start injects a short index of what is stored for the project (about 100 tokens). On each prompt you type, another hook searches memory with it and adds the matches, within a token budget, and adds nothing when nothing matches.</p>
+          <p>At session start a hook injects a short index of what is stored for the project (about 100 tokens). On each prompt you type, another hook searches memory with it and adds the matches, up to 2,400 tokens by default. With the reranker on (the default), a prompt unrelated to anything stored adds nothing.</p>
         </li>
         <li>
           <h3>Checkpointed capture</h3>
-          <p>Every 15 responses (configurable) the agent is asked to save what it learned through the <code>collivind_batch_add</code> tool. A checkpoint counts as saved only when that call arrives; an unanswered one is re-asked with backoff and then recorded as failed. After a context compaction, the agent is asked to save from the summary.</p>
+          <p>Every 15 responses (configurable) the agent is asked to save what it learned through the <code>collivind_batch_add</code> tool. A checkpoint counts as saved only when that call arrives; an unanswered one is re-asked with backoff and then recorded as failed. After a context compaction, the agent is asked to save from the compaction summary. Once a session has saved enough memories (8 by default), the agent is also asked to write one summary memory linked to them, which recall reads first.</p>
         </li>
         <li>
           <h3>Graph plus vectors</h3>
-          <p>Memories are typed (fact, decision, pattern, error, architecture, preference, snippet) and linked to entities such as files, services and libraries. Search mixes vector similarity (70%) with graph proximity (30%). A newer version of a memory supersedes the old one and keeps the history; when a new memory conflicts with a stored one, the agent checks which is right and retires the other, or asks you.</p>
+          <p>Memories are typed (fact, decision, pattern, error, architecture, preference, snippet, summary) and linked to entities such as files, services and libraries. Search runs in two local stages: vector similarity (70%) mixed with graph proximity (30%) and recency, then a small cross-encoder rescores the best candidates from vector and keyword search. A newer version of a memory supersedes the old one and keeps the history; when a new memory conflicts with a stored one, the agent checks which is right and retires the other, or asks you.</p>
         </li>
       </ol>
       <dl class="facts">
-        <div><dt>Local-first</dt><dd>Docker mode runs Qdrant, Neo4j and an embedding service in containers on your machine. Embedded mode needs no Docker: SQLite for vectors and graph, with the embedding model loaded in-process.</dd></div>
-        <div><dt>No LLM API keys</dt><dd>Embeddings are computed locally. Extracting memories from a conversation is done by the agent you already run, through its own model, so Collivind adds no model bill.</dd></div>
-        <div><dt>Plain tools</dt><dd>13 MCP tools for agents, and a CLI for you: <code>search</code>, <code>add</code>, <code>update</code>, <code>invalidate</code>, <code>export</code>, <code>import</code>, <code>migrate</code>, <code>sync</code>.</dd></div>
+        <div><dt>Local-first</dt><dd>Docker mode runs Qdrant, Neo4j and an embedding service in containers on your machine. Embedded mode needs no Docker: SQLite for vectors and graph, with the embedding model loaded locally.</dd></div>
+        <div><dt>No LLM API keys</dt><dd>Embeddings and the search reranker run locally. Extracting memories from a conversation is done by the agent you already run, through its own model, so Collivind adds no model bill.</dd></div>
+        <div><dt>Plain tools</dt><dd>15 MCP tools for agents, and a CLI for you: <code>search</code>, <code>add</code>, <code>update</code>, <code>invalidate</code>, <code>export</code>, <code>import</code>, <code>migrate</code>, <code>sync</code>.</dd></div>
       </dl>
     </div>
   </section>
@@ -124,7 +124,7 @@ Integration tests use a throwaway Neo4j 5.26 container, never the live stack.</d
           </tbody>
         </table>
       </div>
-      <p class="muted small mt-s">Copilot's agent hooks are in preview in VS Code. <a href="https://github.com/maiiasleptcova/collivind#agent-support">Details in the README</a>.</p>
+      <p class="muted small mt-s">Copilot's agent hooks are in preview in VS Code, an organization policy can switch them off, and this integration has not yet been verified in a live Copilot run. <a href="https://github.com/maiiasleptcova/collivind#agent-support">Details in the README</a>.</p>
     </div>
   </section>
 
@@ -138,20 +138,20 @@ Integration tests use a throwaway Neo4j 5.26 container, never the live stack.</d
         <div class="stack">
         <div class="code" tabindex="0" role="region" aria-label="Install commands, Docker mode">
           <button class="copy" type="button" data-copy="install-cmds" aria-live="polite" hidden>Copy</button>
-<pre id="install-cmds"><span class="dim"># v0.14.0, the latest release</span>
-uv tool install https://github.com/maiiasleptcova/collivind/releases/download/v0.14.0/collivind_memory-0.14.0-py3-none-any.whl
+<pre id="install-cmds"><span class="dim"># v0.21.0, the latest release</span>
+uv tool install https://github.com/maiiasleptcova/collivind/releases/download/v0.21.0/collivind_memory-0.21.0-py3-none-any.whl
 collivind init</pre>
         </div>
-        <p class="muted small">No Docker? Embedded mode keeps everything in SQLite and loads the model in-process. It needs the <code>embedded</code> extra and <code>mode = "embedded"</code> in the config before <code>init</code>. The second line only writes a config if there is none, so on a machine that already has <code>~/.collivind/config.toml</code> add the line under <code>[collivind]</code> yourself instead:</p>
+        <p class="muted small">No Docker? Embedded mode keeps everything in SQLite and loads the model locally. It needs the <code>embedded</code> extra and <code>mode = "embedded"</code> in the config before <code>init</code>. The second line only writes a config if there is none, so on a machine that already has <code>~/.collivind/config.toml</code> add the line under <code>[collivind]</code> yourself instead:</p>
         <div class="code" tabindex="0" role="region" aria-label="Install commands, embedded mode">
           <button class="copy" type="button" data-copy="install-embedded" aria-live="polite" hidden>Copy</button>
-<pre id="install-embedded">uv tool install "collivind-memory[embedded] @ https://github.com/maiiasleptcova/collivind/releases/download/v0.14.0/collivind_memory-0.14.0-py3-none-any.whl"
+<pre id="install-embedded">uv tool install "collivind-memory[embedded] @ https://github.com/maiiasleptcova/collivind/releases/download/v0.21.0/collivind_memory-0.21.0-py3-none-any.whl"
 mkdir -p ~/.collivind &amp;&amp; [ -e ~/.collivind/config.toml ] || printf '[collivind]\nmode = "embedded"\n' &gt; ~/.collivind/config.toml
 collivind init</pre>
         </div>
         </div>
         <ul class="notes">
-          <li>In docker mode, <code>collivind init</code> starts the containers (or uses Qdrant and Neo4j already running) and registers the MCP server for every supported agent it finds installed, plus the hooks (Claude Code, Codex) or the capture plugin (opencode).</li>
+          <li>In docker mode, <code>collivind init</code> starts the containers (or uses Qdrant and Neo4j already running) and registers the MCP server for every supported agent it finds installed, plus the hooks (Claude Code, Codex, GitHub Copilot) or the plugin (opencode).</li>
           <li>More on <a href="https://github.com/maiiasleptcova/collivind#embedded-mode-no-docker">embedded mode</a> and <a href="https://github.com/maiiasleptcova/collivind#switching-modes">moving data between modes</a>.</li>
           <li>Codex runs hooks only after you <a href="https://github.com/maiiasleptcova/collivind#codex-trust-the-hooks-after-installing-or-upgrading">review and trust them</a>.</li>
           <li><code>collivind status</code> checks backends, containers, hooks and MCP registration, and exits 1 if anything is broken.</li>
@@ -167,15 +167,28 @@ collivind init</pre>
         <p class="lead"><code>collivind web</code> opens a local explorer on <code>127.0.0.1:8765</code> over the same store your hooks and agents use. In docker mode, <code>collivind docker up</code> runs it as a container too.</p>
         <div class="prose">
           <p>A graph shows memories with the entities they mention, their links, contradictions and version chains. Filter by project, category, entity type or date, or narrow to a few hops around one memory. Search by meaning and the matches light up on the graph.</p>
-          <p>Open a memory to edit it, read its history, link it to another memory or entity, or forget it after a confirmation. Each project gets a name, colour, description and repository link, stored with the memories so export and migrate carry them. The header says which store you are reading, docker or embedded.</p>
-          <p class="small muted">Loopback only and without authentication: anything that can reach the port can read the whole store.</p>
+          <p>Open a memory to edit it, read its history, link it to another memory or entity, or forget it after a confirmation. Each project gets a name, colour, description and repository link, stored with the memories so export and migrate carry them. The header names the mode whose store you are reading.</p>
+          <p class="small muted">Loopback only and without authentication: anything that can reach the port can read and edit the whole store.</p>
         </div>
       </div>
+      <div class="stack">
       <figure>
-        <img class="frame" src="assets/explorer-graph.jpg" width="1200" height="750" loading="lazy" decoding="async"
-          alt="The Collivind explorer: a graph of memories coloured by project, linked to the services, files and ideas they mention, with filters for project, category, entity type and date in a sidebar.">
+        <picture>
+          <source srcset="assets/explorer-graph-dark.webp" media="(prefers-color-scheme: dark)">
+          <img class="frame" src="assets/explorer-graph.jpg" width="1200" height="750" loading="lazy" decoding="async"
+            alt="The Collivind explorer: a graph of memories coloured by project, linked to the services, files and ideas they mention, with filters for project, category, entity type and date in a sidebar.">
+        </picture>
         <figcaption class="caption">Screenshot of the graph view, with demo data.</figcaption>
       </figure>
+      <figure>
+        <picture>
+          <source srcset="assets/explorer-panel-dark.webp" media="(prefers-color-scheme: dark)">
+          <img class="frame" src="assets/explorer-panel.webp" width="1200" height="750" loading="lazy" decoding="async"
+            alt="A memory opened in the explorer's side panel: its text, Edit, Local graph and Forget actions, and its links to the entities Stripe, webhooks and Postgres and to a related memory.">
+        </picture>
+        <figcaption class="caption">A memory opened in the side panel, with demo data.</figcaption>
+      </figure>
+      </div>
     </div>
   </section>
 
@@ -185,8 +198,8 @@ collivind init</pre>
         <h2 id="measured-h">Measured, with the conditions attached</h2>
       </div>
       <div class="prose">
-        <p><strong>Retrieval.</strong> On LongMemEval-S session retrieval, Collivind finds the right session in the top 5 for 98.0% of the 500 questions (standard uncleaned split, raw mode: the default bge-small embedding model run locally, no LLM, no reranking). This is retrieval recall, not answer accuracy. Method, per-question results and caveats are in <a href="https://github.com/maiiasleptcova/collivind/blob/main/benchmarks/BENCHMARKS.md">BENCHMARKS.md</a>. We publish no comparisons with other memory tools, since they measure different things.</p>
-        <p><strong>Search latency.</strong> With 10,000 memories, median search takes 32 ms in embedded mode and 65 ms on Neo4j + Qdrant, median of the repository's seeded benchmark on an Apple-silicon laptop, embedding time excluded.</p>
+        <p><strong>Retrieval.</strong> On LongMemEval-S session retrieval, Collivind finds the right session in the top 5 for 98.0% of the 500 questions (standard uncleaned split, raw mode: the default bge-small embedding model run locally, no LLM, no reranking). This is retrieval recall, not answer accuracy. On LoCoMo turn-level retrieval through the full engine, a much harder task, the right turn is in the top 5 for 72.4% and the top 10 for 77.5% of 1,536 non-adversarial questions, with the keyword and reranking stage added in 0.19 (57.6% and 67.2% before it). Method, per-question results and caveats are in <a href="https://github.com/maiiasleptcova/collivind/blob/main/benchmarks/BENCHMARKS.md">BENCHMARKS.md</a>. We publish no comparisons with other memory tools, since they measure different things.</p>
+        <p><strong>Search latency.</strong> With 10,000 memories in embedded mode, a search for 10 results takes a median 35 ms with the reranker off and 186 ms with it on, in the repository's seeded benchmark on Apple silicon. Embedding time is excluded, and the reranker figure is a worst case: every text is padded to the model's full window.</p>
       </div>
     </div>
   </section>
@@ -197,7 +210,7 @@ collivind init</pre>
         <h2 id="oss-h">Open source, MIT licensed</h2>
       </div>
       <div class="prose">
-        <p>Everything on this page is in the MIT-licensed repository: the graph and vector memory, hooks for Claude Code and Codex, the opencode capture plugin, the MCP tools and CLI, the web UI, lossless <code>export</code> and <code>import</code>, <code>migrate</code> between modes, and <code>sync</code> through a git repo for sharing with a team.</p>
+        <p>Everything on this page is in the MIT-licensed repository: the graph and vector memory, hooks for Claude Code, Codex and GitHub Copilot, the opencode plugin, the MCP tools and CLI, the web UI, lossless <code>export</code> and <code>import</code>, <code>migrate</code> between modes, and <code>sync</code> through a git repo for sharing with a team.</p>
         <p>The roadmap says single-user memory, export and sync stay free. A team edition with a shared server and permissions is in development; it is not available or for sale.</p>
       </div>
       <div class="row mt">
