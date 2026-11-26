@@ -65,7 +65,7 @@
             <text class="sub" x="336" y="77" text-anchor="middle">recall, ask to checkpoint</text>
             <rect class="box" x="236" y="150" width="200" height="80" rx="12"/>
             <text x="336" y="185" text-anchor="middle" font-weight="600">MCP server</text>
-            <text class="sub" x="336" y="207" text-anchor="middle">13 memory tools, stdio</text>
+            <text class="sub" x="336" y="207" text-anchor="middle">15 memory tools, stdio</text>
           </g>
           <g>
             <rect class="box" x="500" y="85" width="150" height="80" rx="12"/>
@@ -85,7 +85,7 @@
       </figure>
       <div class="prose mt">
         <p>Hooks are short commands your agent runs at fixed moments: session start, each prompt, after responses, before compaction. They search memory and add what matches to the context, or ask the agent to save. A hook cannot write memories itself, because pulling knowledge out of a conversation needs the agent's model; the agent does it through the MCP tools.</p>
-        <p>The core library is the same in every mode; only the storage backends change. <code>docker</code> mode uses Qdrant, Neo4j and an embedding service in containers. <code>embedded</code> mode uses SQLite for both stores and loads the embedding model in-process, kept warm by a small background process. <code>remote</code> mode points at services you run yourself.</p>
+        <p>The core library is the same in every mode; only the storage backends change. <code>docker</code> mode uses Qdrant, Neo4j and an embedding and reranking service in containers. <code>embedded</code> mode uses SQLite for both stores and loads the embedding and reranking models locally, kept warm by a small background process. <code>remote</code> mode points at services you run yourself.</p>
       </div>
     </div>
   </section>
@@ -103,15 +103,15 @@
         <li><a href="https://github.com/maiiasleptcova/collivind#as-a-claude-code-plugin-recommended">Claude Code plugin</a><p>Registers the MCP server, all four hooks and the slash commands in one step.</p></li>
         <li><a href="https://github.com/maiiasleptcova/collivind#agent-support">Agent support</a><p>What Claude Code, Codex, opencode and Copilot each get, and what capture means precisely.</p></li>
         <li><a href="https://github.com/maiiasleptcova/collivind#codex-trust-the-hooks-after-installing-or-upgrading">Codex hook trust</a><p>Codex runs hooks only after you review them, and again after an upgrade changes them.</p></li>
-        <li><a href="https://github.com/maiiasleptcova/collivind#hooks">Hooks</a><p>SessionStart, UserPromptSubmit, Stop and PreCompact, and what each one does.</p></li>
-        <li><a href="https://github.com/maiiasleptcova/collivind#web-ui">Web UI</a><p><code>collivind web</code>: search, read, edit and delete memories on localhost.</p></li>
-        <li><a href="https://github.com/maiiasleptcova/collivind#mcp-tools">MCP tools</a><p>The 13 tools agents call to search, save, invalidate and inspect memory.</p></li>
+        <li><a href="https://github.com/maiiasleptcova/collivind#hooks">Hooks</a><p>SessionStart, UserPromptSubmit, Stop and PreCompact, what each one does, and where they are registered for Claude Code, Codex and Copilot.</p></li>
+        <li><a href="https://github.com/maiiasleptcova/collivind#web-ui-the-memory-explorer">Web UI</a><p><code>collivind web</code>: a graph, list and project view on localhost to search, edit, link and forget memories.</p></li>
+        <li><a href="https://github.com/maiiasleptcova/collivind#mcp-tools">MCP tools</a><p>The 15 tools agents call to search, save, summarize, invalidate and inspect memory.</p></li>
         <li><a href="https://github.com/maiiasleptcova/collivind#cli-commands">CLI commands</a><p>Every verb; the memory verbs take <code>--json</code> for scripting.</p></li>
         <li><a href="https://github.com/maiiasleptcova/collivind#backup-and-restore">Backup and restore</a><p>Lossless <code>export</code> and <code>import</code>: every project, ids and version history kept.</p></li>
         <li><a href="https://github.com/maiiasleptcova/collivind#team-sharing">Team sharing</a><p><code>collivind sync</code> through any git repo, reviewable in pull requests.</p></li>
-        <li><a href="https://github.com/maiiasleptcova/collivind#how-it-works">Data model</a><p>Memory categories, entity types, relationships and how search is scored.</p></li>
+        <li><a href="https://github.com/maiiasleptcova/collivind#how-it-works">Data model</a><p>Memory categories, entity types, relationships, summaries and the two-stage search.</p></li>
         <li><a href="https://github.com/maiiasleptcova/collivind#configuration">Configuration</a><p><code>~/.collivind/config.toml</code>: mode, search weights, checkpoint interval.</p></li>
-        <li><a href="https://github.com/maiiasleptcova/collivind/blob/main/benchmarks/BENCHMARKS.md">Benchmarks</a><p>LongMemEval-S retrieval and search latency, with method and caveats.</p></li>
+        <li><a href="https://github.com/maiiasleptcova/collivind/blob/main/benchmarks/BENCHMARKS.md">Benchmarks</a><p>LongMemEval-S and LoCoMo retrieval and search latency, with method and caveats.</p></li>
         <li><a href="https://github.com/maiiasleptcova/collivind/blob/main/ROADMAP.md">Roadmap</a><p>What is planned next, and what stays free.</p></li>
       </ul>
     </div>

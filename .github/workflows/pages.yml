@@ -1,6 +1,7 @@
 # Publishes site/ to GitHub Pages on every push to main that touches site/ (or
 # this file), and on demand from the Actions tab. Requires Settings > Pages >
-# Source: "GitHub Actions".
+# Source: "GitHub Actions". Until Pages is enabled the run warns and skips the
+# deploy instead of failing; once it is, run this workflow from the Actions tab.
 # The site assumes https://maiiasleptcova.github.io/collivind/ (canonical URLs,
 # Open Graph, sitemap, 404 home link): grep for it if the address changes.
 name: Pages
@@ -27,9 +28,23 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/upload-pages-artifact@v5
+      # Skip only on an explicit 404 (Pages not enabled); any other API error
+      # falls through to the deploy so it fails loudly.
+      - id: pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/$GITHUB_REPOSITORY/pages" 2>&1 | grep -q '"status": *"404"'; then
+            echo "::warning::GitHub Pages is not enabled for this repository; skipping the deploy."
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.pages.outputs.enabled
+        uses: actions/checkout@v7
+      - if: steps.pages.outputs.enabled
+        uses: actions/upload-pages-artifact@v5
         with:
           path: site
-      - id: deployment
+      - if: steps.pages.outputs.enabled
+        id: deployment
         uses: actions/deploy-pages@v5
