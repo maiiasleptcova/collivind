@@ -3254,56 +3254,6 @@
   }
  },
  {
-  "id": "rev-same-03",
-  "kind": "same",
-  "group": "review:long-wrapper",
-  "hard": true,
-  "a": {
-   "content": "We use SQLite WAL mode for the embedded store.",
-   "summary": "embedded store uses WAL",
-   "category": "decision",
-   "tags": [
-    "sqlite",
-    "storage"
-   ]
-  },
-  "b": {
-   "content": "Session wrap-up: rewrote the explorer's local graph view, fixed two flaky socket tests in the embed daemon, bumped the version to 0.21.3, reviewed the Qdrant retry wrapper, updated README install instructions for uv, and confirmed the embedded store still runs SQLite in WAL mode so the hook and the MCP server can write concurrently.",
-   "summary": "session wrap-up: explorer graph, flaky tests, version bump",
-   "category": "fact",
-   "tags": [
-    "session",
-    "explorer",
-    "release"
-   ]
-  }
- },
- {
-  "id": "rev-same-04",
-  "kind": "same",
-  "group": "review:long-wrapper-2",
-  "hard": true,
-  "a": {
-   "content": "Neo4j bolt port is 7687.",
-   "summary": "neo4j bolt port",
-   "category": "fact",
-   "tags": [
-    "neo4j",
-    "ports"
-   ]
-  },
-  "b": {
-   "content": "Incident 2026-11-20: docker mode failed to start because the compose file mapped Neo4j's HTTP port to 7474 and a stale container already held it; after removing the container the graph came up, bolt on 7687 as usual, Qdrant on 6333, and the embedding service on 8090. Root cause was a container left by an aborted test run.",
-   "summary": "stale container blocked docker mode startup",
-   "category": "error",
-   "tags": [
-    "docker",
-    "incident",
-    "neo4j"
-   ]
-  }
- },
- {
   "id": "rev-same-05",
   "kind": "same",
   "group": "review:synonym-rewrite",
@@ -3494,7 +3444,7 @@
  {
   "id": "rev-same-13",
   "kind": "same",
-  "group": "review:batch-restatement",
+  "group": "review:restatement (written for the batch path, run as two single adds)",
   "hard": true,
   "a": {
    "content": "The MCP server must never print to stdout outside JSON-RPC frames.",

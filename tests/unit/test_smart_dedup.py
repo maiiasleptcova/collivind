@@ -128,11 +128,18 @@ def test_likely_duplicate_in_another_category_is_surfaced(manager):
     assert [c.memory.id for c in found] == [old.id]
 
 
-def test_close_memory_about_another_pr_is_not_surfaced(manager):
+def test_memory_the_old_rule_would_have_merged_is_always_surfaced(manager):
+    """Within dedup_threshold the agent is told even when the PR numbers differ, and nothing is retired."""
     old, _ = _add(manager, "alpha: PR 776 has no reviews yet")
     new, found = _add(manager, "bravo: PR 773 has no reviews yet")
-    assert found == []
+    assert [c.memory.id for c in found] == [old.id]
     assert _live_ids(manager) == {old.id, new.id}
+
+
+def test_close_memory_about_another_pr_is_not_surfaced_below_the_threshold(manager):
+    _add(manager, "alpha: PR 776 has no reviews yet")
+    _, found = _add(manager, "mike: PR 773 has no reviews yet")  # cosine 0.80
+    assert found == []
 
 
 def test_same_fact_with_different_detail_is_surfaced_by_summary(manager):

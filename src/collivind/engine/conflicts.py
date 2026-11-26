@@ -35,13 +35,14 @@ MIN_WORD_OVERLAP = 0.15
 
 CONFLICT_INSTRUCTION = (
     "These existing memories are close to the one just saved. Check each one. "
-    "If it is compatible (a different detail, or the same thing said differently), ignore it. "
-    "If one replaces the other (a newer state of the same fact), call collivind_invalidate on the "
-    "stale one with superseded_by set to the current one. If they genuinely disagree, check the "
-    "source of truth (the code, docs, git history, the user's own words) and invalidate the wrong "
-    "one the same way. If you still cannot tell, ask the user one short question, invalidate the "
-    "wrong one after they answer, and save their answer as a memory. If nobody can be asked now, "
-    "call collivind_mark_conflict on the pair so it is flagged for review. Do not use "
+    "If it states the same fact as the new memory (said differently, or with other detail around it), "
+    "or the new memory is a newer state of it, call collivind_invalidate on the existing one with "
+    "superseded_by set to the memory just saved; keep both only if the existing one holds detail the "
+    "new one lacks. If it is a different fact that only looks similar, ignore it. If they genuinely "
+    "disagree, check the source of truth (the code, docs, git history, the user's own words) and "
+    "invalidate the wrong one the same way. If you still cannot tell, ask the user one short question, "
+    "invalidate the wrong one after they answer, and save their answer as a memory. If nobody can be "
+    "asked now, call collivind_mark_conflict on the pair so it is flagged for review. Do not use "
     "collivind_forget for this, because invalidating keeps the history."
 )
 

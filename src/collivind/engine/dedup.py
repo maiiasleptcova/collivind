@@ -1,10 +1,11 @@
 """Write-time duplicate handling.
 
 The rule: a new memory is rejected only when a live memory in the same
-project has the same content, summary, category and tags (conflicts.same_memory). Nothing is ever retired on
-similarity. A close neighbour is stored next to the new memory and returned
-to the agent under possible_conflicts, and the agent decides whether one
-supersedes the other (collivind_invalidate keeps the version chain).
+project has the same content, summary, category and tags
+(conflicts.same_memory). Nothing is ever retired on similarity. A close
+neighbour is stored next to the new memory and returned to the agent under
+possible_conflicts, and the agent decides whether one supersedes the other
+(collivind_invalidate keeps the version chain).
 
 Why: on LoCoMo the old rule (retire the older memory at cosine >= 0.92) took
 343 of 5,882 turns out of search and cost about 4 points of hit@5, because
@@ -12,12 +13,13 @@ short similar sentences are usually different facts. Similarity cannot tell
 "PR 212 CI passed" from "PR 212 CI failed", or a reworded decision from a
 neighbouring one, so the agent judges, as it already does for conflicts.
 
-A neighbour counts as a likely duplicate, surfaced even when it is in another
-category, when it is about the same subject (conflicts.same_subject) and
-either its stored (enriched) vector is within `dedup_threshold` or, when both
-memories have their own summary, the summaries are within SUMMARY_THRESHOLD.
-The summary check catches the same fact wrapped in different detail, whose
-content cosine can be as low as 0.77.
+Likely duplicates are surfaced in any category:
+- every neighbour within `dedup_threshold` (stored-vector cosine), which is
+  everything the old rule would have merged;
+- below it, a neighbour about the same subject (conflicts.same_subject) whose
+  summary is within SUMMARY_THRESHOLD of the new memory's, when both have a
+  summary of their own (not a copy of the content). That catches the same fact wrapped
+  in different detail, whose content cosine can be as low as 0.77.
 """
 
 from dataclasses import dataclass
@@ -69,9 +71,13 @@ class Deduplicator:
 
     def likely_duplicates(self, memory: MemoryCreate, neighbours: List[Neighbour]) -> List[Neighbour]:
         """Neighbours that are probably the same fact: returned to the agent, never retired here."""
-        subject = [n for n in neighbours if same_subject(n.payload.get("content", ""), memory.content)]
-        likely = [n for n in subject if n.score >= self.config.dedup_threshold]
-        rest = [n for n in subject if n.score < self.config.dedup_threshold and _own_summary(n.payload)]
+        likely = [n for n in neighbours if n.score >= self.config.dedup_threshold]
+        rest = [
+            n
+            for n in neighbours
+            if n.score < self.config.dedup_threshold and same_subject(n.payload.get("content", ""), memory.content)
+        ]
+        rest = [n for n in rest if _own_summary(n.payload)]
         if rest and self.embedder is not None and memory.summary and memory.summary != memory.content:
             mine, *theirs = self.embedder.embed_batch([memory.summary] + [n.payload["summary"] for n in rest])
             likely += [n for n, v in zip(rest, theirs) if cosine(mine, v) >= SUMMARY_THRESHOLD]
@@ -79,5 +85,6 @@ class Deduplicator:
 
 
 def _own_summary(payload: Dict[str, Any]) -> bool:
+    # a summary that repeats the content says nothing the stored vector does not
     summary = payload.get("summary")
     return bool(summary) and summary != payload.get("content")
