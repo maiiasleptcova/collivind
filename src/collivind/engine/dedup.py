@@ -1,7 +1,7 @@
 """Write-time duplicate handling.
 
-The rule: a new memory is rejected only when its text, normalised, is
-identical to a live memory's in the same project. Nothing is ever retired on
+The rule: a new memory is rejected only when a live memory in the same
+project has the same content, summary, category and tags (conflicts.same_memory). Nothing is ever retired on
 similarity. A close neighbour is stored next to the new memory and returned
 to the agent under possible_conflicts, and the agent decides whether one
 supersedes the other (collivind_invalidate keeps the version chain).
@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from collivind.config import SearchConfig
-from collivind.engine.conflicts import cosine, normalise, same_subject
+from collivind.engine.conflicts import cosine, same_subject
 from collivind.models import MemoryCreate
 from collivind.storage.interfaces import EmbeddingProvider, VectorStore
 
@@ -63,10 +63,9 @@ class Deduplicator:
         ]
 
     @staticmethod
-    def exact(content: str, neighbours: List[Neighbour]) -> Optional[Neighbour]:
-        """The neighbour whose text is the same as `content` once normalised: a resubmission."""
-        key = normalise(content)
-        return next((n for n in neighbours if normalise(n.payload.get("content", "")) == key), None)
+    def same_text(content: str, neighbours: List[Neighbour]) -> List[Neighbour]:
+        """Neighbours whose indexed text is `content`: candidates for a resubmission, to confirm on the graph."""
+        return [n for n in neighbours if (n.payload.get("content") or "").strip() == content.strip()]
 
     def likely_duplicates(self, memory: MemoryCreate, neighbours: List[Neighbour]) -> List[Neighbour]:
         """Neighbours that are probably the same fact: returned to the agent, never retired here."""

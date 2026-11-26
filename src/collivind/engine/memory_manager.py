@@ -4,7 +4,7 @@ from dataclasses import replace
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 from collivind.config import CollivindConfig
-from collivind.engine.conflicts import MAX_CANDIDATES, is_live
+from collivind.engine.conflicts import MAX_CANDIDATES, is_live, same_memory
 from collivind.engine.dedup import Deduplicator, Neighbour
 from collivind.engine.enrichment import build_enriched_text
 from collivind.engine.search_engine import SearchEngine
@@ -100,7 +100,7 @@ class MemoryManager:
     ) -> Tuple[MemoryNode, List[SearchResult]]:
         """Store a memory and return it with the live memories it may conflict with.
 
-        Only a resubmission (the same text once normalised) is rejected.
+        Only a resubmission (conflicts.same_memory) is rejected.
         Nothing is retired here: close neighbours and likely duplicates come
         back as conflict candidates, and the caller (an agent, via the MCP
         response) decides whether one is an older version, a real conflict or
@@ -113,10 +113,10 @@ class MemoryManager:
         vector = self.embedding_provider.embed(enriched)
 
         neighbours = self.deduplicator.neighbours(vector, memory_create.project_id)
-        same = self.deduplicator.exact(memory_create.content, neighbours)
-        if same:
-            existing = self._graph_write(self.graph_store.get_memory, same.memory_id)
-            if existing:
+        for candidate in self.deduplicator.same_text(memory_create.content, neighbours):
+            # the graph is the truth: a payload can lag an edit or outlive an invalidation
+            existing = self._graph_write(self.graph_store.get_memory, candidate.memory_id)
+            if existing is not None and is_live(existing) and same_memory(existing, memory_create):
                 # identical content resubmitted — keep existing as-is, but the
                 # links the save states are new knowledge ("this fix resolves
                 # that error") and must not vanish with the duplicate text
@@ -157,15 +157,17 @@ class MemoryManager:
     def _possible_conflicts(
         self, memory_create: MemoryCreate, node: MemoryNode, vector: List[float], neighbours: List[Neighbour]
     ) -> List[SearchResult]:
-        """Likely duplicates first (any category), then same-category conflict candidates, at most MAX_CANDIDATES."""
+        """Up to MAX_CANDIDATES likely duplicates (any category), then up to MAX_CANDIDATES same-category conflicts.
+
+        Separate caps, so a pile of near-identical notes cannot crowd out a real conflict.
+        """
         found: List[SearchResult] = []
-        for n in self.deduplicator.likely_duplicates(memory_create, neighbours):
+        for n in self.deduplicator.likely_duplicates(memory_create, neighbours)[:MAX_CANDIDATES]:
             existing = self.graph_store.get_memory(n.memory_id)
             if existing is not None and is_live(existing):
                 found.append(SearchResult(memory=existing, score=n.score, vector_score=n.score, graph_score=0.0))
         seen = {r.memory.id for r in found}
-        found += [c for c in self.search_engine.conflict_candidates(node, vector) if c.memory.id not in seen]
-        return found[:MAX_CANDIDATES]
+        return found + [c for c in self.search_engine.conflict_candidates(node, vector) if c.memory.id not in seen]
 
     def _write_relationships(
         self, memory_id: str, relationships: Optional[Sequence[Union[RelationshipCreate, EntityRelation]]]

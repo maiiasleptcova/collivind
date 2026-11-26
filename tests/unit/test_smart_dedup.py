@@ -71,12 +71,45 @@ def test_resubmission_is_rejected_and_keeps_its_links(manager):
     other, _ = _add(manager, "unrelated note")
     again, found = _add(
         manager,
-        "alpha:  PR 42 uses POSTGRES 15.",
+        "  alpha: PR 42 uses Postgres 15\n",
         relationships=[RelationshipCreate(source_id="", target_id=other.id, type=RelType.RELATES_TO)],
     )
     assert again.id == old.id and found == []
     assert _live_ids(manager) == {old.id, other.id}
     assert any(e.target_id == other.id for e in manager.graph_store.iter_relationships() if e.source_id == old.id)
+
+
+@pytest.mark.parametrize(
+    "content, tags",
+    [
+        ("alpha: PR 42 uses postgres 15", []),  # case is meaningful in code
+        ("alpha: PR 42  uses Postgres 15", []),  # so is inner whitespace
+        ("alpha: PR 42 uses Postgres 15", ["pr-43"]),  # same line, another subject
+    ],
+)
+def test_almost_identical_is_kept_and_surfaced(manager, content, tags):
+    old, _ = _add(manager, "alpha: PR 42 uses Postgres 15")
+    new, found = manager.add_memory_checked(
+        MemoryCreate(content=content, summary=content, category=MemoryCategory.FACT, project_id="p", tags=tags)
+    )
+    assert new.id != old.id
+    assert old.id in [c.memory.id for c in found]
+
+
+def test_stale_payload_does_not_reject_a_new_fact(manager):
+    """The vector payload says A but the memory was edited to B: saving A again is a new fact."""
+    old, _ = _add(manager, "alpha: timeout is 30s")
+    manager.graph_store.update_memory(old.id, content="alpha: timeout is 60s", summary="alpha: timeout is 60s")
+    new, _ = _add(manager, "alpha: timeout is 30s")
+    assert new.id != old.id
+
+
+def test_resaving_a_retired_memory_stores_it_again(manager):
+    old, _ = _add(manager, "alpha: PR 42 uses Postgres 15")
+    newer, _ = _add(manager, "bravo: PR 42 uses Postgres 16")
+    manager.graph_store.invalidate_memory(old.id, newer.id, "graph only: the vector delete never ran")
+    again, _ = _add(manager, "alpha: PR 42 uses Postgres 15")
+    assert again.id not in (old.id, newer.id)
 
 
 def test_near_duplicate_is_kept_and_surfaced_not_retired(manager):

@@ -2870,5 +2870,648 @@
     "perf"
    ]
   }
+ },
+ {
+  "id": "rev-diff-01",
+  "kind": "different",
+  "group": "review:git-range",
+  "hard": true,
+  "a": {
+   "content": "To review only the branch's own changes run git diff origin/main...",
+   "summary": "PR review uses three-dot diff (since merge base)",
+   "category": "pattern",
+   "tags": [
+    "git",
+    "review"
+   ]
+  },
+  "b": {
+   "content": "To review only the branch's own changes run git diff origin/main..",
+   "summary": "PR review uses two-dot diff (tip to tip)",
+   "category": "pattern",
+   "tags": [
+    "git",
+    "review"
+   ]
+  }
+ },
+ {
+  "id": "rev-diff-02",
+  "kind": "different",
+  "group": "review:docker-context",
+  "hard": true,
+  "a": {
+   "content": "Build the api image with: docker build -f services/api/Dockerfile .",
+   "summary": "api image builds with services/api as context",
+   "category": "snippet",
+   "tags": [
+    "docker",
+    "api"
+   ]
+  },
+  "b": {
+   "content": "Build the api image with: docker build -f services/api/Dockerfile ..",
+   "summary": "api image builds with the repo root as context",
+   "category": "snippet",
+   "tags": [
+    "docker",
+    "api"
+   ]
+  }
+ },
+ {
+  "id": "rev-diff-03",
+  "kind": "different",
+  "group": "review:python-indent",
+  "hard": true,
+  "a": {
+   "content": "first_truthy helper:\ndef first_truthy(xs):\n    for x in xs:\n        if x:\n            return x\n    return None",
+   "summary": "first_truthy scans the whole list",
+   "category": "snippet",
+   "tags": [
+    "python",
+    "utils"
+   ]
+  },
+  "b": {
+   "content": "first_truthy helper:\ndef first_truthy(xs):\n    for x in xs:\n        if x:\n            return x\n        return None",
+   "summary": "buggy first_truthy returns after the first item",
+   "category": "error",
+   "tags": [
+    "python",
+    "utils"
+   ]
+  }
+ },
+ {
+  "id": "rev-diff-04",
+  "kind": "different",
+  "group": "review:yaml-indent",
+  "hard": true,
+  "a": {
+   "content": "In ci.yml the cache key is set as:\njobs:\n  test:\n    cache:\n      key: uv-lock",
+   "summary": "cache key nested under the test job",
+   "category": "fact",
+   "tags": [
+    "ci",
+    "yaml"
+   ]
+  },
+  "b": {
+   "content": "In ci.yml the cache key is set as:\njobs:\n  test:\n    cache:\n  key: uv-lock",
+   "summary": "cache key accidentally at jobs level (the bug)",
+   "category": "error",
+   "tags": [
+    "ci",
+    "yaml"
+   ]
+  }
+ },
+ {
+  "id": "rev-diff-05",
+  "kind": "different",
+  "group": "review:case-filename",
+  "hard": true,
+  "a": {
+   "content": "The component file is src/components/Button.tsx",
+   "summary": "Button component filename is capitalised",
+   "category": "fact",
+   "tags": [
+    "frontend",
+    "filenames"
+   ]
+  },
+  "b": {
+   "content": "The component file is src/components/button.tsx",
+   "summary": "button component filename is lowercase after the rename",
+   "category": "fact",
+   "tags": [
+    "frontend",
+    "filenames"
+   ]
+  }
+ },
+ {
+  "id": "rev-diff-06",
+  "kind": "different",
+  "group": "review:case-sql-column",
+  "hard": true,
+  "a": {
+   "content": "The orders table column is \"userId\"",
+   "summary": "orders.userId is camelCase and must be quoted",
+   "category": "fact",
+   "tags": [
+    "postgres",
+    "schema"
+   ]
+  },
+  "b": {
+   "content": "The orders table column is \"userid\"",
+   "summary": "orders.userid is lowercase after migration 0043",
+   "category": "fact",
+   "tags": [
+    "postgres",
+    "schema"
+   ]
+  }
+ },
+ {
+  "id": "rev-diff-07",
+  "kind": "different",
+  "group": "review:case-env",
+  "hard": true,
+  "a": {
+   "content": "The worker reads its port from PORT",
+   "summary": "worker port env var is upper-case PORT",
+   "category": "fact",
+   "tags": [
+    "config",
+    "worker"
+   ]
+  },
+  "b": {
+   "content": "The worker reads its port from port",
+   "summary": "worker port comes from the 'port' key in settings.toml",
+   "category": "fact",
+   "tags": [
+    "config",
+    "worker"
+   ]
+  }
+ },
+ {
+  "id": "rev-diff-08",
+  "kind": "different",
+  "group": "review:case-go-export",
+  "hard": true,
+  "a": {
+   "content": "Use settings.Load to read the config",
+   "summary": "exported settings.Load is the public entry point",
+   "category": "pattern",
+   "tags": [
+    "go",
+    "config"
+   ]
+  },
+  "b": {
+   "content": "Use settings.load to read the config",
+   "summary": "inside package settings use the unexported load",
+   "category": "pattern",
+   "tags": [
+    "go",
+    "config"
+   ]
+  }
+ },
+ {
+  "id": "rev-diff-09",
+  "kind": "different",
+  "group": "review:bang",
+  "hard": true,
+  "a": {
+   "content": "After a permission error, rerun with sudo !!",
+   "summary": "rerun last command as root via history expansion",
+   "category": "pattern",
+   "tags": [
+    "shell"
+   ]
+  },
+  "b": {
+   "content": "After a permission error, rerun with sudo",
+   "summary": "rerun the command manually with sudo",
+   "category": "pattern",
+   "tags": [
+    "shell"
+   ]
+  }
+ },
+ {
+  "id": "rev-diff-10",
+  "kind": "different",
+  "group": "review:status-tags-pr",
+  "hard": true,
+  "a": {
+   "content": "CI is green, ready to merge.",
+   "summary": "PR 212 CI passed",
+   "category": "fact",
+   "tags": [
+    "pr-212",
+    "ci"
+   ]
+  },
+  "b": {
+   "content": "CI is green, ready to merge.",
+   "summary": "PR 213 CI passed",
+   "category": "fact",
+   "tags": [
+    "pr-213",
+    "ci"
+   ]
+  }
+ },
+ {
+  "id": "rev-diff-11",
+  "kind": "different",
+  "group": "review:migration-summary",
+  "hard": true,
+  "a": {
+   "content": "Migration applied cleanly on staging.",
+   "summary": "0042_add_orders_index applied on staging",
+   "category": "fact",
+   "tags": [
+    "migrations",
+    "staging"
+   ]
+  },
+  "b": {
+   "content": "Migration applied cleanly on staging.",
+   "summary": "0043_drop_legacy_column applied on staging",
+   "category": "fact",
+   "tags": [
+    "migrations",
+    "staging"
+   ]
+  }
+ },
+ {
+  "id": "rev-diff-12",
+  "kind": "different",
+  "group": "review:revert-tags",
+  "hard": true,
+  "a": {
+   "content": "Reverted the last deploy because of elevated 5xx.",
+   "summary": "billing-service deploy reverted",
+   "category": "error",
+   "tags": [
+    "billing-service",
+    "deploy"
+   ]
+  },
+  "b": {
+   "content": "Reverted the last deploy because of elevated 5xx.",
+   "summary": "search-service deploy reverted",
+   "category": "error",
+   "tags": [
+    "search-service",
+    "deploy"
+   ]
+  }
+ },
+ {
+  "id": "rev-diff-13",
+  "kind": "different",
+  "group": "review:category-only",
+  "hard": true,
+  "a": {
+   "content": "Pin httpx below 0.28.",
+   "summary": "httpx 0.28 broke the proxy kwarg in tests",
+   "category": "error",
+   "tags": [
+    "httpx",
+    "deps"
+   ]
+  },
+  "b": {
+   "content": "Pin httpx below 0.28.",
+   "summary": "team decided to keep httpx pinned until the client is rewritten",
+   "category": "decision",
+   "tags": [
+    "httpx",
+    "deps"
+   ]
+  }
+ },
+ {
+  "id": "rev-diff-14",
+  "kind": "different",
+  "group": "review:join-separator",
+  "hard": true,
+  "a": {
+   "content": "Fixed-width report columns are joined with \"  \".join(cols)",
+   "summary": "report uses a two-space column separator",
+   "category": "snippet",
+   "tags": [
+    "reports",
+    "formatting"
+   ]
+  },
+  "b": {
+   "content": "Fixed-width report columns are joined with \" \".join(cols)",
+   "summary": "report uses a one-space separator (breaks the parser)",
+   "category": "error",
+   "tags": [
+    "reports",
+    "formatting"
+   ]
+  }
+ },
+ {
+  "id": "rev-same-01",
+  "kind": "same",
+  "group": "review:ref-mismatch",
+  "hard": true,
+  "a": {
+   "content": "Fixed the flaky login test (issue #198) by awaiting the session cookie",
+   "summary": "flaky login test fixed",
+   "category": "error",
+   "tags": [
+    "tests",
+    "flaky"
+   ]
+  },
+  "b": {
+   "content": "PR #212 fixes the flaky login test: it now awaits the session cookie",
+   "summary": "flaky login test fix",
+   "category": "error",
+   "tags": [
+    "tests",
+    "flaky"
+   ]
+  }
+ },
+ {
+  "id": "rev-same-02",
+  "kind": "same",
+  "group": "review:incidental-ref",
+  "hard": true,
+  "a": {
+   "content": "Redis must listen on 6380 locally, not 6379 (see #45)",
+   "summary": "local redis on 6380",
+   "category": "fact",
+   "tags": [
+    "redis",
+    "dev-env"
+   ]
+  },
+  "b": {
+   "content": "Local Redis port is 6380 because 6379 clashes with the system redis; noted in PR #61",
+   "summary": "redis dev port 6380",
+   "category": "fact",
+   "tags": [
+    "redis",
+    "dev-env"
+   ]
+  }
+ },
+ {
+  "id": "rev-same-03",
+  "kind": "same",
+  "group": "review:long-wrapper",
+  "hard": true,
+  "a": {
+   "content": "We use SQLite WAL mode for the embedded store.",
+   "summary": "embedded store uses WAL",
+   "category": "decision",
+   "tags": [
+    "sqlite",
+    "storage"
+   ]
+  },
+  "b": {
+   "content": "Session wrap-up: rewrote the explorer's local graph view, fixed two flaky socket tests in the embed daemon, bumped the version to 0.21.3, reviewed the Qdrant retry wrapper, updated README install instructions for uv, and confirmed the embedded store still runs SQLite in WAL mode so the hook and the MCP server can write concurrently.",
+   "summary": "session wrap-up: explorer graph, flaky tests, version bump",
+   "category": "fact",
+   "tags": [
+    "session",
+    "explorer",
+    "release"
+   ]
+  }
+ },
+ {
+  "id": "rev-same-04",
+  "kind": "same",
+  "group": "review:long-wrapper-2",
+  "hard": true,
+  "a": {
+   "content": "Neo4j bolt port is 7687.",
+   "summary": "neo4j bolt port",
+   "category": "fact",
+   "tags": [
+    "neo4j",
+    "ports"
+   ]
+  },
+  "b": {
+   "content": "Incident 2026-11-20: docker mode failed to start because the compose file mapped Neo4j's HTTP port to 7474 and a stale container already held it; after removing the container the graph came up, bolt on 7687 as usual, Qdrant on 6333, and the embedding service on 8090. Root cause was a container left by an aborted test run.",
+   "summary": "stale container blocked docker mode startup",
+   "category": "error",
+   "tags": [
+    "docker",
+    "incident",
+    "neo4j"
+   ]
+  }
+ },
+ {
+  "id": "rev-same-05",
+  "kind": "same",
+  "group": "review:synonym-rewrite",
+  "hard": true,
+  "a": {
+   "content": "We chose Postgres over MongoDB because reports need joins across orders and customers.",
+   "summary": "Postgres chosen for joins",
+   "category": "decision",
+   "tags": [
+    "database"
+   ]
+  },
+  "b": {
+   "content": "Relational database picked instead of a document store, since reporting queries combine order and client records.",
+   "summary": "relational DB for reporting",
+   "category": "architecture",
+   "tags": [
+    "db",
+    "reporting"
+   ]
+  }
+ },
+ {
+  "id": "rev-same-06",
+  "kind": "same",
+  "group": "review:cross-category-short",
+  "hard": true,
+  "a": {
+   "content": "Run uv run pytest tests/unit before every push.",
+   "summary": "Run uv run pytest tests/unit before every push.",
+   "category": "preference",
+   "tags": [
+    "testing"
+   ]
+  },
+  "b": {
+   "content": "Before pushing, always run the unit tests with uv run pytest tests/unit.",
+   "summary": "Before pushing, always run the unit tests with uv run pytest tests/unit.",
+   "category": "pattern",
+   "tags": [
+    "workflow",
+    "ci"
+   ]
+  }
+ },
+ {
+  "id": "rev-same-07",
+  "kind": "same",
+  "group": "review:status-repeat-different-tags",
+  "hard": true,
+  "a": {
+   "content": "Benchmark still running on the M2; do not start other model jobs.",
+   "summary": "benchmark running, avoid model jobs",
+   "category": "fact",
+   "tags": [
+    "benchmark",
+    "memory-pressure"
+   ]
+  },
+  "b": {
+   "content": "Do not launch anything that loads a model while the benchmark is going on the M2 laptop.",
+   "summary": "no model loads during benchmark",
+   "category": "preference",
+   "tags": [
+    "laptop",
+    "ram",
+    "locomo"
+   ]
+  }
+ },
+ {
+  "id": "rev-same-08",
+  "kind": "same",
+  "group": "review:russian-english",
+  "hard": true,
+  "a": {
+   "content": "Релизный тег требует GitHub Release с собранными артефактами.",
+   "summary": "тег требует GitHub Release",
+   "category": "pattern",
+   "tags": [
+    "release"
+   ]
+  },
+  "b": {
+   "content": "Every release tag needs a GitHub Release with the built assets attached.",
+   "summary": "tag needs GitHub Release",
+   "category": "pattern",
+   "tags": [
+    "release",
+    "github"
+   ]
+  }
+ },
+ {
+  "id": "rev-same-09",
+  "kind": "same",
+  "group": "review:short-tokens",
+  "hard": true,
+  "a": {
+   "content": "CI: uv sync needs --frozen.",
+   "summary": "CI uses uv sync --frozen",
+   "category": "pattern",
+   "tags": [
+    "ci",
+    "uv"
+   ]
+  },
+  "b": {
+   "content": "In the GitHub workflow always install deps with the frozen lockfile flag.",
+   "summary": "workflow installs with frozen lockfile",
+   "category": "pattern",
+   "tags": [
+    "github-actions"
+   ]
+  }
+ },
+ {
+  "id": "rev-same-10",
+  "kind": "same",
+  "group": "review:summary-granularity",
+  "hard": true,
+  "a": {
+   "content": "Large git pushes to the collivind remote drop the connection; push with -c http.version=HTTP/1.1.",
+   "summary": "git push workaround",
+   "category": "error",
+   "tags": [
+    "git"
+   ]
+  },
+  "b": {
+   "content": "Use HTTP/1.1 for multi-megabyte pushes to collivind, otherwise the remote hangs up mid-transfer.",
+   "summary": "multi-MB push to collivind needs HTTP/1.1 or it disconnects",
+   "category": "pattern",
+   "tags": [
+    "git",
+    "push",
+    "network"
+   ]
+  }
+ },
+ {
+  "id": "rev-same-11",
+  "kind": "same",
+  "group": "review:pr-dash",
+  "hard": true,
+  "a": {
+   "content": "PR-212 adds the superseded report command",
+   "summary": "superseded report command",
+   "category": "fact",
+   "tags": [
+    "cli"
+   ]
+  },
+  "b": {
+   "content": "The fix/dedup-evidence-loss branch adds a read-only report listing memories retired on similarity",
+   "summary": "read-only superseded listing",
+   "category": "fact",
+   "tags": [
+    "cli",
+    "dedup"
+   ]
+  }
+ },
+ {
+  "id": "rev-same-12",
+  "kind": "same",
+  "group": "review:different-numbers-format",
+  "hard": true,
+  "a": {
+   "content": "HTTP client timeout for the embedding service is 30s.",
+   "summary": "embed timeout 30s",
+   "category": "fact",
+   "tags": [
+    "embedding",
+    "timeouts"
+   ]
+  },
+  "b": {
+   "content": "embedding_service.py sets requests timeout=30_000 ms",
+   "summary": "embedding timeout set in ms",
+   "category": "snippet",
+   "tags": [
+    "python",
+    "http"
+   ]
+  }
+ },
+ {
+  "id": "rev-same-13",
+  "kind": "same",
+  "group": "review:batch-restatement",
+  "hard": true,
+  "a": {
+   "content": "The MCP server must never print to stdout outside JSON-RPC frames.",
+   "summary": "no stray stdout in MCP server",
+   "category": "pattern",
+   "tags": [
+    "mcp"
+   ]
+  },
+  "b": {
+   "content": "Never write non-JSON-RPC output to stdout from the MCP server; it corrupts the stream.",
+   "summary": "MCP stdout must be JSON-RPC only",
+   "category": "pattern",
+   "tags": [
+    "mcp",
+    "stdio"
+   ]
+  }
  }
 ]

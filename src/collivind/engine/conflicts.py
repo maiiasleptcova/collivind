@@ -9,19 +9,21 @@ overlap does not separate them either. So similarity alone never decides that
 something is a contradiction. On write the server returns a few gated
 candidates and the agent judges them (see CONFLICT_INSTRUCTION). The review
 command only re-labels what the new gate would not have surfaced, and it
-retires only a memory whose text is identical to the other's once normalised,
-the same rule add_memory applies (see engine/dedup.py).
+retires only one of two identical memories (same_memory), the same rule
+add_memory applies (see engine/dedup.py).
 """
 
 import math
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Sequence, Set
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Sequence, Set, Union
 
 from collivind.models import MemoryCategory, MemoryNode, RelationshipCreate, RelType
 
 if TYPE_CHECKING:
     from collivind.engine.memory_manager import MemoryManager
+    from collivind.models import MemoryCreate
     from collivind.storage.interfaces import GraphStore
 
 # Cosine (enriched text vs enriched text) a stored memory must reach before a
@@ -85,9 +87,19 @@ def same_subject(a: str, b: str) -> bool:
     return len(wa & wb) / max(1, len(wa | wb)) >= MIN_WORD_OVERLAP
 
 
-def normalise(text: str) -> str:
-    """Case, inner whitespace and trailing full stops do not make a different memory."""
-    return re.sub(r"\s+", " ", text.casefold()).strip().rstrip(".!").rstrip()
+def same_memory(a: Union[MemoryNode, "MemoryCreate"], b: Union[MemoryNode, "MemoryCreate"]) -> bool:
+    """A resubmission: the same content, summary, category and tags; only outer whitespace may differ.
+
+    Nothing looser. Case and inner whitespace matter in code (Button.tsx vs
+    button.tsx, indentation), and the same status line tagged pr-212 and
+    pr-213 is two facts.
+    """
+    return (
+        a.content.strip() == b.content.strip()
+        and (a.summary or "").strip() == (b.summary or "").strip()
+        and MemoryCategory(a.category) == MemoryCategory(b.category)
+        and set(a.tags or []) == set(b.tags or [])
+    )
 
 
 def is_live(memory: Optional[MemoryNode]) -> bool:
@@ -103,7 +115,7 @@ def cosine(a: Sequence[float], b: Sequence[float]) -> float:
 # Review buckets. Only REVIEW keeps its CONTRADICTS edge.
 RESOLVED = "resolved"  # an endpoint is gone or already invalidated: the edge is history
 UNRELATED = "unrelated"  # below the new gate: re-label to RELATES_TO
-DUPLICATE = "duplicate"  # identical text once normalised: retire the older one
+DUPLICATE = "duplicate"  # identical memories (same_memory): retire the older one
 REVIEW = "review"  # passes the gate: a person or agent has to read it
 
 
@@ -123,8 +135,8 @@ def classify_edge(
     if not is_live(a) or not is_live(b):
         return RESOLVED, "one side is already invalidated or deleted"
     assert a is not None and b is not None
-    if normalise(a.content) == normalise(b.content):
-        return DUPLICATE, "identical text"
+    if same_memory(a, b):
+        return DUPLICATE, "identical content, summary, category and tags"
     if score is None:
         return REVIEW, "no live vector to compare"
     if score < CONFLICT_THRESHOLD:
@@ -243,6 +255,11 @@ def auto_superseded(graph: "GraphStore", project_id: Optional[str] = None) -> Li
             continue
         if project_id is not None and m.project_id != project_id:
             continue
-        if abs((m.valid_to - new.created_at).total_seconds()) <= AUTO_SUPERSEDE_WINDOW:
+        if abs((_aware(m.valid_to) - _aware(new.created_at)).total_seconds()) <= AUTO_SUPERSEDE_WINDOW:
             pairs.append((m, new))
     return sorted(pairs, key=lambda p: _created(p[0]))
+
+
+def _aware(when: datetime) -> datetime:
+    # legacy rows may hold naive timestamps; everything collivind writes is UTC
+    return when if when.tzinfo else when.replace(tzinfo=timezone.utc)

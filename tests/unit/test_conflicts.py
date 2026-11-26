@@ -109,8 +109,10 @@ def _node(content, **kw):
         (_node("PR 10 open"), _node("PR 11 open"), 0.90, UNRELATED),
         # close is not enough to retire anything: a likely duplicate goes to review
         (_node("PR 10 open"), _node("PR 10 merged"), 0.95, REVIEW),
-        # only identical text (case, spacing, final full stop aside) is a duplicate
-        (_node("PR 10 open"), _node("pr 10  open."), 0.5, DUPLICATE),
+        # only an identical memory (outer whitespace aside) is a duplicate
+        (_node("PR 10 open"), _node(" PR 10 open\n"), 0.5, DUPLICATE),
+        (_node("PR 10 open"), _node("pr 10 open"), 0.99, REVIEW),
+        (_node("PR 10 open"), _node("PR 10 open", tags=["pr-11"]), 0.99, REVIEW),
         (_node("PR 10 open"), _node("PR 10 merged"), 0.88, REVIEW),
         (_node("PR 10 open"), _node("PR 10 merged"), None, REVIEW),
     ],
@@ -149,7 +151,10 @@ def test_exact_duplicate_reports_no_conflicts(manager):
     _add(manager, "alpha: PR 42 uses Postgres 15")
     _, found = manager.add_memory_checked(
         MemoryCreate(
-            content="alpha: PR 42 uses Postgres 15", summary="db", category=MemoryCategory.FACT, project_id="p"
+            content="alpha: PR 42 uses Postgres 15",
+            summary="alpha: PR 42 uses Postgres 15",
+            category=MemoryCategory.FACT,
+            project_id="p",
         )
     )
     assert found == []
@@ -214,7 +219,10 @@ def backlog(manager):
     # a near-duplicate can sit in the store if dedup was off or the threshold changed
     dup = manager.graph_store.create_memory(
         MemoryCreate(
-            content="Alpha: PR 42 runs on Postgres 15.", summary="d", category=MemoryCategory.FACT, project_id="p"
+            content="alpha: PR 42 runs on Postgres 15",
+            summary="alpha: PR 42 runs on Postgres 15",
+            category=MemoryCategory.FACT,
+            project_id="p",
         )
     )
     manager.vector_store.upsert(dup.id, DUP, dup.to_dict())
@@ -303,7 +311,10 @@ def test_review_apply_keeps_version_chain_when_newer_side_repeats(manager):
     for _ in range(2):
         m = manager.graph_store.create_memory(
             MemoryCreate(
-                content="delta: PR 7 status, newest", summary="o", category=MemoryCategory.FACT, project_id="p"
+                content="delta: PR 7 status, newest",
+                summary="delta: PR 7 status, newest",
+                category=MemoryCategory.FACT,
+                project_id="p",
             )
         )
         manager.vector_store.upsert(m.id, BASE, m.to_dict())
