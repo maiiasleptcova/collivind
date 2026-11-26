@@ -224,8 +224,8 @@ class _Page:
             out += [f"- {self.link(r['id'], r['title'])} — {_one_line(r['reason'])}" for r in page["related"]] + [""]
         if topic.kind == "project" and page.get("unfiled"):
             out += [
-                f"The memories below are about no topic ({page['unfiled']} of {len(topic.members)}); "
-                "the rest are on the topic pages above.",
+                f"Below: every problem in the project, and the {page['unfiled']} of its {len(topic.members)} "
+                "memories that are about no topic; the rest are on the topic pages above.",
                 "",
             ]
         for section in page["sections"]:

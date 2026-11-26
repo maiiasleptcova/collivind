@@ -121,6 +121,7 @@ function render() {
       <div class="prose">${esc(m.content)}</div>
       <div class="panel-actions">
         <button class="quiet" id="p-edit">Edit</button>
+        ${m.category === "summary" && !m.superseded_by ? `<button class="quiet" id="p-wiki">Read its page</button>` : ""}
         <button class="quiet" id="p-local" aria-pressed="${ctx.local() ? "true" : "false"}">Local graph</button>
         ${m.version > 1 || m.superseded_by ? `<button class="quiet" id="p-versions">Versions</button>` : ""}
         <button class="danger" id="p-forget">Forget</button>
@@ -138,10 +139,13 @@ function render() {
       <div class="panel-meta"><span class="tag tag-entity">${esc(n.type)}</span><span>entity</span><span>${memories} linked memories</span></div>
       <h2 class="panel-title">${esc(n.label)}</h2>
       <div class="panel-actions">
+        <button class="quiet" id="p-wiki" title="What it is, its memories by purpose, and why it connects to other topics">Read its page</button>
         <button class="quiet" id="p-local" aria-pressed="${ctx.local() ? "true" : "false"}">Local graph</button>
       </div>
       <section class="panel-section"><h3>Connections</h3>${connectionsMarkup(n.id)}${linkFormMarkup()}</section>`;
   }
+  // the wiki opens on its own address (#wiki/<id>); app.js switches views on it
+  $("#p-wiki")?.addEventListener("click", () => { location.hash = `#wiki/${encodeURIComponent(current.id)}`; });
   $$(".project-dot", body).forEach((el) => { el.style.background = ctx.colorOf(el.dataset.color); });
   wire();
   if (current.kind === "memory") loadExtras(current.data);

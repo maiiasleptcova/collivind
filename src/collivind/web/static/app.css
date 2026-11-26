@@ -477,3 +477,7 @@ dialog .actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-
   .w-gist, .w-att, .w-links, .w-full { margin-left: 0; }
   .w-mem-head { flex-wrap: wrap; }
 }
+.w-find { margin: 1rem 0 0.2rem; }
+.w-find input { width: 100%; max-width: 28rem; }
+.w-section details summary { cursor: pointer; color: var(--steel); font-size: var(--step--1); margin-top: 0.4rem; }
+.w-section details .w-related { margin-top: 0.3rem; }

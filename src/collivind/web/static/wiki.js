@@ -4,15 +4,16 @@
 // and a small map is navigation, labelled only around what you point at.
 // Opening a page never moves the map; clicking empty map does nothing.
 
-import { $, $$, api, esc, plural, showError, clearError } from "./util.js";
+import { $, $$, api, esc, showError, clearError } from "./util.js";
 import { GraphView } from "./graph.js";
 
 const TYPE_ORDER = ["project", "summary", "named-project", "service", "tool", "library", "concept", "file", "person"];
-const TYPE_HEAD = { project: "Projects", "named-project": "Projects named in memories", summary: "Summaries", service: "Services", tool: "Tools", library: "Libraries",
+const TYPE_HEAD = { project: "Projects", "named-project": "Project names used as topics", summary: "Summaries", service: "Services", tool: "Tools", library: "Libraries",
   concept: "Concepts", file: "Files", person: "People" };
 const BACKLINK_CHIPS = 24;
 
-const w = { index: null, byId: new Map(), id: null, within: null, page: null, filter: "", seq: 0 };
+const w = { index: null, byId: new Map(), id: null, within: null, page: null, filter: "", query: "", seq: 0 };
+let queryTimer;
 let ctx, map;
 
 export function initWiki(context) {
@@ -108,11 +109,13 @@ function renderMap() {
 
 // ---- the page --------------------------------------------------------------
 
-async function openPage(id, within = null) {
+async function openPage(id, within = null, { keepQuery = false } = {}) {
   const seq = ++w.seq;
+  if (!keepQuery) w.query = "";
   w.id = id; w.within = within;
   const params = new URLSearchParams({ id });
   if (within) params.set("within", within);
+  if (w.query) params.set("q", w.query);
   if (ctx.project()) params.set("project", ctx.project());
   try {
     clearError();
@@ -120,10 +123,11 @@ async function openPage(id, within = null) {
     if (seq !== w.seq) return; // a newer page was asked for meanwhile
     w.page = page;
     renderPage();
-    $$("#w-index [data-topic]").forEach((a) => a.toggleAttribute("aria-current", a.dataset.topic === id));
+    $$("#w-index [data-topic]").forEach((a) => a.dataset.topic === id ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"));
     $(`#w-index [data-topic="${CSS.escape(id)}"]`)?.scrollIntoView({ block: "nearest" });
     map.select(id); // highlighted where it is: the camera stays put
-    $("#w-page").scrollTop = 0;
+    if (keepQuery) { const box = $("#w-q"); box.focus(); box.setSelectionRange(box.value.length, box.value.length); }
+    else $("#w-page").scrollTop = 0;
   } catch (e) { if (seq === w.seq) showError(e); }
 }
 
@@ -154,19 +158,27 @@ function pairRows(m) {
     `<p class="w-nofix">No fix recorded yet. If one exists, link it from the fix with “resolves”.</p>`}</li>`;
 }
 
+const moreLabel = (n) => `Show ${Math.min(n, 20)} more <span class="count">(${n.toLocaleString()} not shown yet)</span>`;
+
 function sectionHtml(s) {
   const rows = s.items.map((m) => (s.key === "problems" ? pairRows(m) : `<li>${memoryRow(m)}</li>`)).join("");
-  const more = s.more ? `<button class="quiet w-more" data-more="${esc(s.key)}" data-offset="${s.offset + s.items.length}">
-    Show ${Math.min(s.more, 20)} more <span class="count">${s.more.toLocaleString()} not shown</span></button>` : "";
+  const more = s.more ? `<button class="quiet w-more" data-more="${esc(s.key)}" data-offset="${s.offset + s.items.length}">${moreLabel(s.more)}</button>` : "";
+  const paired = s.with_problems ? `<p class="hint">${s.with_problems.toLocaleString()} more ${s.with_problems === 1 ? "is" : "are"} shown under Problems and fixes, beside the problem ${s.with_problems === 1 ? "it settles or caused" : "they settle or caused"}.</p>` : "";
   return `<section class="w-section" id="w-sec-${esc(s.key)}" data-section="${esc(s.key)}">
-    <h2>${esc(s.title)} <span class="count">${s.total.toLocaleString()}</span></h2>
+    <h2>${esc(s.title)} <span class="count">${s.total.toLocaleString()}</span></h2>${paired}
     <ol class="w-list">${rows}</ol>${more}</section>`;
 }
+
+const RELATED_SHOWN = 8;
+const projectTopicRow = (r) => `<li>${topicLink(r)} <span class="hint">${esc(r.type)} · ${esc(r.reason)}</span></li>`;
+const relatedRow = (p, r) => `<li>${topicLink(r)} <span class="w-type-chip">${esc(r.type)}</span> <span class="w-reason">${esc(r.reason)}</span>
+  ${r.count > 1 && p.kind !== "summary" && r.kind === "entity" ? `<a class="w-narrow" href="${hashOf(p.id, r.id)}">read the ${r.count} shared</a>` : ""}</li>`;
 
 function renderPage() {
   const p = w.page;
   const kindWord = p.kind === "entity" ? `${p.type} · topic` : p.kind;
-  const toc = p.sections.length > 1 ? `<nav class="w-toc" aria-label="On this page">${p.sections.map((s) =>
+  const listed = p.sections.filter((s) => s.total);
+  const toc = listed.length > 1 ? `<nav class="w-toc" aria-label="On this page">${listed.map((s) =>
     `<a href="#w-sec-${esc(s.key)}" data-jump="w-sec-${esc(s.key)}">${esc(s.title)} <span class="count">${s.total}</span></a>`).join("")}</nav>` : "";
   const within = p.within ? `<p class="w-within" role="status">Only the memories also under ${topicLink(p.within)}.
     <a href="${hashOf(p.id)}">Show all of ${esc(p.title)}</a></p>` : "";
@@ -182,17 +194,22 @@ function renderPage() {
       <p class="w-desc">${esc(p.description)}</p>
       <p class="w-meta">${esc(p.stats)}<span class="w-src">${p.described_by === "agent" ? "Description written by an agent" : "Description built from its links and counts"}</span>
         <button class="quiet" id="w-find-here" title="Center the map on this topic">Find on map</button></p>
-      ${p.hub && !p.within ? `<p class="hint">Many memories are about this. Each section shows the newest first, in pages; narrow it to one related topic below.</p>` : ""}
+      ${p.hub && !p.within ? `<p class="hint">Many memories are about this. Each section shows the newest first, in pages: filter them below, or read only the ones shared with a related topic.</p>` : ""}
     </header>
     ${within}${facts}
+    ${related.length ? `<section class="w-section"><h2>Related topics <span class="count">${related.length}</span></h2>
+      <ul class="w-related">${related.slice(0, RELATED_SHOWN).map((r) => relatedRow(p, r)).join("")}</ul>
+      ${related.length > RELATED_SHOWN ? `<details><summary>${related.length - RELATED_SHOWN} more related topics</summary>
+        <ul class="w-related">${related.slice(RELATED_SHOWN).map((r) => relatedRow(p, r)).join("")}</ul></details>` : ""}</section>` : ""}
     ${projectTopics.length ? `<section class="w-section"><h2>Topics in this project <span class="count">${projectTopics.length}</span></h2>
-      <ul class="w-topics">${projectTopics.map((r) => `<li>${topicLink(r)} <span class="hint">${esc(r.type)} · ${esc(r.reason)}</span></li>`).join("")}</ul>
-      ${p.unfiled ? `<p class="hint">Below: the ${plural(p.unfiled, "memory")} about no topic.</p>` : ""}</section>` : ""}
+      <ul class="w-topics">${projectTopics.slice(0, 12).map(projectTopicRow).join("")}</ul>
+      ${projectTopics.length > 12 ? `<details><summary>${projectTopics.length - 12} more topics</summary><ul class="w-topics">${projectTopics.slice(12).map(projectTopicRow).join("")}</ul></details>` : ""}
+      <p class="hint">Below: every problem in the project with its cause and fix, then the ${p.unfiled === 1 ? "1 memory" : `${p.unfiled.toLocaleString()} memories`} about no topic. Everything else is on the topic pages above.</p></section>` : ""}
+    <div class="w-find"><label class="sr-only" for="w-q">Filter this page's memories</label>
+      <input id="w-q" type="search" placeholder="Filter this page's memories by words" value="${esc(w.query)}" autocomplete="off" spellcheck="false"></div>
     ${toc}
-    ${p.sections.map(sectionHtml).join("") || (p.kind === "project" ? "" : `<p class="hint">No memories are about this yet; it is known through its links.</p>`)}
-    ${related.length ? `<section class="w-section"><h2>Related topics</h2><ul class="w-related">${related.map((r) => `<li>
-      ${topicLink(r)} <span class="w-type-chip">${esc(r.type)}</span> <span class="w-reason">${esc(r.reason)}</span>
-      ${r.count > 1 && p.kind !== "summary" && r.kind === "entity" ? `<a class="w-narrow" href="${hashOf(p.id, r.id)}">read these ${r.count}</a>` : ""}</li>`).join("")}</ul></section>` : ""}
+    ${p.sections.map(sectionHtml).join("") || (w.query ? `<p class="hint">No memory on this page has all of “${esc(w.query)}”.</p>`
+       : p.kind === "project" ? "" : `<p class="hint">No memories are about this yet; it is known through its links.</p>`)}
     ${backlinks.length ? `<section class="w-section"><h2>Linked from <span class="count">${backlinks.length}</span></h2><p class="w-chips">${backlinks.slice(0, BACKLINK_CHIPS).map((b) =>
       `<a class="chip" href="${hashOf(b.id)}">${esc(b.title)}</a>`).join("")}${backlinks.length > BACKLINK_CHIPS ? `<span class="hint">and ${backlinks.length - BACKLINK_CHIPS} more</span>` : ""}</p></section>` : ""}`;
   wirePage();
@@ -201,6 +218,10 @@ function renderPage() {
 function wirePage() {
   const page = $("#w-page");
   $("#w-find-here").onclick = () => map.centerOn(w.id, false);
+  $("#w-q").addEventListener("input", (e) => {
+    clearTimeout(queryTimer);
+    queryTimer = setTimeout(() => { w.query = e.target.value.trim(); openPage(w.id, w.within, { keepQuery: true }); }, 250);
+  });
   $$("[data-jump]", page).forEach((a) => a.onclick = (e) => { e.preventDefault(); $(`#${a.dataset.jump}`)?.scrollIntoView({ block: "start" }); });
   page.onclick = (e) => {
     const t = e.target.closest("button");
@@ -228,6 +249,7 @@ async function more(button) {
   const key = button.dataset.more, offset = Number(button.dataset.offset);
   const params = new URLSearchParams({ id: w.id, section: key, offset: String(offset), limit: "20" });
   if (w.within) params.set("within", w.within);
+  if (w.query) params.set("q", w.query);
   if (ctx.project()) params.set("project", ctx.project());
   try {
     button.disabled = true;
@@ -238,8 +260,7 @@ async function more(button) {
     const first = list.children.length;
     list.insertAdjacentHTML("beforeend", s.items.map((m) => (key === "problems" ? pairRows(m) : `<li>${memoryRow(m)}</li>`)).join(""));
     list.children[first]?.querySelector(".w-label")?.focus();
-    if (s.more) { button.dataset.offset = String(s.offset + s.items.length); button.disabled = false;
-      button.innerHTML = `Show ${Math.min(s.more, 20)} more <span class="count">${s.more.toLocaleString()} not shown</span>`; }
+    if (s.more) { button.dataset.offset = String(s.offset + s.items.length); button.disabled = false; button.innerHTML = moreLabel(s.more); }
     else button.remove();
   } catch (e) { button.disabled = false; showError(e); }
 }

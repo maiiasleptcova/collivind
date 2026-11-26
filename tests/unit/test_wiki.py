@@ -132,7 +132,8 @@ def test_error_is_shown_with_its_cause_and_fix_even_when_they_are_filed_elsewher
 
     # on Colima's page the fix is part of the pair, not listed again under Decisions
     colima = {s["key"]: s for s in Wiki(mgr.graph_store).page("colima")["sections"]}
-    assert "decisions" not in colima and "facts" not in colima
+    assert colima["decisions"]["items"] == [] and colima["decisions"]["with_problems"] == 1
+    assert colima["facts"]["items"] == [] and colima["facts"]["with_problems"] == 1
 
 
 def test_a_memory_row_says_what_kind_what_it_says_and_what_else_it_is_under(mgr, incident):
@@ -158,10 +159,10 @@ def test_gist_never_repeats_the_label():
 
 def test_related_topics_carry_their_reason_in_words(mgr, incident):
     rel = {r["title"]: r["reason"] for r in Wiki(mgr.graph_store).page("docker")["related"]}
-    assert rel["Colima"] == "Docker uses Colima: on the Mac"
+    assert rel["Colima"] == "Docker uses Colima: on the Mac (1 shared memory)"
     assert rel["p"] == "2 of these are in this project"
     rel = {r["title"]: r["reason"] for r in Wiki(mgr.graph_store).page("colima")["related"]}
-    assert rel["Docker"] == "Colima is used by Docker: on the Mac"
+    assert rel["Docker"] == "Colima is used by Docker: on the Mac (1 shared memory)"
 
 
 def test_summary_page_and_the_topics_its_memories_are_about(mgr, incident):
@@ -202,15 +203,17 @@ def test_a_hub_is_read_in_pages_and_can_be_narrowed_to_one_related_topic(mgr):
     assert len(rest["sections"][0]["items"]) == HUB_DEGREE + 5 - PAGE_SIZE and "related" not in rest
     narrowed = wiki.page("docker", within="neo4j")
     assert narrowed["sections"][0]["total"] == 4 and narrowed["within"]["title"] == "Neo4j"
+    found = wiki.page("docker", query="NUMBER 17 ports")["sections"][0]
+    assert [i["label"] for i in found["items"]] == ["docker fact 17"]
     neo = {r["title"]: r for r in wiki.page("neo4j")["related"]}
     assert neo["Docker"]["reason"] == "4 shared memories"
 
 
-def test_project_page_lists_topics_and_only_the_memories_no_topic_files(mgr, incident):
+def test_project_page_lists_topics_every_problem_and_the_memories_no_topic_files(mgr, incident):
     loose = _add(mgr, "Release on Fridays", "We release on Fridays.", MemoryCategory.PREFERENCE)
     page = Wiki(mgr.graph_store).page("project:p")
     assert page["unfiled"] == 1
-    assert [i["id"] for s in page["sections"] for i in s["items"]] == [loose.id]
+    assert [i["id"] for s in page["sections"] for i in s["items"]] == [incident["err"].id, loose.id]
     assert {r["title"] for r in page["related"] if r["kind"] == "entity"} == {"Docker", "Colima"}
     assert Wiki(mgr.graph_store, project="other").topics == {}
 

@@ -162,6 +162,12 @@ class Wiki:
         self.degree = {e: len(ids) for e, ids in about.items()}
         for i, ents in self.attached.items():  # most specific topic first: the one fewest memories share
             ents.sort(key=lambda e: (self.degree[e], e))
+        # each memory's links, strongest kind first: a row lists a few, an error its causes and fixes
+        self.links_of: Dict[str, List[Tuple[str, str, str]]] = {}
+        rank = {rel: n for n, rel in enumerate(ROW_LINKS)}
+        for link in sorted(self.memory_links, key=lambda x: (rank.get(x[1], 99), x)):
+            for end in (link[0], link[2]):
+                self.links_of.setdefault(end, []).append(link)
         self.covered_by: Dict[str, List[str]] = {}
         for s, ids in covers.items():
             for i in ids:
@@ -266,14 +272,14 @@ class Wiki:
     def _fixes(self, error_id: str) -> List[Tuple[str, str]]:
         return [
             (s, self.notes.get((s, r, t), ""))
-            for s, r, t in self.memory_links
+            for s, r, t in self.links_of.get(error_id, ())
             if r == "RESOLVES" and t == error_id and s in self.live
         ]
 
     def _causes(self, error_id: str) -> List[Tuple[str, str]]:
         return [
             (t, self.notes.get((s, r, t), ""))
-            for s, r, t in self.memory_links
+            for s, r, t in self.links_of.get(error_id, ())
             if r == "CAUSED_BY" and s == error_id and t in self.live
         ]
 
@@ -288,10 +294,8 @@ class Wiki:
         attached = [self.topic_ref(e) for e in self.attached.get(memory_id, []) if e != here and e in self.topics]
         summaries = [self.topic_ref(s) for s in self.covered_by.get(memory_id, []) if s != here and s in self.topics]
         links: List[Any] = []
-        for s, rel, t in sorted(
-            self.memory_links, key=lambda x: (ROW_LINKS.index(x[1]) if x[1] in ROW_LINKS else 99, x)
-        ):
-            if memory_id not in (s, t) or rel not in ROW_LINKS or len(links) >= MAX_ROW_LINKS:
+        for s, rel, t in self.links_of.get(memory_id, ()):
+            if rel not in ROW_LINKS or len(links) >= MAX_ROW_LINKS:
                 continue
             other = t if s == memory_id else s
             o = self.memories[other]
@@ -323,16 +327,22 @@ class Wiki:
             "links": links,
         }
 
-    def _members(self, topic: Topic, within: Optional[str]) -> Tuple[str, ...]:
-        if topic.kind == "project":
-            # a project is the biggest hub of all: its page lists topics, and
-            # here only the memories no topic files
-            ids: Tuple[str, ...] = tuple(i for i in topic.members if not self.attached.get(i))
-        else:
-            ids = topic.members
+    def _members(self, topic: Topic, within: Optional[str], query: str = "") -> Tuple[str, ...]:
+        """The memories a page lists. A project is the biggest hub of all: its page lists its topics,
+        every problem (what a reader most often comes for), and otherwise only what no topic files."""
+        ids = topic.members
+        if topic.kind == "project" and not within:
+            ids = tuple(i for i in ids if not self.attached.get(i) or str(_enum(self.memories[i].category)) == "error")
         if within and within in self.topics:
             keep = set(self.topics[within].members)
-            ids = tuple(i for i in topic.members if i in keep)
+            ids = tuple(i for i in ids if i in keep)
+        words = query.lower().split()
+        if words:
+            ids = tuple(
+                i
+                for i in ids
+                if all(w in f"{self.memories[i].summary} {self.memories[i].content}".lower() for w in words)
+            )
         return ids
 
     def sections(
@@ -342,9 +352,10 @@ class Wiki:
         only: Optional[str] = None,
         offset: int = 0,
         limit: int = PAGE_SIZE,
+        query: str = "",
     ) -> List[Dict[str, Any]]:
         """Memories grouped by purpose; problems carry their causes and fixes, wherever those are filed."""
-        ids = [i for i in self._members(topic, within) if str(_enum(self.memories[i].category)) != "summary"]
+        ids = [i for i in self._members(topic, within, query) if str(_enum(self.memories[i].category)) != "summary"]
         in_pairs: Set[str] = set()
         problems = [i for i in ids if str(_enum(self.memories[i].category)) == "error"]
         for i in problems:
@@ -353,12 +364,9 @@ class Wiki:
         for key, title, cats in SECTIONS:
             if only and key != only:
                 continue
-            rows = [
-                i
-                for i in ids
-                if str(_enum(self.memories[i].category)) in cats and (key == "problems" or i not in in_pairs)
-            ]
-            if not rows:
+            mine = [i for i in ids if str(_enum(self.memories[i].category)) in cats]
+            rows = [i for i in mine if key == "problems" or i not in in_pairs]
+            if not mine:
                 continue
             page = rows[offset : offset + limit]
             items = []
@@ -376,7 +384,8 @@ class Wiki:
                     "offset": offset,
                     "items": items,
                     "more": max(0, len(rows) - offset - len(page)),
-                }  # fmt: skip
+                    "with_problems": len(mine) - len(rows),  # shown beside the problems they settle or caused
+                }
             )
         return out
 
@@ -400,7 +409,9 @@ class Wiki:
                     other = t if s == topic_id else s
                     note = self.notes.get((s, rel, t), "")
                     said = f"{topic.title} {phrase(rel, outgoing=s == topic_id)} {self.entities[other].name}"
-                    add(other, f"{said}: {note}" if note else said, 1000.0)
+                    both = len(members & set(self.topics[other].members)) if other in self.topics else 0
+                    shared_note = f" ({_counted(both, 'shared memory')})" if both else ""
+                    add(other, (f"{said}: {note}" if note else said) + shared_note, 1000.0, both)
         if topic.kind in ("entity", "summary"):
             shared: Dict[str, int] = {}
             for i in members:
@@ -456,6 +467,7 @@ class Wiki:
         only: Optional[str] = None,
         offset: int = 0,
         limit: int = PAGE_SIZE,
+        query: str = "",
     ) -> Optional[Dict[str, Any]]:
         topic = self.topics.get(topic_id)
         if topic is None:
@@ -467,7 +479,8 @@ class Wiki:
             "stats": self.stats(topic),
             "hub": len(topic.members) > HUB_DEGREE,
             "within": self.topic_ref(within) if within in self.topics else None,
-            "sections": self.sections(topic, within, only, offset, limit),
+            "query": query,
+            "sections": self.sections(topic, within, only, offset, limit, query),
         }
         if only:
             return body
@@ -478,7 +491,7 @@ class Wiki:
                 if ln.strip()
             ]
         if topic.kind == "project":
-            body["unfiled"] = len(self._members(topic, None))
+            body["unfiled"] = sum(1 for i in topic.members if not self.attached.get(i))
         body["related"] = self.related(topic_id)
         body["backlinks"] = self.backlinks(topic_id)
         return body

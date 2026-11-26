@@ -73,6 +73,13 @@ def _rel_type(value: Any) -> RelType:
         raise ValueError(f"unknown relationship type {value!r}") from None
 
 
+def _query(params: Dict[str, str]) -> str:
+    query = params.get("q", "")
+    if len(query) > MAX_QUERY:
+        raise ValueError(f"q is longer than {MAX_QUERY} characters")
+    return query
+
+
 def _int_param(params: Dict[str, str], key: str, default: int, low: int, high: int) -> int:
     try:
         value = int(params.get(key, default))
@@ -229,8 +236,9 @@ class MemoryAPI:
         section: Optional[str] = None,
         offset: int = 0,
         limit: int = PAGE_SIZE,
+        query: str = "",
     ) -> Result:
-        page = Wiki(self.manager.graph_store, project).page(topic_id, within, section, offset, limit)
+        page = Wiki(self.manager.graph_store, project).page(topic_id, within, section, offset, limit, query)
         if page is None:
             return 404, {"error": f"No topic {topic_id}"}
         return 200, page
@@ -454,6 +462,7 @@ def _dispatch(api: MemoryAPI, method: str, parts: list, params: Dict[str, str], 
             section,
             _int_param(params, "offset", 0, 0, 1_000_000),
             _int_param(params, "limit", PAGE_SIZE, 1, MAX_PAGE),
+            _query(params),
         )
 
     if parts == ["wiki", "describe"] and method == "POST":
