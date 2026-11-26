@@ -34,7 +34,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh api "repos/$GITHUB_REPOSITORY/pages" 2>&1 | grep -q '"status": *"404"'; then
+          out=$(gh api "repos/$GITHUB_REPOSITORY/pages" 2>&1 || true)
+          if grep -q '"status": *"404"' <<<"$out"; then
             echo "::warning::GitHub Pages is not enabled for this repository; skipping the deploy."
           else
             echo "enabled=true" >> "$GITHUB_OUTPUT"
