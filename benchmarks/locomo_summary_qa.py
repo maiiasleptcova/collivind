@@ -31,6 +31,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import random
 import subprocess
 import sys
@@ -45,7 +46,15 @@ from pathlib import Path
 from typing import Dict, List
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from locomo_bench import ADVERSARIAL, ingest, make_manager, parse_evidence, sessions_of, turn_text  # noqa: E402
+from locomo_bench import (  # noqa: E402
+    ADVERSARIAL,
+    ingest,
+    make_manager,
+    parse_evidence,
+    parse_search_overrides,
+    sessions_of,
+    turn_text,
+)
 
 CATEGORIES = {1: "multi-hop", 2: "temporal", 3: "open-domain", 4: "single-hop"}
 ARMS = ("turns50", "routed", "hook_turns", "hook_summ")
@@ -146,7 +155,9 @@ def build_contexts(data: Dict[str, dict], summaries: dict, sample: List[tuple]) 
     out: Dict[str, dict] = {f"{sid}:{i}": {} for sid, i in sample}
     stats = {"summaries": 0, "gold_summary_routed": 0, "routed_searches": 0}
     with tempfile.TemporaryDirectory(prefix="collivind-summ-") as tmp:
-        manager = make_manager(tmp, "BAAI/bge-small-en-v1.5")
+        # LOCOMO_SEARCH="dedup_threshold=0.98,rerank_pool=100" overrides [search] settings for an experiment
+        overrides = parse_search_overrides([kv for kv in os.environ.get("LOCOMO_SEARCH", "").split(",") if kv])
+        manager = make_manager(tmp, "BAAI/bge-small-en-v1.5", search=overrides or None)
         hooks = manager.config.hooks  # the shipped hook defaults, not hardcoded
 
         def search(q, pid, limit):
