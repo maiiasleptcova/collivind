@@ -82,7 +82,7 @@ def _manager(tmp_path, **search):
 
 
 def test_get_context_uses_the_recall_settings_and_search_does_not(tmp_path):
-    manager, graph, vector, emb = _manager(tmp_path, recall_fallback_min_score=0.001)
+    manager, graph, vector, emb = _manager(tmp_path, recall_window=12.0, recall_fallback_min_score=0.001)
     for w in ("alpha", "beta", "gamma"):
         _store(graph, vector, emb, f"deploy helm {w}")
     emb.rerank = lambda q, texts: [-2.0 if "alpha" in t else -9.0 for t in texts]  # nothing confident
@@ -97,7 +97,7 @@ def test_get_context_uses_the_recall_settings_and_search_does_not(tmp_path):
 
 
 def test_get_context_off_switch_reproduces_todays_output(tmp_path):
-    manager, graph, vector, emb = _manager(tmp_path, recall_window=0.0, recall_fallback_min_score=0.0)
+    manager, graph, vector, emb = _manager(tmp_path)  # the defaults are the off switch
     for w in ("alpha", "beta", "gamma"):
         _store(graph, vector, emb, f"deploy helm {w}")
     emb.rerank = lambda q, texts: [-2.0 if "alpha" in t else -9.0 for t in texts]
@@ -141,5 +141,5 @@ def test_recall_settings_are_validated(field, bad):
 
 def test_defaults():
     config = CollivindConfig()
-    assert (config.search.recall_window, config.search.recall_fallback_min_score) == (12.0, 0.0)
-    assert config.hooks.recall_limit == 10
+    assert (config.search.recall_window, config.search.recall_fallback_min_score) == (0.0, 0.0)  # off
+    assert config.hooks.recall_limit == 20

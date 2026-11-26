@@ -177,14 +177,17 @@ def make_queries(texts: List[str], n: int, seed: int = 11) -> List[str]:
     return [" ".join(rng.sample(rng.choice(texts).split(), 3)) for _ in range(n)]
 
 
-def run_queries(engine: SearchEngine, queries: List[str], limit: int = 10) -> Dict[str, float]:
-    """Time each search; the first one (vector cache load) is a warm-up, not counted."""
-    engine.search(SearchQuery(query=queries[0], limit=limit, include_graph=True))
+def run_queries(engine: SearchEngine, queries: List[str], limit: int = 10, **recall: float) -> Dict[str, float]:
+    """Time each search; the first one (vector cache load) is a warm-up, not counted.
+
+    recall: SearchQuery recall fields (min_rerank_score, rerank_window, ...) to time the recall path.
+    """
+    engine.search(SearchQuery(query=queries[0], limit=limit, include_graph=True, **recall))
     timings = []
     hits = []
     for q in queries:
         start = time.perf_counter()
-        results = engine.search(SearchQuery(query=q, limit=limit, include_graph=True))
+        results = engine.search(SearchQuery(query=q, limit=limit, include_graph=True, **recall))
         timings.append((time.perf_counter() - start) * 1000)
         hits.append(len(results))
     timings.sort()
@@ -244,6 +247,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--legacy", action="store_true", help="per-item store lookups (the equivalence reference)")
     parser.add_argument("--no-rerank", action="store_true", help="skip the cross-encoder arm")
     parser.add_argument("--rerank-model", default=CollivindConfig().search.rerank_model)
+    parser.add_argument("--recall-window", type=float, default=0.0, help="also time the recall path with this window")
     args = parser.parse_args(argv)
 
     with tempfile.TemporaryDirectory(prefix="collivind-bench-") as tmp:
@@ -261,12 +265,17 @@ def main(argv: Optional[List[str]] = None) -> int:
         expanded = engine.graph_engine.get_expanded_memories([r["id"] for r in enriched])
         stats = run_queries(engine, queries)
         statements = count_statements(graph, engine, queries[0])
-        rerank_stats = None
+        rerank_stats = window_stats = None
         if not args.no_rerank:
             reranking = RerankingHashEmbedder(args.rerank_model)
             reranking._cache = embedder._cache
             rerank_stats = run_queries(build_engine(graph, vector, reranking, rerank=True), queries)
             pool = statistics.mean(reranking.pool_sizes)
+            if args.recall_window:
+                window_stats = run_queries(
+                    build_engine(graph, vector, reranking, rerank=True), queries,
+                    min_rerank_score=0.00002, rerank_window=args.recall_window,
+                )  # fmt: skip
         graph.close()
         vector.close()
 
@@ -282,6 +291,12 @@ def main(argv: Optional[List[str]] = None) -> int:
             f"rerank on:  p50={rerank_stats['p50_ms']:.1f}ms p95={rerank_stats['p95_ms']:.1f}ms "
             f"max={rerank_stats['max_ms']:.1f}ms mean_results={rerank_stats['mean_results']:.1f} "
             f"(in-process {args.rerank_model}, mean pool {pool:.0f} texts at 256 tokens)"
+        )
+    if window_stats:
+        print(
+            f"recall, window {args.recall_window:g}: p50={window_stats['p50_ms']:.1f}ms "
+            f"p95={window_stats['p95_ms']:.1f}ms max={window_stats['max_ms']:.1f}ms "
+            f"mean_results={window_stats['mean_results']:.1f}"
         )
     if not enriched or not expanded:
         print("WARNING: probe query had no vector seeds or no expansion; numbers are meaningless", file=sys.stderr)

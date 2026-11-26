@@ -444,13 +444,13 @@ def test_user_prompt_recall_depth_comes_from_config(monkeypatch):
 
     from collivind.config import CollivindConfig
 
-    assert CollivindConfig().hooks.recall_limit == 10
+    assert CollivindConfig().hooks.recall_limit == 20
     manager = MagicMock()
     manager.config = CollivindConfig()
     manager.get_context.return_value = "--- Collivind Context ---\n[FACT] x"
     monkeypatch.setattr("collivind.cli.commands.hook._load_manager", lambda: manager)
     CliRunner().invoke(hook, ["user-prompt"], input=_prompt_payload("build the database layer for orders"))
-    assert manager.get_context.call_args.kwargs["limit"] == 10
+    assert manager.get_context.call_args.kwargs["limit"] == 20
 
     manager.config.hooks.recall_limit = 7
     CliRunner().invoke(hook, ["user-prompt"], input=_prompt_payload("build the database layer for orders"))

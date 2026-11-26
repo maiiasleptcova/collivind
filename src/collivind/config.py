@@ -11,12 +11,12 @@ from .exceptions import ConfigurationError
 # 10 unrelated prompts recall nothing. Higher values cut more noise but drop
 # indirect matches (LongMemEval preference questions) that sit at the floor.
 RECALL_MIN_SCORE_DEFAULT = 0.00002
-# Recall stopping rule, chosen on LoCoMo dev conversations and a synthetic
-# coding store (BENCHMARKS.md, "Recall precision"). With a confident match,
-# keep what is within 12 logits of it. With none, the floor is off by default:
-# at 0.001 it emptied half the unrelated coding prompts but dropped 11% of the
+# Recall stopping rule, off by default (BENCHMARKS.md, "Recall precision").
+# recall_window = 12 with recall_limit = 10 halved recall tokens on held-out
+# LoCoMo but cost 3.4 points of QA accuracy (95% CI -6.7 to -0.1); the floor
+# at 0.001 emptied half the unrelated coding prompts but dropped 1 in 8
 # relevant memories on prompts written blind to the scores.
-RECALL_WINDOW_DEFAULT = 12.0
+RECALL_WINDOW_DEFAULT = 0.0
 RECALL_FALLBACK_MIN_SCORE_DEFAULT = 0.0
 
 
@@ -85,12 +85,12 @@ class SearchConfig:
     # cross-encoder score is below this, so an unrelated prompt recalls
     # nothing. 0 disables. Explicit search never applies it.
     recall_min_score: float = RECALL_MIN_SCORE_DEFAULT
-    # Recall only, after the cutoff. When some memory clears the reranker's
-    # relevance boundary, drop memories more than recall_window logits below
-    # the best one. When none does (the reranker finds nothing relevant),
-    # keep only memories scoring at least recall_fallback_min_score (0 = off,
-    # the default; 0.001 empties more unrelated prompts at a cost in relevant
-    # ones). Both 0, with [hooks] recall_limit = 20, = the 0.21 behaviour.
+    # Recall only, after the cutoff; both 0 (off) by default. When some memory
+    # clears the reranker's relevance boundary, drop memories more than
+    # recall_window logits below the best one. When none does (the reranker
+    # finds nothing relevant), keep only memories scoring at least
+    # recall_fallback_min_score. Trades answer accuracy for fewer tokens and
+    # fewer unrelated memories; see the constants above.
     recall_window: float = RECALL_WINDOW_DEFAULT
     recall_fallback_min_score: float = RECALL_FALLBACK_MIN_SCORE_DEFAULT
     # When a summary memory is among the reranked candidates, return the top
@@ -157,11 +157,10 @@ class HooksConfig:
     quiet_capture: bool = True
     # memories the prompt hook recalls per prompt, packed into a token budget
     # (len/4 estimate); `hook user-prompt --max-tokens` overrides the budget.
-    # 10 since 0.22 (was 20): on LoCoMo dev, memories 11-20 cost as many tokens
-    # as the first 10 and held the only gold turn for 4.5% of questions (QA in
-    # BENCHMARKS.md, "Recall precision"). The budget mostly binds on summary
-    # memories; the recall cutoff and window run first.
-    recall_limit: int = 10
+    # 2400 fits about 20 coding-length memories (~120 tokens each); the recall
+    # cutoff runs first. 10 halves the tokens but cost 3.4 points of LoCoMo QA
+    # accuracy on held-out conversations (BENCHMARKS.md, "Recall precision").
+    recall_limit: int = 20
     recall_max_tokens: int = 2400
     # Ask the agent for a session summary once a session holds this many
     # memories no summary covers yet; 0 never asks.
@@ -289,12 +288,11 @@ lexical = true
 # scores below this (0..1), so an unrelated prompt recalls nothing. 0 = off.
 # Explicit search never applies it.
 recall_min_score = 0.00002
-# Recall stopping rule: with a confident match, drop memories more than
-# recall_window logits below the best; with none, keep only memories scoring
-# at least recall_fallback_min_score (0 = off; 0.001 empties most unrelated
-# prompts but also drops some indirect matches). Both 0 and [hooks]
-# recall_limit = 20 give the 0.21 behaviour.
-recall_window = 12.0
+# Recall stopping rule, off by default: with a confident match, drop memories
+# more than recall_window logits below the best (12 measured); with none, keep
+# only memories scoring at least recall_fallback_min_score (0.001 measured).
+# Fewer tokens and fewer unrelated memories, at some cost in answers.
+recall_window = 0.0
 recall_fallback_min_score = 0.0
 # A summary among the candidates returns the top N summaries plus their most
 # relevant member memories. 0 = treat summaries as ordinary results.
@@ -312,8 +310,8 @@ enable_stop = true
 enable_session_start = true
 enable_user_prompt = true
 quiet_capture = true
-recall_limit = 10  # memories recalled per prompt (at most)
-recall_max_tokens = 2400  # token budget for those memories
+recall_limit = 20  # memories recalled per prompt
+recall_max_tokens = 2400  # token budget for those memories (about 20 coding-length memories)
 summary_after = 8  # ask the agent for a session summary after this many new memories (0 = never)
 """
 
