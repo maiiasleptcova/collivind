@@ -56,8 +56,8 @@ def test_add_memory_no_duplicate():
 
 def test_add_memory_with_exact_duplicate():
     vector_store = MagicMock()
-    # Exact duplicate (>=0.98) is rejected; near-dupes now supersede instead
-    vector_store.search.return_value = [{"id": "dup-1", "score": 0.99}]
+    # a resubmission is recognised by its text, not its cosine; nothing else is rejected
+    vector_store.search.return_value = [{"id": "dup-1", "score": 0.99, "payload": {"content": "dup."}}]
 
     graph_store = MagicMock()
     mock_memory = MemoryNode(content="Dup", summary="Dup", category=MemoryCategory.FACT, id="dup-1")

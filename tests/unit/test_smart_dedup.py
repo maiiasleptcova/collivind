@@ -1,119 +1,210 @@
-from unittest.mock import MagicMock
+"""Write-time dedup on a real SQLite store: only a resubmission is rejected, nothing is retired on similarity."""
 
-from collivind.config import CollivindConfig
-from collivind.engine.dedup import Deduplicator
+import json
+from pathlib import Path
+
+import pytest
+
+from collivind.config import CollivindConfig, QdrantConfig
 from collivind.engine.memory_manager import MemoryManager
-from collivind.models import (
-    EntityCreate,
-    EntityType,
-    MemoryCategory,
-    MemoryCreate,
-    MemoryNode,
-)
+from collivind.models import MemoryCategory, MemoryCreate, RelationshipCreate, RelType
+from collivind.storage.graph_sqlite import SqliteGraphStore
+from collivind.storage.vector_sqlite import SqliteVectorStore
+
+PAIRS = json.loads((Path(__file__).parent.parent / "fixtures" / "dedup_pairs.json").read_text())
+
+# cosine to BASE: DUP 0.95 (above the 0.92 dedup threshold), MID 0.80, FAR 0.0
+BASE = [1.0, 0.0, 0.0, 0.0]
+DUP = [1.0, 0.329, 0.0, 0.0]
+MID = [1.0, 0.0, 0.75, 0.0]
+FAR = [0.0, 0.0, 0.0, 1.0]
 
 
-def test_dedup_match_exact():
-    vs = MagicMock()
-    from collivind.config import SearchConfig
+class KeyedEmbedder:
+    """Vector chosen by the first marker word found in the text; FAR when none."""
 
-    config = SearchConfig()
-    dedup = Deduplicator(vs, config)
+    def __init__(self, table):
+        self.table = table
 
-    vs.search.return_value = [{"id": "dup-1", "score": 0.99}]
-    match = dedup.find_duplicate_detailed([0.1], "proj")
+    def embed(self, text):
+        return next((vec for key, vec in self.table.items() if key in text), FAR)
 
-    assert match is not None
-    assert match.is_exact is True
-    assert match.memory_id == "dup-1"
+    def embed_query(self, text):
+        return self.embed(text)
 
+    def embed_batch(self, texts):
+        return [self.embed(t) for t in texts]
 
-def test_dedup_match_near():
-    vs = MagicMock()
-    from collivind.config import SearchConfig
+    def health_check(self):
+        return {"status": "ok"}
 
-    config = SearchConfig()
-    dedup = Deduplicator(vs, config)
-
-    vs.search.return_value = [{"id": "dup-1", "score": 0.93}]
-    match = dedup.find_duplicate_detailed([0.1], "proj")
-
-    assert match is not None
-    assert match.is_exact is False
+    @property
+    def dimension(self):
+        return 4
 
 
-def test_dedup_no_match():
-    vs = MagicMock()
-    from collivind.config import SearchConfig
-
-    config = SearchConfig()
-    dedup = Deduplicator(vs, config)
-
-    vs.search.return_value = [{"id": "m-1", "score": 0.5}]
-    match = dedup.find_duplicate_detailed([0.1], "proj")
-
-    assert match is None
-
-
-def test_exact_duplicate_rejected_without_merge():
-    vs = MagicMock()
-    vs.search.return_value = [{"id": "dup-1", "score": 0.99}]
-
-    existing = MemoryNode(id="dup-1", content="Test", summary="Test", category=MemoryCategory.FACT, tags=["tag1"])
-    gs = MagicMock()
-    gs.get_memory.return_value = existing
-
-    ep = MagicMock()
-    ep.embed.return_value = [0.1]
-
-    config = CollivindConfig()
-    manager = MemoryManager(vs, gs, ep, config)
-
-    mem_create = MemoryCreate(content="Test", summary="Test", category=MemoryCategory.FACT, tags=["tag1", "tag2"])
-    result = manager.add_memory(mem_create, entities=[EntityCreate(name="NewEntity", type=EntityType.CONCEPT)])
-
-    assert result is existing
-    gs.update_memory.assert_not_called()
-    gs.create_entity.assert_not_called()
-    gs.create_memory.assert_not_called()
-
-
-def _supersede_manager(existing, new_node):
-    """Manager whose vector search reports a near-duplicate of `existing`."""
-    vs, gs, ep = MagicMock(), MagicMock(), MagicMock()
-    vs.search.return_value = [{"id": existing.id, "score": 0.95}]
-    gs.get_memory.side_effect = lambda mid: {existing.id: existing, new_node.id: new_node}.get(mid)
-    gs.create_memory.return_value = new_node
-    ep.embed.return_value = [0.1]
-    manager = MemoryManager(vs, gs, ep, CollivindConfig())
-    manager.search_engine.find_contradictions = MagicMock(return_value=[])
-    return manager, vs, gs
-
-
-def test_near_duplicate_supersedes_stale_memory():
-    existing = MemoryNode(
-        id="dup-1", content="Postgres 15 is our DB", summary="db", category=MemoryCategory.FACT, tags=["db"]
-    )
-    new_node = MemoryNode(
-        id="new-1", content="Postgres 16 is our DB", summary="db", category=MemoryCategory.FACT, tags=["db"]
-    )
-    manager, vs, gs = _supersede_manager(existing, new_node)
-
-    result = manager.add_memory(
-        MemoryCreate(content="Postgres 16 is our DB", summary="db", category=MemoryCategory.FACT, tags=["db"])
+def _manager(tmp_path, embedder, dim=4):
+    path = str(tmp_path / "store")
+    return MemoryManager(
+        SqliteVectorStore(path, QdrantConfig(), dim), SqliteGraphStore(path), embedder, CollivindConfig()
     )
 
-    assert result.id == "new-1"
-    gs.create_memory.assert_called_once()
-    gs.invalidate_memory.assert_called_once_with("dup-1", "new-1", "superseded_by_update")
-    vs.delete.assert_called_once_with("dup-1")  # stale vector leaves the live index
-    vs.upsert.assert_called_once()
+
+@pytest.fixture
+def manager(tmp_path):
+    return _manager(tmp_path, KeyedEmbedder({"alpha": BASE, "bravo": DUP, "mike": MID, "sumsame": BASE}))
 
 
-def test_supersede_inherits_stale_tags():
-    existing = MemoryNode(id="dup-1", content="old", summary="old", category=MemoryCategory.FACT, tags=["legacy"])
-    new_node = MemoryNode(id="new-1", content="new", summary="new", category=MemoryCategory.FACT, tags=["fresh"])
-    manager, _, gs = _supersede_manager(existing, new_node)
+def _add(mgr, content, summary=None, category=MemoryCategory.FACT, relationships=None):
+    return mgr.add_memory_checked(
+        MemoryCreate(content=content, summary=summary or content, category=category, project_id="p"),
+        relationships=relationships,
+    )
 
-    manager.add_memory(MemoryCreate(content="new", summary="new", category=MemoryCategory.FACT, tags=["fresh"]))
 
-    gs.update_memory.assert_called_once_with("new-1", tags=["legacy", "fresh"])
+def _live_ids(mgr):
+    return {i for i, _, _ in mgr.vector_store.iter_all()}
+
+
+def test_resubmission_is_rejected_and_keeps_its_links(manager):
+    old, _ = _add(manager, "alpha: PR 42 uses Postgres 15")
+    other, _ = _add(manager, "unrelated note")
+    again, found = _add(
+        manager,
+        "alpha:  PR 42 uses POSTGRES 15.",
+        relationships=[RelationshipCreate(source_id="", target_id=other.id, type=RelType.RELATES_TO)],
+    )
+    assert again.id == old.id and found == []
+    assert _live_ids(manager) == {old.id, other.id}
+    assert any(e.target_id == other.id for e in manager.graph_store.iter_relationships() if e.source_id == old.id)
+
+
+def test_near_duplicate_is_kept_and_surfaced_not_retired(manager):
+    """Changed: this used to retire the older memory (cosine 0.95 >= 0.92)."""
+    old, _ = _add(manager, "alpha: PR 42 uses Postgres 15")
+    new, found = _add(manager, "bravo: PR 42 uses Postgres 16")
+    assert new.id != old.id
+    assert [c.memory.id for c in found] == [old.id]
+    assert manager.graph_store.get_memory(old.id).superseded_by is None
+    assert _live_ids(manager) == {old.id, new.id}
+
+
+def test_likely_duplicate_in_another_category_is_surfaced(manager):
+    old, _ = _add(manager, "alpha: snapshot before the qdrant 1.19 upgrade", category=MemoryCategory.FACT)
+    _, found = _add(manager, "bravo: snapshot before the qdrant 1.19 upgrade, always", category=MemoryCategory.PATTERN)
+    assert [c.memory.id for c in found] == [old.id]
+
+
+def test_close_memory_about_another_pr_is_not_surfaced(manager):
+    old, _ = _add(manager, "alpha: PR 776 has no reviews yet")
+    new, found = _add(manager, "bravo: PR 773 has no reviews yet")
+    assert found == []
+    assert _live_ids(manager) == {old.id, new.id}
+
+
+def test_same_fact_with_different_detail_is_surfaced_by_summary(manager):
+    # content vectors 0.80 apart (below the dedup threshold), summaries identical in meaning
+    old, _ = _add(manager, "alpha: the Colima VM disk is 80 GiB", summary="sumsame Colima disk is 80 GiB")
+    _, found = _add(
+        manager,
+        "mike: while debugging docker exec, the Colima VM disk turned out to be 80 GiB",
+        summary="sumsame Colima VM disk 80 GiB",
+        category=MemoryCategory.PATTERN,  # not a same-category conflict candidate
+    )
+    assert [c.memory.id for c in found] == [old.id]
+
+
+def test_agent_confirmed_update_retires_stale_memory_and_keeps_the_chain(manager):
+    old, _ = _add(manager, "alpha: PR 42 uses Postgres 15")
+    new, found = _add(manager, "bravo: PR 42 uses Postgres 16")
+    assert [c.memory.id for c in found] == [old.id]
+    manager.invalidate(old.id, new.id, "Postgres upgraded")
+    assert [m.id for m in manager.get_version_chain(new.id)] == [old.id, new.id]  # oldest first
+    assert _live_ids(manager) == {new.id}
+
+
+class SameVector:
+    """Every text gets the same vector: the worst case, where similarity says everything is a duplicate."""
+
+    def embed(self, text):
+        return [1.0, 0.0]
+
+    embed_query = embed
+
+    def embed_batch(self, texts):
+        return [[1.0, 0.0] for _ in texts]
+
+    def health_check(self):
+        return {"status": "ok"}
+
+    @property
+    def dimension(self):
+        return 2
+
+
+def test_similarity_alone_never_loses_a_pair_memory(tmp_path):
+    """Every fixture pair at cosine 1.0: only identical text may be merged, so nothing is lost."""
+    manager = _manager(tmp_path, SameVector(), dim=2)
+    for pair in PAIRS:
+        a, _ = manager.add_memory_checked(_create(pair["a"], pair["id"]))
+        b, _ = manager.add_memory_checked(_create(pair["b"], pair["id"]))
+        assert b.id != a.id, pair["id"]
+    assert len(_live_ids(manager)) == 2 * len(PAIRS)
+
+
+def _create(mem, project):
+    return MemoryCreate(
+        content=mem["content"],
+        summary=mem["summary"],
+        category=MemoryCategory(mem["category"]),
+        project_id=project,
+        tags=mem["tags"],
+    )
+
+
+def test_fixture_pairs_with_the_real_model(tmp_path):
+    """The synthetic coding-agent pairs through the real embedder (needs the embedded extra)."""
+    pytest.importorskip("sentence_transformers")
+    from collivind.config import EmbeddingsConfig
+    from collivind.storage.embedding_local import LocalEmbeddingProvider
+
+    embedder = LocalEmbeddingProvider(
+        EmbeddingsConfig(provider="local", model="BAAI/bge-small-en-v1.5", daemon=False), data_dir=str(tmp_path)
+    )
+    manager = _manager(tmp_path, embedder, dim=embedder.dimension)
+    missed, lost = [], []
+    for pair in PAIRS:
+        a, _ = manager.add_memory_checked(_create(pair["a"], pair["id"]))
+        b, found = manager.add_memory_checked(_create(pair["b"], pair["id"]))
+        if pair["kind"] == "different" and (b.id == a.id or a.id not in _live_ids(manager)):
+            lost.append(pair["id"])
+        if pair["kind"] == "same" and b.id != a.id and a.id not in {c.memory.id for c in found}:
+            missed.append(pair["id"])
+    same = sum(p["kind"] == "same" for p in PAIRS)
+    assert lost == []
+    assert len(missed) <= 0.2 * same, missed
+
+
+def test_superseded_report_lists_same_call_retirements_only(manager, monkeypatch):
+    from click.testing import CliRunner
+
+    from collivind.cli.commands.contradictions import contradictions
+    from collivind.engine.conflicts import auto_superseded
+
+    # what the pre-0.22 add path did: create the successor, retire the old one in the same call
+    auto_old, _ = _add(manager, "alpha: PR 1 note")
+    auto_new, _ = _add(manager, "unrelated: PR 1 note, newer")
+    manager.invalidate(auto_old.id, auto_new.id, "superseded_by_update")
+    # an agent retiring a memory well after the successor was stored
+    agent_old, _ = _add(manager, "unrelated: PR 2 note")
+    agent_new, _ = _add(manager, "unrelated: PR 2 note, newer")
+    manager.graph_store.update_memory(agent_new.id, created_at="2020-01-01T00:00:00+00:00")
+    manager.invalidate(agent_old.id, agent_new.id, "agent")
+
+    assert [(o.id, n.id) for o, n in auto_superseded(manager.graph_store)] == [(auto_old.id, auto_new.id)]
+    monkeypatch.setattr("collivind.cli.commands.contradictions._manager", lambda: manager)
+    before = {m.id: m.superseded_by for m in manager.graph_store.iter_memories()}
+    out = CliRunner().invoke(contradictions, ["superseded", "--json"])
+    assert out.exit_code == 0, out.output
+    assert [r["retired"] for r in json.loads(out.output)] == [auto_old.id]
+    assert {m.id: m.superseded_by for m in manager.graph_store.iter_memories()} == before  # read only

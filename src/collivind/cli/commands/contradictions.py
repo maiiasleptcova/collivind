@@ -6,7 +6,7 @@ from collections import Counter
 import click
 
 from collivind.cli.commands.memory import _fail, _manager
-from collivind.engine.conflicts import DUPLICATE, RESOLVED, REVIEW, UNRELATED, review_backlog
+from collivind.engine.conflicts import DUPLICATE, RESOLVED, REVIEW, UNRELATED, auto_superseded, review_backlog
 
 ACTIONS = {
     RESOLVED: "re-label RELATES_TO (one side already retired)",
@@ -58,3 +58,31 @@ def review(project, do_apply, show, as_json):
         click.secho("\nApplied.", fg="green")
     else:
         click.secho("\nDry run: nothing changed. Re-run with --apply to act on the buckets.", fg="cyan")
+
+
+@contradictions.command()
+@click.option("--project", "-p", default=None, help="Only this project (default: all)")
+@click.option("--json", "as_json", is_flag=True, help="Every pair as JSON")
+def superseded(project, as_json):
+    """List memories an older version retired on similarity alone. Read only: changes nothing.
+
+    Before 0.22 a new memory within cosine 0.92 of a live one retired it in
+    the same call. Read each pair; if the retired memory was a different fact,
+    it is still in its version chain and can be restored by hand.
+    """
+    try:
+        pairs = auto_superseded(_manager().graph_store, project_id=project)
+    except Exception as e:
+        _fail(f"Listing failed: {e}")
+    if as_json:
+        rows = [
+            {"retired": old.id, "successor": new.id, "retired_content": old.content, "successor_content": new.content}
+            for old, new in pairs
+        ]
+        click.echo(json.dumps(rows, indent=2))
+        return
+    click.secho(f"{len(pairs)} memories retired in the same call that stored their successor", bold=True)
+    for old, new in pairs:
+        click.echo(f"  {old.id} -> {new.id}  [{old.project_id}]")
+        click.secho(f"      retired:   {old.summary or old.content[:100]}", fg="bright_black")
+        click.secho(f"      successor: {new.summary or new.content[:100]}", fg="bright_black")
