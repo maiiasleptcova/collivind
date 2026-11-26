@@ -60,6 +60,7 @@ def score(question, owners, answer_texts, hits_pool, hits_k) -> Dict[str, float]
     row = {"session_r@5": float(bool(set(top_sessions(sessions, 5)) & set(question["answer_session_ids"])))}
     for k in KS:
         row[f"turn_hit@{k}"] = float(any(h.memory.content in answer_texts for h in hits_k[:k]))
+    row["returned"] = float(len(hits_k))  # memories recall returned at limit max(KS)
     return row
 
 
@@ -142,6 +143,7 @@ def report(rows: List[Dict[str, Any]], arms: Sequence[str]) -> Dict[str, Any]:
                     else None
                     for k in KS
                 },
+                "returned": round(sum(r[arm].get("returned", 0.0) for r in rs) / len(rs), 2),
             }
     return summary
 
@@ -154,7 +156,12 @@ def main() -> None:
     parser.add_argument("--summary", default=None)
     args = parser.parse_args()
 
-    arms = {"rerank": {}, "no_rerank": {"rerank": False}}
+    # rerank = the shipped defaults; rerank_021 = the 0.21 recall (cutoff only, no window or floor)
+    arms = {
+        "rerank": {},
+        "rerank_021": {"recall_window": 0.0, "recall_fallback_min_score": 0.0},
+        "no_rerank": {"rerank": False},
+    }
     picked = pick(json.loads(Path(args.dataset).read_text()), args.per_type)
     print(f"{len(picked)} questions", flush=True)
     rows, embedder, started = [], None, time.time()
