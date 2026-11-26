@@ -74,6 +74,18 @@ def _recall_trim(results: List[SearchResult], query: SearchQuery) -> List[Search
     return [r for r in results if (r.rerank_score or 0.0) >= query.fallback_min_score]
 
 
+def recall_query(config: SearchConfig, query: str, project_id: str, limit: int) -> SearchQuery:
+    """The query recall (get_context, the prompt hook) runs: explicit search builds a plain SearchQuery."""
+    return SearchQuery(
+        query=query,
+        project_id=project_id,
+        limit=limit,
+        min_rerank_score=config.recall_min_score,
+        rerank_window=config.recall_window,
+        fallback_min_score=config.recall_fallback_min_score,
+    )
+
+
 def _rrf(rankings: List[List[str]], k: int = RRF_K) -> List[str]:
     """Reciprocal rank fusion. Ties keep first-seen order, so dense wins ties."""
     scores: Dict[str, float] = {}

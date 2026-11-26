@@ -31,7 +31,6 @@ import argparse
 import hashlib
 import json
 import math
-import os
 import random
 import subprocess
 import sys
@@ -40,26 +39,23 @@ import threading
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
+from dataclasses import replace
 from pathlib import Path
 from typing import Dict, List
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from locomo_bench import (  # noqa: E402
-    ADVERSARIAL,
-    ingest,
-    make_manager,
-    parse_evidence,
-    parse_search_overrides,
-    sessions_of,
-    turn_text,
-)
+from locomo_bench import ADVERSARIAL, ingest, make_manager, parse_evidence, sessions_of, turn_text  # noqa: E402
 
 CATEGORIES = {1: "multi-hop", 2: "temporal", 3: "open-domain", 4: "single-hop"}
 ARMS = ("turns50", "routed", "hook_turns", "hook_summ")
 # 0.21 re-benchmark arms: the old hook setting, the shipped hook default (read from
 # config), search at 30, each without and with summaries, and two references that
 # never touch the engine (the whole conversation; the gold evidence turns only).
-EXTRA_ARMS = ("hook_old", "hook_default", "search30", "hook_default_summ", "search30_summ", "full", "oracle", "none")
+EXTRA_ARMS = ("hook_old", "hook_default", "search30", "hook_default_summ", "search30_summ", "full", "oracle", "none",
+              "hook_021", "hook_021_summ")  # fmt: skip
+# hook_default* read the shipped defaults; hook_021* pin the 0.21 hook (20 memories,
+# 2,400 tokens, cutoff only), so the two stay comparable after the defaults change.
 
 READER = """You are an intelligent memory assistant answering a question about a long conversation between {a} and {b}.
 
@@ -107,7 +103,9 @@ Just return the label CORRECT or WRONG in a json format with the key as "label".
 
 
 def sample_questions(data: List[dict], n: int) -> List[tuple]:
-    """The 2026-11-25 evaluation's sample: (sample_id, qa_index), reproduced from the dataset alone."""
+    """The 2026-11-25 evaluation's sample: (sample_id, qa_index), reproduced from the dataset alone.
+
+    n = 0: every eligible question (shuffled the same way)."""
     picked = []
     for s in data:
         known = {t["dia_id"] for _, _, turns in sessions_of(s["conversation"]) for t in turns}
@@ -115,26 +113,42 @@ def sample_questions(data: List[dict], n: int) -> List[tuple]:
             if qa["category"] in CATEGORIES and "answer" in qa and set(parse_evidence(qa.get("evidence", []))) & known:
                 picked.append((s["sample_id"], i))
     random.Random(0).shuffle(picked)
-    return picked[:n]
+    return picked[:n] if n else picked
+
+
+# The 0.21 recall: the cutoff alone, no stopping rule. Every arm measured before
+# 0.22 runs under it, so its contexts (and cached answers) stay the same.
+LEGACY_SEARCH = {"recall_window": 0.0, "recall_fallback_min_score": 0.0}
+
+
+@contextmanager
+def search_settings(manager, **overrides):
+    """Run with [search] overrides on the manager and its engine; restores them after."""
+    saved = manager.config.search
+    manager.config.search = manager.search_engine.config = replace(saved, **overrides)
+    try:
+        yield
+    finally:
+        manager.config.search = manager.search_engine.config = saved
 
 
 def build_contexts(data: Dict[str, dict], summaries: dict, sample: List[tuple]) -> Dict[str, dict]:
+    from collivind.engine.search_engine import recall_query
     from collivind.engine.summaries import Group, save_summary
-    from collivind.models import SearchQuery
 
     wanted = sorted({sid for sid, _ in sample})
     out: Dict[str, dict] = {f"{sid}:{i}": {} for sid, i in sample}
     stats = {"summaries": 0, "gold_summary_routed": 0, "routed_searches": 0}
     with tempfile.TemporaryDirectory(prefix="collivind-summ-") as tmp:
-        # LOCOMO_SEARCH="dedup_threshold=0.98,rerank_pool=100" overrides [search] settings for an experiment
-        overrides = parse_search_overrides([kv for kv in os.environ.get("LOCOMO_SEARCH", "").split(",") if kv])
-        manager = make_manager(tmp, "BAAI/bge-small-en-v1.5", search=overrides or None)
-        cutoff = manager.config.search.recall_min_score
+        manager = make_manager(tmp, "BAAI/bge-small-en-v1.5")
         hooks = manager.config.hooks  # the shipped hook defaults, not hardcoded
 
         def search(q, pid, limit):
-            hits = manager.search(SearchQuery(query=q, project_id=pid, limit=limit, min_rerank_score=cutoff))
+            hits = manager.search(recall_query(manager.config.search, q, pid, limit))
             return [h.memory.content for h in hits], hits
+
+        def hook(q, pid, limit, max_tokens):
+            return [manager.get_context(q, project_id=pid, limit=limit, max_tokens=max_tokens)]
 
         for sid in wanted:
             pid = f"locomo-{sid}"
@@ -142,13 +156,14 @@ def build_contexts(data: Dict[str, dict], summaries: dict, sample: List[tuple]) 
             ingest(manager, data[sid], pid)
             qs = [(i, data[sid]["qa"][i]["question"]) for s2, i in sample if s2 == sid]
             for i, q in qs:
-                out[f"{sid}:{i}"]["turns50"] = search(q, pid, 50)[0]
-                out[f"{sid}:{i}"]["hook_turns"] = [manager.get_context(q, project_id=pid, limit=20, max_tokens=800)]
-                out[f"{sid}:{i}"]["hook_old"] = [manager.get_context(q, project_id=pid, limit=5, max_tokens=800)]
-                out[f"{sid}:{i}"]["hook_default"] = [
-                    manager.get_context(q, project_id=pid, limit=hooks.recall_limit, max_tokens=hooks.recall_max_tokens)
-                ]
-                out[f"{sid}:{i}"]["search30"] = search(q, pid, 30)[0]
+                row = out[f"{sid}:{i}"]
+                with search_settings(manager, **LEGACY_SEARCH):
+                    row["turns50"] = search(q, pid, 50)[0]
+                    row["hook_turns"] = hook(q, pid, 20, 800)
+                    row["hook_old"] = hook(q, pid, 5, 800)
+                    row["hook_021"] = hook(q, pid, 20, 2400)  # the 0.21 hook default
+                    row["search30"] = search(q, pid, 30)[0]
+                row["hook_default"] = hook(q, pid, hooks.recall_limit, hooks.recall_max_tokens)
                 turns = [
                     (t["dia_id"], turn_text(t, when))
                     for _, when, ts in sessions_of(data[sid]["conversation"])
@@ -156,9 +171,9 @@ def build_contexts(data: Dict[str, dict], summaries: dict, sample: List[tuple]) 
                 ]
                 known = {d for d, _ in turns}
                 gold_turns = sorted(set(parse_evidence(data[sid]["qa"][i].get("evidence", []))) & known)
-                out[f"{sid}:{i}"]["none"] = ["(no memory was retrieved)"]  # no memory tool at all
-                out[f"{sid}:{i}"]["full"] = [text for _, text in turns]
-                out[f"{sid}:{i}"]["oracle"] = [dict(turns)[d] for d in gold_turns]
+                row["none"] = ["(no memory was retrieved)"]  # no memory tool at all
+                row["full"] = [text for _, text in turns]
+                row["oracle"] = [dict(turns)[d] for d in gold_turns]
             for number, when, _ in sessions_of(data[sid]["conversation"]):
                 entry = summaries.get(f"{sid}|{number}")
                 if not entry:
@@ -167,13 +182,14 @@ def build_contexts(data: Dict[str, dict], summaries: dict, sample: List[tuple]) 
                 save_summary(manager, pid, Group("session", f"{pid}-s{number}"), text)
                 stats["summaries"] += 1
             for i, q in qs:
-                texts, hits = search(q, pid, 28)
-                out[f"{sid}:{i}"]["routed"] = texts
-                out[f"{sid}:{i}"]["hook_summ"] = [manager.get_context(q, project_id=pid, limit=20, max_tokens=800)]
-                out[f"{sid}:{i}"]["hook_default_summ"] = [
-                    manager.get_context(q, project_id=pid, limit=hooks.recall_limit, max_tokens=hooks.recall_max_tokens)
-                ]
-                out[f"{sid}:{i}"]["search30_summ"] = search(q, pid, 30)[0]
+                row = out[f"{sid}:{i}"]
+                with search_settings(manager, **LEGACY_SEARCH):
+                    texts, hits = search(q, pid, 28)
+                    row["routed"] = texts
+                    row["hook_summ"] = hook(q, pid, 20, 800)
+                    row["hook_021_summ"] = hook(q, pid, 20, 2400)
+                    row["search30_summ"] = search(q, pid, 30)[0]
+                row["hook_default_summ"] = hook(q, pid, hooks.recall_limit, hooks.recall_max_tokens)
                 gold = {int(e[1:].split(":")[0]) for e in parse_evidence(data[sid]["qa"][i].get("evidence", []))}
                 routed = {h.memory.session_id for h in hits if h.memory.category == "summary"}
                 stats["routed_searches"] += bool(routed)
@@ -260,7 +276,9 @@ def run_qa(data, sample, contexts, model, cache_path: Path, arms) -> dict:
             row[f"n_{name}"] = len(qs)
         report["arms"][arm] = row
     pairs = (("routed", "turns50"), ("hook_summ", "hook_turns"), ("hook_default", "hook_old"),
-             ("hook_default_summ", "hook_default"), ("search30_summ", "search30"), ("full", "hook_default_summ"))  # fmt: skip
+             ("hook_default_summ", "hook_default"), ("search30_summ", "search30"), ("full", "hook_default_summ"),
+             ("hook_default", "hook_021"), ("hook_default_summ", "hook_021_summ"),
+             ("hook_021", "hook_old"), ("hook_default", "hook_old"))  # fmt: skip
     for a, b in pairs:
         if a in arms and b in arms:
             wa, wb, p = mcnemar_exact([correct[a][q] for q in sample], [correct[b][q] for q in sample])
@@ -273,7 +291,8 @@ def main() -> None:
     parser.add_argument("dataset")
     parser.add_argument("summaries", help="agent-written summaries, {'<sample_id>|<session>': {'summary': ...}}")
     parser.add_argument("--work", required=True, help="directory for contexts, cache and report (dataset text!)")
-    parser.add_argument("--n", type=int, default=300)
+    parser.add_argument("--n", type=int, default=300, help="questions in the sample (0 = every eligible one)")
+    parser.add_argument("--convs", default=None, help="keep only these sample ids (comma-separated)")
     parser.add_argument("--qa", action="store_true", help="also run reader + judge through the Claude CLI")
     parser.add_argument("--model", default="sonnet")
     parser.add_argument(
@@ -291,6 +310,8 @@ def main() -> None:
     work.mkdir(parents=True, exist_ok=True)
     data = {s["sample_id"]: s for s in json.loads(Path(args.dataset).read_text())}
     sample = sample_questions(list(data.values()), args.n)
+    if args.convs:  # e.g. the held-out conversations only
+        sample = [q for q in sample if q[0] in args.convs.split(",")]
     ctx_path = work / "contexts.json"
     if ctx_path.exists():
         contexts = json.loads(ctx_path.read_text())

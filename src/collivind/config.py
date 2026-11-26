@@ -12,10 +12,12 @@ from .exceptions import ConfigurationError
 # indirect matches (LongMemEval preference questions) that sit at the floor.
 RECALL_MIN_SCORE_DEFAULT = 0.00002
 # Recall stopping rule, chosen on LoCoMo dev conversations and a synthetic
-# coding store (BENCHMARKS.md, "Recall precision"): with a confident match keep
-# what is within 12 logits of it; with none, keep only scores >= 0.001.
+# coding store (BENCHMARKS.md, "Recall precision"). With a confident match,
+# keep what is within 12 logits of it. With none, the floor is off by default:
+# at 0.001 it emptied half the unrelated coding prompts but dropped 11% of the
+# relevant memories on prompts written blind to the scores.
 RECALL_WINDOW_DEFAULT = 12.0
-RECALL_FALLBACK_MIN_SCORE_DEFAULT = 0.001
+RECALL_FALLBACK_MIN_SCORE_DEFAULT = 0.0
 
 
 @dataclass
@@ -86,8 +88,9 @@ class SearchConfig:
     # Recall only, after the cutoff. When some memory clears the reranker's
     # relevance boundary, drop memories more than recall_window logits below
     # the best one. When none does (the reranker finds nothing relevant),
-    # keep only memories scoring at least recall_fallback_min_score, so an
-    # unrelated prompt usually recalls nothing. Both 0 = the 0.21 behaviour.
+    # keep only memories scoring at least recall_fallback_min_score (0 = off,
+    # the default; 0.001 empties more unrelated prompts at a cost in relevant
+    # ones). Both 0, with [hooks] recall_limit = 20, = the 0.21 behaviour.
     recall_window: float = RECALL_WINDOW_DEFAULT
     recall_fallback_min_score: float = RECALL_FALLBACK_MIN_SCORE_DEFAULT
     # When a summary memory is among the reranked candidates, return the top
@@ -154,10 +157,10 @@ class HooksConfig:
     quiet_capture: bool = True
     # memories the prompt hook recalls per prompt, packed into a token budget
     # (len/4 estimate); `hook user-prompt --max-tokens` overrides the budget.
-    # 10 since 0.22 (was 20): on LoCoMo dev the extra 10 held 1% of the gold
-    # turns the top 10 did not, at twice the tokens. The budget mostly binds
-    # on summary memories; the recall rules run first, so an unrelated prompt
-    # usually injects nothing.
+    # 10 since 0.22 (was 20): on LoCoMo dev, memories 11-20 cost as many tokens
+    # as the first 10 and held the only gold turn for 4.5% of questions (QA in
+    # BENCHMARKS.md, "Recall precision"). The budget mostly binds on summary
+    # memories; the recall cutoff and window run first.
     recall_limit: int = 10
     recall_max_tokens: int = 2400
     # Ask the agent for a session summary once a session holds this many
@@ -288,9 +291,11 @@ lexical = true
 recall_min_score = 0.00002
 # Recall stopping rule: with a confident match, drop memories more than
 # recall_window logits below the best; with none, keep only memories scoring
-# at least recall_fallback_min_score. Set both to 0 for the 0.21 behaviour.
+# at least recall_fallback_min_score (0 = off; 0.001 empties most unrelated
+# prompts but also drops some indirect matches). Both 0 and [hooks]
+# recall_limit = 20 give the 0.21 behaviour.
 recall_window = 12.0
-recall_fallback_min_score = 0.001
+recall_fallback_min_score = 0.0
 # A summary among the candidates returns the top N summaries plus their most
 # relevant member memories. 0 = treat summaries as ordinary results.
 summary_routes = 3

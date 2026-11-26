@@ -82,12 +82,12 @@ def _manager(tmp_path, **search):
 
 
 def test_get_context_uses_the_recall_settings_and_search_does_not(tmp_path):
-    manager, graph, vector, emb = _manager(tmp_path)
+    manager, graph, vector, emb = _manager(tmp_path, recall_fallback_min_score=0.001)
     for w in ("alpha", "beta", "gamma"):
         _store(graph, vector, emb, f"deploy helm {w}")
     emb.rerank = lambda q, texts: [-2.0 if "alpha" in t else -9.0 for t in texts]  # nothing confident
     ctx = manager.get_context("deploy helm", project_id="p", limit=10)
-    assert "alpha" in ctx and "beta" not in ctx  # default floor 0.001 keeps sigmoid(-2) = 0.12 only
+    assert "alpha" in ctx and "beta" not in ctx  # floor 0.001 keeps sigmoid(-2) = 0.12 only
     assert len(manager.search(SearchQuery(query="deploy helm", project_id="p"))) == 3  # explicit search: all
     emb.rerank = lambda q, texts: [-9.0] * len(texts)
     assert ctx.startswith("--- Collivind Context ---")
@@ -141,5 +141,5 @@ def test_recall_settings_are_validated(field, bad):
 
 def test_defaults():
     config = CollivindConfig()
-    assert (config.search.recall_window, config.search.recall_fallback_min_score) == (12.0, 0.001)
+    assert (config.search.recall_window, config.search.recall_fallback_min_score) == (12.0, 0.0)
     assert config.hooks.recall_limit == 10

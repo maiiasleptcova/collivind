@@ -66,8 +66,8 @@ def score(question, owners, answer_texts, hits_pool, hits_k) -> Dict[str, float]
 def run_question(question, embedder, arms):
     from collivind.config import CollivindConfig, EmbeddingsConfig
     from collivind.engine.memory_manager import MemoryManager
-    from collivind.engine.search_engine import SearchEngine
-    from collivind.models import MemoryCategory, MemoryCreate, SearchQuery
+    from collivind.engine.search_engine import SearchEngine, recall_query
+    from collivind.models import MemoryCategory, MemoryCreate
     from collivind.storage.factory import create_all_backends
 
     with tempfile.TemporaryDirectory(prefix="collivind-lme-") as tmp:
@@ -114,8 +114,8 @@ def run_question(question, embedder, arms):
         }
         for arm, overrides in arms.items():
             engine = SearchEngine(vector, graph, embedder, replace(config.search, **overrides))
-            cutoff = engine.config.recall_min_score  # the recall path: cutoff on (inert with rerank off)
-            ask = lambda n: SearchQuery(query=question["question"], project_id="lme", limit=n, min_rerank_score=cutoff)  # noqa: E731
+            # the recall path: cutoff and stopping rule on (inert with rerank off)
+            ask = lambda n: recall_query(engine.config, question["question"], "lme", n)  # noqa: E731
             pool = engine.search(ask(POOL))
             top = engine.search(ask(max(KS)))
             row[arm] = score(question, resolved, answer_texts, pool, top)

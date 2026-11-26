@@ -21,6 +21,7 @@ import re
 import sys
 import tempfile
 from collections import defaultdict
+from dataclasses import replace
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -53,25 +54,21 @@ def build(manager, data: dict) -> dict:
     return resolved
 
 
-def hook_check(manager, data: dict, owners: dict) -> dict:
-    """The shipped get_context, as the hook calls it: memories, tokens, relevant kept, empty."""
-    from collivind.models import SearchQuery
+def hook_check(manager, data: dict) -> dict:
+    """The shipped get_context, as the hook calls it: memories, tokens, relevant kept, empty.
 
+    A relevant memory counts as kept when its text is in the printed context.
+    """
     hooks, out = manager.config.hooks, defaultdict(list)
+    text = {m["id"]: m["content"] for m in data["memories"]}
     for p in data["prompts"]:
         ctx = manager.get_context(
             p["prompt"], project_id=p["project"], limit=hooks.recall_limit, max_tokens=hooks.recall_max_tokens
         )
         empty = "No relevant context found" in ctx
-        hits = [] if empty else manager.search(
-            SearchQuery(query=p["prompt"], project_id=p["project"], limit=hooks.recall_limit,
-                        min_rerank_score=manager.config.search.recall_min_score)
-        )  # fmt: skip
-        n = 0 if empty else len(META.findall(ctx))
-        kept = {i for h in hits[:n] for i in owners.get(h.memory.id, ())}
         kind = "relevant" if p["relevant"] else "none"
-        out[kind].append({"n": n, "tokens": 0 if empty else len(ctx) // 4, "empty": empty,
-                          "kept": bool(set(p["relevant"]) & kept)})  # fmt: skip
+        out[kind].append({"n": 0 if empty else len(META.findall(ctx)), "tokens": 0 if empty else len(ctx) // 4,
+                          "empty": empty, "kept": any(text[i] in ctx for i in p["relevant"])})  # fmt: skip
     return {
         kind: {
             "prompts": len(rows),
@@ -92,6 +89,7 @@ def main() -> None:
     ap.add_argument("--prompts", default=None, help="prompt file to use instead of the store file's own prompts")
     ap.add_argument("--out", default=None)
     ap.add_argument("--hook", action="store_true", help="also report the shipped get_context defaults")
+    ap.add_argument("--recall-limit", type=int, default=None, help="[hooks] recall_limit override (0.21: 20)")
     ap.add_argument("--search", action="append", default=[], metavar="KEY=VALUE", help="[search] override")
     args = ap.parse_args()
     from locomo_bench import parse_search_overrides
@@ -101,6 +99,8 @@ def main() -> None:
         data = {**data, "prompts": json.loads(Path(args.prompts).read_text())["prompts"]}
     with tempfile.TemporaryDirectory(prefix="collivind-coding-") as tmp:
         manager = make_manager(tmp, "BAAI/bge-small-en-v1.5", parse_search_overrides(args.search))
+        if args.recall_limit:
+            manager.config.hooks = replace(manager.config.hooks, recall_limit=args.recall_limit)
         owners = build(manager, data)
         print(f"{len(data['memories'])} memories -> {len(owners)} live", flush=True)
         if args.out:
@@ -123,7 +123,7 @@ def main() -> None:
                            "store": "turns", "n_gold": len(p["relevant"]), "ranked": ranked}  # fmt: skip
                     out.write(json.dumps(row) + "\n")
         if args.hook:
-            print(json.dumps(hook_check(manager, data, owners), indent=1))
+            print(json.dumps(hook_check(manager, data), indent=1))
 
 
 if __name__ == "__main__":
