@@ -138,6 +138,21 @@ three held out (conv-48, conv-49, conv-50).
   sentence-style) but the wording was chosen after seeing dev results, so the
   held-out column is the one to read.
 
+End to end (300 questions, Haiku 5.5, one run) the same two changes move
+answers in the same direction, but not significantly on this sample:
+
+| Context given to the reader | shipped (transcript, 0.92) | sentence wording, 0.98 | paired p |
+|---|---|---|---|
+| prompt hook, 5 memories | 67.3 | 70.0 | 0.31 |
+| prompt hook, shipped default (20 memories) | 70.3 | 73.3 | 0.26 |
+| shipped default, with summary memories | 79.7 | 81.7 | 0.46 |
+
+Also measured on the sentence + 0.98 setting: a rerank pool of 100 instead of
+50 gives 78.3 / 84.0 (about half a point for roughly twice the rerank time).
+Swapping the reranker for `BAAI/bge-reranker-base` scored 67.1 / 77.4, but the
+relevance gate and cutoff are calibrated to the current model's score scale, so
+that run does not settle whether a stronger reranker would help.
+
 ### LoCoMo, session level
 
 | System | Stored unit | session hit@5 | session hit@10 |
