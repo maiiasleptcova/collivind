@@ -450,22 +450,36 @@ Collivind stores memories as nodes in a knowledge graph with vector embeddings f
 
 ## Benchmarks
 
-**LongMemEval-S session retrieval, Recall@5: 98.0%** (500/500 questions,
-standard split, raw mode — local embeddings, no LLM, no reranking, no API
-keys). Fully reproducible: methodology, per-question results, and honest
-caveats in [benchmarks/BENCHMARKS.md](benchmarks/BENCHMARKS.md).
-**LoCoMo turn-level retrieval through the full engine: strict hit@5 72.4%,
-hit@10 77.5%** with the 0.19 hybrid keyword + cross-encoder rerank stage
-(0.18: 57.6% / 67.2%; 1,536 non-adversarial questions, a much harder,
-turn-level task, same doc).
-**Summary memories (0.20)** lift LoCoMo QA through the engine from 75.7% to
-83.7% at about 1,800 words of context (300 questions, Claude Sonnet 5.5
-reader and judge, p = 0.0002), and the prompt hook's recall at 800 tokens (the old default;
-now 2,400, not re-measured) from 74.3% to 81.3%; multi-hop did not improve measurably. Summaries cost one
-agent call per session at save time.
-We publish
-no side-by-side numbers against other memory tools — different projects
-measure different things on different splits.
+Measured on v0.21.0, embedded mode, default config. Systems in one table were
+run through the same harness and scoring code; full method, caveats and
+reproduction steps are in [benchmarks/BENCHMARKS.md](benchmarks/BENCHMARKS.md).
+
+**LoCoMo, find the exact evidence turn** (1,536 questions, no LLM):
+
+| System | top 5 | top 10 |
+|---|---|---|
+| **collivind 0.21.0** (hybrid candidates + local reranker) | **72.4%** | **77.5%** |
+| MemPalace 3.12.0, hybrid v5, stored per turn | 60.5% | 69.5% |
+| BM25 | 57.9% | 65.4% |
+| plain dense search (bge-small) | 56.8% | 66.2% |
+| MemPalace 3.12.0, raw, stored per turn | 49.6% | 58.5% |
+
+The MemPalace rows are its published benchmark pipeline (its own scripts and
+embedder), not its product path; details in the benchmark notes.
+
+**LongMemEval-S, find the right session**: every system above scores 94.8% to
+98.2% at top 5 (collivind 97.8% through the engine on a 90-question sample,
+98.0% through the raw vector store on all 500). The benchmark is saturated for
+retrieval and does not separate memory tools.
+
+**LoCoMo answers end to end** (300 questions, Claude Haiku 5.5 as reader and
+judge, scored twice): the prompt hook's default recall answers 70-72%; with
+agent-written summary memories 79-80%; the whole conversation in context 76%.
+Summaries cost one agent call per session at save time.
+
+Mem0, Zep, Letta and LangMem need an LLM at write time and were not run here;
+their own published figures are listed separately in the benchmark notes and
+are not comparable with the table above.
 
 ## Architecture
 

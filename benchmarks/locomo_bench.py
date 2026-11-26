@@ -265,6 +265,7 @@ def run(args) -> None:
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
+    qa_index = {id(qa): i for sample in data for i, qa in enumerate(sample["qa"])}
     with tempfile.TemporaryDirectory(prefix="collivind-locomo-") as tmp, out_path.open("w") as out:
         manager = make_manager(tmp, args.model, parse_search_overrides(args.search))
         print(f"search config: {manager.config.search}", flush=True)
@@ -309,11 +310,13 @@ def run(args) -> None:
             row: Dict[str, Any] = {
                 # ids only: the dataset text is CC BY-NC and is not redistributed
                 "sample_id": sample["sample_id"],
-                "qa_index": sample["qa"].index(qa),
+                "qa_index": qa_index[id(qa)],  # not .index(qa): LoCoMo repeats a few identical questions
                 "category": qa["category"],
                 "category_name": CATEGORIES.get(qa["category"], str(qa["category"])),
                 "evidence": sorted(evidence),
                 "retrieved": [sorted(r) for r in ranked],
+                # the session each returned memory itself belongs to (not the turns it superseded)
+                "retrieved_sessions": [f"D{(h.memory.session_id or '').rsplit('-s', 1)[-1]}" for h in hits],
                 **score_retrieval(ranked, evidence, ks),
                 **score_strict([h.memory.content for h in hits], {turn_texts[e] for e in evidence}, ks),
             }

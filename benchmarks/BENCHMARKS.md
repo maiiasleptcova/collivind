@@ -1,9 +1,248 @@
 # Collivind Benchmarks
 
-Every number in this document is reproducible from this repository with the
-commands below. Full per-question result files are committed alongside.
+Every number measured here is reproducible from this repository with the
+commands below, and names the version, sample size and commit it was measured
+on. Result files hold ids and scores only (LoCoMo is CC BY-NC; no dataset text
+is committed).
 
-## Methodology — what is and isn't measured
+Current release measured: **v0.21.0** (commit `9480b04`), embedded mode, default
+config, `BAAI/bge-small-en-v1.5`, 2026-11-26, Apple-silicon laptop.
+
+## Summary
+
+- **LoCoMo, find the exact turn** (1,536 questions, no LLM): collivind returns
+  an evidence turn in its top 5 for **72.4%** of questions and in its top 10 for
+  **77.5%**. On the same harness, MemPalace's hybrid mode stored per turn gets
+  60.5% / 69.5%, plain dense search 56.8% / 66.2%, BM25 57.9% / 65.4%.
+- **LoCoMo, find the right session**: collivind 91.9% (top 5) / 96.2% (top 10);
+  MemPalace hybrid, its published per-session configuration, 70.4% / 91.9%. A
+  random ranking already scores 23.6% / 44.0%, so this metric separates systems
+  poorly at top 10.
+- **LongMemEval-S, find the right session** (500 questions): every system here
+  is between 94.8% and 98.2% at top 5. This benchmark is saturated for
+  retrieval and should not be used to rank memory tools.
+- **LoCoMo end-to-end answers** (300 questions, Claude Haiku 5.5 as reader and
+  judge, scored twice): the prompt hook's default recall answers 70-72%
+  correctly; with agent-written summary memories 79-80%; the whole conversation
+  in context 76%; the gold evidence alone 84%.
+- **Where collivind is behind or unproven**: open-domain questions (44.6%
+  strict hit@5); multi-hop answers (47-63% depending on run and summaries);
+  search p95 goes from about 40 ms to about 214 ms with the reranker; docker
+  mode has no accuracy benchmark; Mem0, Zep, Letta and LangMem were not run
+  here (see below).
+
+## Comparison policy
+
+Earlier versions of this file published no side-by-side comparison. That
+changed in 0.21.0, with one rule: **only systems run through the same harness,
+on the same data, with the same scoring code share a table.** Figures other
+projects publish about themselves are listed separately, with their own setup,
+and are never ranked against rows measured here. Different reader models,
+judges, retrieval depths and splits make cross-quoted numbers incomparable, and
+that reason has not gone away.
+
+## Measured here, same harness
+
+Scoring is [`compare.py`](compare.py): one definition per metric, applied to
+every system's ids-only ranking file. Per-system scores are in
+[`results_comparison.json`](results_comparison.json).
+
+- **turn hit@k**: a gold evidence turn is among the top k units. For collivind
+  this is the *strict* variant (the returned memory's text is an evidence
+  turn), which is harder than what the other rows get.
+- **session hit@k**: a gold evidence session is among the top k sessions,
+  sessions ranked by their best unit.
+- LoCoMo rows cover categories 1-4 with resolvable evidence (1,536 questions).
+  LongMemEval-S rows cover all 500 questions, recall-any.
+
+### LoCoMo, turn level (systems whose stored unit is a turn)
+
+| System | Embedding | turn hit@5 | turn hit@10 |
+|---|---|---|---|
+| **collivind 0.21.0, default** (hybrid candidates + rerank) | bge-small | **72.4** | **77.5** |
+| collivind 0.21.0, `rerank = false` | bge-small | 57.6 | 67.2 |
+| MemPalace 3.12.0, hybrid v5, `--granularity dialog` | all-MiniLM-L6-v2 | 60.5 | 69.5 |
+| MemPalace 3.12.0, raw, `--granularity dialog` | all-MiniLM-L6-v2 | 49.6 | 58.5 |
+| plain dense cosine | bge-small | 56.8 | 66.2 |
+| BM25 | none | 57.9 | 65.4 |
+
+Paired exact McNemar tests, collivind default against each other row, give
+p < 1e-11 at both depths (for example against MemPalace hybrid at top 5:
+collivind alone right on 269 questions, MemPalace alone on 87).
+
+Collivind's numbers are `MemoryManager.search(limit=10)` through the recall
+path ([`results_locomo_summary.json`](results_locomo_summary.json)); the
+collivind rows in `results_comparison.json` come from the `limit=50` run used
+for session ranking, where the rerank pool is larger and turn hit is 72.9 /
+78.3. MemPalace's hybrid ranking depends on the requested depth (its rerank
+pool is `top_k * 3`); the row above uses a requested depth of 50, the most
+favourable to it, and its exact `--top-k 10` run scores 58.6 / 66.1.
+
+### LoCoMo, session level
+
+| System | Stored unit | session hit@5 | session hit@10 |
+|---|---|---|---|
+| *random ranking (expected)* | | *23.6* | *44.0* |
+| **collivind 0.21.0, default** | turn | **91.9** | **96.2** |
+| collivind 0.21.0, `rerank = false` | turn | 86.1 | 94.0 |
+| BM25 | turn | 89.8 | 95.4 |
+| plain dense cosine, bge-small | turn | 85.5 | 93.9 |
+| MemPalace hybrid v5, per turn | turn | 85.5 | 93.2 |
+| MemPalace raw, per turn | turn | 78.3 | 89.4 |
+| MemPalace hybrid v5, per session (published configuration) | session | 70.4 | 91.9 |
+| MemPalace raw, per session (published configuration) | session | 51.9 | 65.8 |
+
+Conversations have 19 to 32 sessions, hence the high chance floor. Collivind's
+session ranking is derived from `search(limit=50)` (each returned memory's own
+session, in order). MemPalace's per-session rows use its own `--top-k 5` and
+`--top-k 10` runs; with a requested depth of 50 its hybrid mode scores
+82.3 / 92.3. Its published figures use fractional recall over all five
+categories including four empty-evidence questions scored as hits: 60.3% raw
+and 88.9% hybrid at R@10. Both were reproduced exactly with its unmodified
+scripts before anything here was scored.
+
+### LongMemEval-S, session level, all 500 questions
+
+| System | session hit@5 | session hit@10 |
+|---|---|---|
+| MemPalace hybrid v4 | 98.2 | 99.8 |
+| collivind raw vector store (bypasses the engine; 2026-07) | 98.0 | n/a |
+| plain dense cosine, bge-small, per turn | 97.8 | 99.0 |
+| MemPalace raw | 96.4 | 98.2 |
+| BM25, per turn | 94.8 | 97.6 |
+
+Through the full engine, collivind was measured on a 90-question stratified
+sample only: 97.8% at top 5, rerank on or off; on those same 90 questions
+dense scores 97.8, MemPalace hybrid v4 97.8, MemPalace raw 95.6, BM25 91.1.
+With 90 questions one question is 1.1 points. MemPalace's own notes say
+hybrid v4 was tuned on three named test questions. Its raw figure here is
+96.4% against a published 96.6%: 14 questions in this copy of the dataset carry
+one or two extra haystack sessions, and one flips.
+
+### What "MemPalace" means in these rows
+
+Version 3.12.0, commit `87ae502`, run in an isolated environment with no LLM
+and none of its CLI installers. Its benchmark scripts do not import the
+`mempalace` package: raw and hybrid modes call ChromaDB directly with its
+default all-MiniLM-L6-v2 embedder, and the hybrid heuristics (keyword,
+quoted-phrase, name and temporal boosts) exist only in those scripts. So these
+rows measure MemPalace's published benchmark pipeline, not its shipped product
+path, which chunks conversations differently. Modes that need an LLM
+(`--llm-rerank`, `diary`, `palace`, `rooms`) were not run. The embedders differ
+(bge-small against MiniLM), which is part of each system's default and part of
+the gap: collivind's own raw store scored 91.8% on LongMemEval with MiniLM and
+98.0% with bge-small.
+
+### LoCoMo end-to-end QA, collivind only
+
+300 questions (categories 1-4, seed 0), every turn stored through
+`add_memory`, one reader call per question, reader and judge **Claude Haiku
+5.5** through the Claude CLI, judge prompt Mem0's `ACCURACY_PROMPT`.
+[`locomo_summary_qa.py`](locomo_summary_qa.py), `--model haiku`. Run 2 repeats
+reader and judge with an independent cache on identical contexts, to show
+run-to-run variation.
+
+| Context given to the reader | words | run 1 | run 2 | multi-hop (run 1 / run 2) |
+|---|---|---|---|---|
+| prompt hook, old setting (5 memories, 800 tokens) | 215 | 67.3 | 68.0 | 42.1 / 43.9 |
+| prompt hook, shipped default (20 memories, 2,400 tokens) | 764 | 70.3 | 72.0 | 52.6 / 47.4 |
+| `search(limit=30)` | 1,015 | 71.3 | | 47.4 |
+| shipped hook default, store has summary memories | 1,558 | 79.7 | 78.7 | 63.2 / 57.9 |
+| `search(limit=30)`, store has summary memories | 1,864 | 78.7 | | 61.4 |
+| whole conversation (no retrieval) | 19,767 | 76.0 | | 66.7 |
+| gold evidence turns only (no retrieval) | 73 | 83.7 | | 68.4 |
+
+- The deeper hook default is 3-4 points above the old setting; that is **not**
+  significant in either run (paired McNemar p = 0.28 and 0.11).
+- Summary memories add 7-9 points and are significant in both runs
+  (p = 0.0009 and 0.014). They are written by the agent, one call per session
+  at save time; collivind itself runs no model.
+- With this reader, collivind with summaries scores above the whole
+  conversation in context; the difference is not significant (p = 0.22).
+- Earlier QA tables further down used Claude Sonnet 5.5 and are not comparable
+  with this one: the reader changes every row.
+
+No other system was run for QA. MemPalace's benchmark scripts are retrieval
+only, and the tools that publish QA scores need an LLM at write time.
+
+## Published by others, different setups
+
+Not measured here, not comparable with the tables above or with each other.
+Collected from the linked sources on 2026-11-25; check the source for current
+figures.
+
+| System | Benchmark and figure | Reader / judge | Retrieval depth | Source |
+|---|---|---|---|---|
+| Mem0 | LoCoMo LLM-judge 66.9 (graph variant 68.4) | gpt-4o-mini | 30 memories per speaker | [paper](https://arxiv.org/abs/2504.19413) |
+| full-context baseline | LoCoMo LLM-judge 72.9 | gpt-4o-mini | whole conversation | same paper |
+| Zep | LoCoMo 66.0 in Mem0's paper; 75.1 by Zep's count | see sources | see sources | [Zep blog](https://www.getzep.com/blog/lies-damn-lies-statistics-is-mem0-really-sota-in-agent-memory/) |
+| Letta filesystem agent | LoCoMo 74.0 | see source | agentic file search | [Letta blog](https://www.letta.com/blog/benchmarking-ai-agent-memory) |
+| LangMem | LoCoMo LLM-judge 58.1 | gpt-4o-mini | see source | Mem0 paper |
+| Mem0 (2026 algorithm) | LoCoMo 92.5, LongMemEval 94.4, vendor claim | see source | see source | [Mem0 blog](https://mem0.ai/blog/ai-memory-benchmarks-in-2026) |
+| MemPalace | LongMemEval-S R@5 96.6 raw; LoCoMo session R@10 60.3 raw, 88.9 hybrid | none (retrieval) | top 5 / top 10 of 19-32 sessions | [README](https://github.com/MemPalace/mempalace) (reproduced above) |
+
+Mem0, Zep, Letta and LangMem extract or organise memories with an LLM at write
+time or run as a hosted service, so they could not be run on this machine,
+which has no model API key. Nothing here says how collivind would rank against
+them; the only way to know is to run them through the same harness with the
+same reader. LoCoMo also has known label noise: a
+[third-party audit](https://dev.to/penfieldlabs/we-audited-locomo-64-of-the-answer-key-is-wrong-and-the-judge-accepts-up-to-63-of-intentionally-33lg)
+found about 6% of the answer keys wrong.
+
+## Caveats that apply to collivind's own numbers
+
+- The default search path was chosen and measured on the same LoCoMo questions;
+  there is no held-out split. The reranker is trained on web search data and
+  has been tested on conversational questions only, not on coding prompts.
+- Near-duplicate supersession (cosine at or above 0.92) still replaces some
+  evidence turns' text with a later near-duplicate; strict scoring counts those
+  as misses.
+- Retrieval at 0.21.0 is identical to 0.19.0 (same per-question hits), which is
+  expected: 0.20 and 0.21 did not change ranking for stores without summaries.
+- Search latency was last measured cleanly at 0.19.0 (p50 35 ms / p95 40 ms
+  with rerank off, 186 / 214 ms with rerank on, 10k memories, worst-case text
+  length). A re-run at 0.21.0 on a heavily loaded machine gave 82 / 158 ms and
+  334 / 449 ms and is not a usable measurement.
+- Docker mode (Qdrant + Neo4j + HTTP embeddings) has no accuracy benchmark.
+- QA scores move 1-2 points between runs with identical contexts.
+
+## Reproducing the comparison
+
+```bash
+uv sync --extra embedded --dev
+# datasets into benchmarks/data/ (gitignored): locomo10.json, longmemeval_s.json (see below)
+uv run --extra embedded python benchmarks/locomo_bench.py benchmarks/data/locomo10.json \
+  --summary benchmarks/results_locomo_summary.json                       # collivind, limit 10
+uv run --extra embedded python benchmarks/locomo_bench.py benchmarks/data/locomo10.json --top-k 5,10,50 \
+  --out benchmarks/data/systems/collivind_locomo_top50.jsonl             # for session ranking
+uv run --extra embedded python benchmarks/locomo_bench.py benchmarks/data/locomo10.json --top-k 5,10,50 \
+  --search rerank=false --out benchmarks/data/systems/collivind_norerank_locomo_top50.jsonl
+uv run --extra embedded python benchmarks/baselines.py locomo benchmarks/data/locomo10.json benchmarks/data/systems
+uv run --extra embedded python benchmarks/baselines.py lme benchmarks/data/longmemeval_s.json benchmarks/data/systems
+uv run python benchmarks/compare.py benchmarks/data/locomo10.json benchmarks/data/longmemeval_s.json \
+  benchmarks/data/systems --out benchmarks/results_comparison.json
+```
+
+MemPalace's ranking files (`mempalace_*.json` in the systems directory) come
+from its own scripts at commit `87ae502`: `benchmarks/locomo_bench.py` with
+`--granularity session|dialog`, `--mode raw|hybrid`, `--top-k 5|10|50`, and
+`benchmarks/longmemeval_bench.py` in `raw` and `hybrid_v4` modes, converted to
+ids only. Run them with `HOME` redirected to a scratch directory and do not run
+its `init` or hook installers.
+
+QA: `uv run --extra embedded python benchmarks/locomo_summary_qa.py
+benchmarks/data/locomo10.json SUMMARIES.json --work benchmarks/data/qa --qa
+--model haiku --arms hook_old,hook_default,search30,hook_default_summ,search30_summ,full,oracle`
+(about 4,200 Claude CLI calls; add `--cache cache_run2.jsonl` for a repeat).
+`SUMMARIES.json` holds agent-written session summaries and is not committed.
+
+# Detailed results and history
+
+The sections below are collivind's own measurements as each change landed.
+Where they give a figure for an earlier version, the tables above supersede it
+for v0.21.0.
+
+## LongMemEval-S through the raw vector store (2026-07)
 
 **Task**: [LongMemEval](https://github.com/xiaowu0162/LongMemEval) (S variant,
 500 questions) session-level retrieval. For each question, its haystack
@@ -11,18 +250,12 @@ sessions (~50 per question) are ingested into a fresh embedded collivind
 store; the question text is the search query; the score is **Recall@5** —
 whether an evidence session appears in the top 5 retrieved sessions.
 
-**Mode**: *raw*. Each conversation turn is embedded
-(`all-MiniLM-L6-v2`, in-process) and sessions are ranked by their
-best-scoring turn. No LLM anywhere in the pipeline, no API keys, no
-reranking, no keyword heuristics, no per-question tuning.
+**Mode**: *raw*. Each conversation turn is embedded in-process and sessions
+are ranked by their best-scoring turn, calling the vector store directly. No
+LLM anywhere in the pipeline, no API keys, no reranking, no keyword
+heuristics, no per-question tuning. This bypasses `MemoryManager`.
 
-**What this does not claim**: R@5 is retrieval recall, not end-to-end QA
-accuracy. We deliberately publish no side-by-side comparison against other
-memory tools — projects publish different metrics on different splits, and
-cross-quoting them is not an honest comparison. Read each project's own
-research page for their numbers.
-
-## Results
+### Results
 
 **LongMemEval-S, session-level Recall@5, raw mode (no LLM): 98.0%** on all
 500 questions with `BAAI/bge-small-en-v1.5` (collivind's default embedding
