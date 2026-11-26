@@ -41,7 +41,8 @@ config, `BAAI/bge-small-en-v1.5`, 2026-11-26, Apple-silicon laptop.
 - **Where collivind is behind or unproven**: open-domain questions (44.6%
   strict hit@5); multi-hop answers (47-63% depending on run and summaries);
   at session level BM25 is ahead on single-hop and open-domain at top 10;
-  search p95 goes from about 40 ms to about 214 ms with the reranker; docker
+  search p95 goes from about 35 ms to about 181 ms with the reranker; the
+  default near-duplicate merging costs about 4 points on this benchmark; docker
   mode has no accuracy benchmark; Mem0, Zep, Letta and LangMem were not run
   here (see below).
 
@@ -325,15 +326,17 @@ found about 6% of the answer keys wrong.
 - The default search path was chosen and measured on the same LoCoMo questions;
   there is no held-out split. The reranker is trained on web search data and
   has been tested on conversational questions only, not on coding prompts.
-- Near-duplicate supersession (cosine at or above 0.92) still replaces some
-  evidence turns' text with a later near-duplicate; strict scoring counts those
-  as misses.
+- Near-duplicate supersession (cosine at or above 0.92) costs about 4 points
+  here. It merges or drops 343 of the 5,882 turns, and with it raised to 0.98
+  or switched off (`--search dedup_threshold=0.98`,
+  [`results_locomo_dedup098_summary.json`](results_locomo_dedup098_summary.json)),
+  strict hit is 76.0 / 81.7 instead of 72.4 / 77.5. The default is unchanged in
+  0.21.0; the headline numbers are the shipped default, not the best setting.
 - Retrieval at 0.21.0 is identical to 0.19.0 (same per-question hits), which is
   expected: 0.20 and 0.21 did not change ranking for stores without summaries.
-- Search latency was last measured cleanly at 0.19.0 (p50 35 ms / p95 40 ms
-  with rerank off, 186 / 214 ms with rerank on, 10k memories, worst-case text
-  length). A re-run at 0.21.0 on a heavily loaded machine gave 82 / 158 ms and
-  334 / 449 ms and is not a usable measurement.
+- Search latency at 0.21.0, 10k memories, worst-case text length, idle
+  Apple-silicon laptop: p50 32 ms / p95 35 ms with rerank off, 176 / 181 ms
+  with rerank on (`search_bench.py`).
 - Docker mode (Qdrant + Neo4j + HTTP embeddings) has no accuracy benchmark.
 - QA scores move 1-2 points overall between runs with identical contexts, and
   up to 5 points on the 57 multi-hop questions.
