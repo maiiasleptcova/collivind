@@ -6,6 +6,7 @@ from collivind.cli.commands.contradictions import contradictions
 from collivind.cli.commands.describe import describe
 from collivind.cli.commands.docker import docker
 from collivind.cli.commands.embed_daemon import embed_daemon
+from collivind.cli.commands.entities import entities
 from collivind.cli.commands.hook import hook
 from collivind.cli.commands.init import init
 from collivind.cli.commands.memory import (
@@ -70,6 +71,7 @@ cli.add_command(embed_daemon)
 cli.add_command(projects)
 cli.add_command(summarize)
 cli.add_command(describe)
+cli.add_command(entities)
 
 
 if __name__ == "__main__":
