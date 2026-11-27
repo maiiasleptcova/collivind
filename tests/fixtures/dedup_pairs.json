@@ -1,0 +1,3467 @@
+[
+ {
+  "id": "same-000",
+  "kind": "same",
+  "group": "status",
+  "hard": false,
+  "a": {
+   "content": "Still waiting on CI for PR 212 in collivind; the macOS job is queued.",
+   "summary": "PR 212 still waiting on CI",
+   "category": "fact",
+   "tags": [
+    "ci",
+    "pr-212"
+   ]
+  },
+  "b": {
+   "content": "Still waiting on CI for PR 212 in collivind, macOS job is queued.",
+   "summary": "PR 212 waiting on CI",
+   "category": "fact",
+   "tags": [
+    "ci",
+    "pr-212"
+   ]
+  }
+ },
+ {
+  "id": "same-001",
+  "kind": "same",
+  "group": "status",
+  "hard": false,
+  "a": {
+   "content": "Deploy of billing-api to staging is still blocked on the expired TLS certificate.",
+   "summary": "billing-api staging deploy blocked on TLS cert",
+   "category": "fact",
+   "tags": [
+    "deploy",
+    "staging"
+   ]
+  },
+  "b": {
+   "content": "billing-api staging deploy is still blocked on the expired TLS certificate.",
+   "summary": "billing-api deploy blocked by expired cert",
+   "category": "fact",
+   "tags": [
+    "deploy",
+    "staging"
+   ]
+  }
+ },
+ {
+  "id": "same-002",
+  "kind": "same",
+  "group": "status",
+  "hard": false,
+  "a": {
+   "content": "Waiting for the owner to review the migration plan for the orders table.",
+   "summary": "orders migration plan awaits owner review",
+   "category": "fact",
+   "tags": [
+    "migration"
+   ]
+  },
+  "b": {
+   "content": "Still waiting for the owner to review the orders table migration plan.",
+   "summary": "orders migration plan still awaiting review",
+   "category": "fact",
+   "tags": [
+    "migration"
+   ]
+  }
+ },
+ {
+  "id": "same-003",
+  "kind": "same",
+  "group": "status",
+  "hard": false,
+  "a": {
+   "content": "The flaky test test_embed_daemon_restart is still failing intermittently on Linux runners.",
+   "summary": "test_embed_daemon_restart still flaky on Linux",
+   "category": "error",
+   "tags": [
+    "flaky",
+    "ci"
+   ]
+  },
+  "b": {
+   "content": "test_embed_daemon_restart still fails intermittently on the Linux runners.",
+   "summary": "test_embed_daemon_restart flaky on Linux CI",
+   "category": "error",
+   "tags": [
+    "flaky",
+    "ci"
+   ]
+  }
+ },
+ {
+  "id": "same-004",
+  "kind": "same",
+  "group": "status",
+  "hard": false,
+  "a": {
+   "content": "Release v0.21.0 is tagged and the GitHub Release has the wheel and sdist attached.",
+   "summary": "v0.21.0 released with wheel and sdist",
+   "category": "fact",
+   "tags": [
+    "release"
+   ]
+  },
+  "b": {
+   "content": "v0.21.0 tagged; GitHub Release created with wheel and sdist attached.",
+   "summary": "v0.21.0 GitHub Release has wheel and sdist",
+   "category": "fact",
+   "tags": [
+    "release"
+   ]
+  }
+ },
+ {
+  "id": "same-005",
+  "kind": "same",
+  "group": "status",
+  "hard": false,
+  "a": {
+   "content": "Rebase of feat/hybrid-rerank onto main is done, no conflicts.",
+   "summary": "feat/hybrid-rerank rebased on main cleanly",
+   "category": "fact",
+   "tags": [
+    "git"
+   ]
+  },
+  "b": {
+   "content": "feat/hybrid-rerank was rebased onto main with no conflicts.",
+   "summary": "hybrid-rerank rebase onto main clean",
+   "category": "fact",
+   "tags": [
+    "git"
+   ]
+  }
+ },
+ {
+  "id": "same-006",
+  "kind": "same",
+  "group": "status",
+  "hard": false,
+  "a": {
+   "content": "Still waiting on the design team for the final logo SVG for the marketing site.",
+   "summary": "waiting on design for logo SVG",
+   "category": "fact",
+   "tags": [
+    "site"
+   ]
+  },
+  "b": {
+   "content": "Waiting on the design team to send the final logo SVG for the marketing site.",
+   "summary": "marketing site logo SVG pending from design",
+   "category": "fact",
+   "tags": [
+    "site"
+   ]
+  }
+ },
+ {
+  "id": "same-007",
+  "kind": "same",
+  "group": "status",
+  "hard": false,
+  "a": {
+   "content": "Neo4j container is healthy again after raising its heap to 1 GB.",
+   "summary": "neo4j healthy after heap raised to 1 GB",
+   "category": "fact",
+   "tags": [
+    "docker",
+    "neo4j"
+   ]
+  },
+  "b": {
+   "content": "After raising the Neo4j heap to 1 GB the container is healthy again.",
+   "summary": "neo4j container healthy with 1 GB heap",
+   "category": "fact",
+   "tags": [
+    "docker",
+    "neo4j"
+   ]
+  }
+ },
+ {
+  "id": "same-008",
+  "kind": "same",
+  "group": "status",
+  "hard": false,
+  "a": {
+   "content": "The nightly backup job ran successfully and wrote backups/nightly-20261125.jsonl.",
+   "summary": "nightly backup succeeded",
+   "category": "fact",
+   "tags": [
+    "backup"
+   ]
+  },
+  "b": {
+   "content": "Nightly backup job succeeded and wrote backups/nightly-20261125.jsonl.",
+   "summary": "nightly backup ok, wrote nightly-20261125.jsonl",
+   "category": "fact",
+   "tags": [
+    "backup"
+   ]
+  }
+ },
+ {
+  "id": "same-009",
+  "kind": "same",
+  "group": "status",
+  "hard": false,
+  "a": {
+   "content": "Still blocked: the staging database password rotation needs approval from the platform team.",
+   "summary": "staging DB password rotation awaiting platform approval",
+   "category": "fact",
+   "tags": [
+    "secrets"
+   ]
+  },
+  "b": {
+   "content": "Staging database password rotation is still blocked on platform team approval.",
+   "summary": "staging DB password rotation still blocked",
+   "category": "fact",
+   "tags": [
+    "secrets"
+   ]
+  }
+ },
+ {
+  "id": "same-010",
+  "kind": "same",
+  "group": "status",
+  "hard": false,
+  "a": {
+   "content": "mypy is clean on the whole package after the typing fixes in storage/.",
+   "summary": "mypy clean after storage typing fixes",
+   "category": "fact",
+   "tags": [
+    "typing"
+   ]
+  },
+  "b": {
+   "content": "After the typing fixes in storage/, mypy is clean on the whole package.",
+   "summary": "mypy passes on the package",
+   "category": "fact",
+   "tags": [
+    "typing"
+   ]
+  }
+ },
+ {
+  "id": "same-011",
+  "kind": "same",
+  "group": "status",
+  "hard": true,
+  "a": {
+   "content": "2026-11-25: still waiting on Maiia to merge PR 66.",
+   "summary": "PR 66 awaiting merge",
+   "category": "fact",
+   "tags": [
+    "pr-66"
+   ]
+  },
+  "b": {
+   "content": "2026-11-26: PR 66 is still waiting on Maiia to merge it.",
+   "summary": "PR 66 still awaiting merge",
+   "category": "fact",
+   "tags": [
+    "pr-66"
+   ]
+  }
+ },
+ {
+  "id": "same-012",
+  "kind": "same",
+  "group": "status",
+  "hard": true,
+  "a": {
+   "content": "Checked again: the docs site build is still red because of the broken link to /api/search.",
+   "summary": "docs build red on broken /api/search link",
+   "category": "error",
+   "tags": [
+    "docs"
+   ]
+  },
+  "b": {
+   "content": "Docs site build still failing on the broken /api/search link.",
+   "summary": "docs site build broken link /api/search",
+   "category": "error",
+   "tags": [
+    "docs"
+   ]
+  }
+ },
+ {
+  "id": "same-013",
+  "kind": "same",
+  "group": "decision",
+  "hard": false,
+  "a": {
+   "content": "We decided to use SQLite FTS5 for the keyword channel in embedded mode instead of adding a separate search engine.",
+   "summary": "use SQLite FTS5 for keyword search in embedded mode",
+   "category": "decision",
+   "tags": [
+    "search"
+   ]
+  },
+  "b": {
+   "content": "Decision: the embedded-mode keyword channel uses SQLite FTS5 rather than a separate search engine.",
+   "summary": "embedded keyword channel = SQLite FTS5",
+   "category": "decision",
+   "tags": [
+    "search"
+   ]
+  }
+ },
+ {
+  "id": "same-014",
+  "kind": "same",
+  "group": "decision",
+  "hard": false,
+  "a": {
+   "content": "Decided to keep the hook recall depth configurable with a default of 20.",
+   "summary": "hook recall depth configurable, default 20",
+   "category": "decision",
+   "tags": [
+    "hooks"
+   ]
+  },
+  "b": {
+   "content": "Hook recall depth is a config option and its default is 20, as decided.",
+   "summary": "recall depth default 20, configurable",
+   "category": "decision",
+   "tags": [
+    "hooks"
+   ]
+  }
+ },
+ {
+  "id": "same-015",
+  "kind": "same",
+  "group": "decision",
+  "hard": false,
+  "a": {
+   "content": "We will not run an LLM inside collivind at runtime; agents do all judgement.",
+   "summary": "no LLM inside collivind at runtime",
+   "category": "decision",
+   "tags": [
+    "design"
+   ]
+  },
+  "b": {
+   "content": "No LLM runs inside collivind at runtime; all judgement is left to the agent.",
+   "summary": "collivind runs no LLM at runtime",
+   "category": "decision",
+   "tags": [
+    "design"
+   ]
+  }
+ },
+ {
+  "id": "same-016",
+  "kind": "same",
+  "group": "decision",
+  "hard": false,
+  "a": {
+   "content": "Use uv for dependency management and drop pip-tools.",
+   "summary": "switch to uv, drop pip-tools",
+   "category": "decision",
+   "tags": [
+    "tooling"
+   ]
+  },
+  "b": {
+   "content": "Decided to drop pip-tools and manage dependencies with uv.",
+   "summary": "dependencies managed with uv",
+   "category": "decision",
+   "tags": [
+    "tooling"
+   ]
+  }
+ },
+ {
+  "id": "same-017",
+  "kind": "same",
+  "group": "decision",
+  "hard": false,
+  "a": {
+   "content": "Agreed to squash-merge feature branches so main has one commit per PR.",
+   "summary": "squash-merge PRs",
+   "category": "decision",
+   "tags": [
+    "git"
+   ]
+  },
+  "b": {
+   "content": "Feature branches are squash-merged so that main gets one commit per PR.",
+   "summary": "squash merge policy for PRs",
+   "category": "decision",
+   "tags": [
+    "git"
+   ]
+  }
+ },
+ {
+  "id": "same-018",
+  "kind": "same",
+  "group": "decision",
+  "hard": false,
+  "a": {
+   "content": "The owner merges PRs; agents only open them and never push to main.",
+   "summary": "agents open PRs, owner merges",
+   "category": "decision",
+   "tags": [
+    "process"
+   ]
+  },
+  "b": {
+   "content": "Agents open PRs but never push to main; merging is done by the owner.",
+   "summary": "only the owner merges PRs",
+   "category": "decision",
+   "tags": [
+    "process"
+   ]
+  }
+ },
+ {
+  "id": "same-019",
+  "kind": "same",
+  "group": "decision",
+  "hard": false,
+  "a": {
+   "content": "Cross-encoder reranking is applied to the top 50 fused results only.",
+   "summary": "rerank top 50 only",
+   "category": "decision",
+   "tags": [
+    "search",
+    "rerank"
+   ]
+  },
+  "b": {
+   "content": "We rerank only the top 50 results after fusion with the cross-encoder.",
+   "summary": "cross-encoder reranks top 50",
+   "category": "decision",
+   "tags": [
+    "search",
+    "rerank"
+   ]
+  }
+ },
+ {
+  "id": "same-020",
+  "kind": "same",
+  "group": "decision",
+  "hard": false,
+  "a": {
+   "content": "Decided to store timestamps in UTC ISO-8601 everywhere in the graph store.",
+   "summary": "timestamps are UTC ISO-8601",
+   "category": "decision",
+   "tags": [
+    "storage"
+   ]
+  },
+  "b": {
+   "content": "All graph store timestamps are stored as UTC ISO-8601 strings.",
+   "summary": "graph store uses UTC ISO-8601 timestamps",
+   "category": "decision",
+   "tags": [
+    "storage"
+   ]
+  }
+ },
+ {
+  "id": "same-021",
+  "kind": "same",
+  "group": "decision",
+  "hard": false,
+  "a": {
+   "content": "We chose bge-small-en-v1.5 as the default embedding model for its size and speed.",
+   "summary": "default embedder bge-small-en-v1.5",
+   "category": "decision",
+   "tags": [
+    "embeddings"
+   ]
+  },
+  "b": {
+   "content": "Default embedding model is bge-small-en-v1.5, chosen because it is small and fast.",
+   "summary": "bge-small-en-v1.5 is the default embedder",
+   "category": "decision",
+   "tags": [
+    "embeddings"
+   ]
+  }
+ },
+ {
+  "id": "same-022",
+  "kind": "same",
+  "group": "decision",
+  "hard": false,
+  "a": {
+   "content": "Benchmark datasets stay out of git because LoCoMo is CC BY-NC.",
+   "summary": "keep benchmark datasets out of git",
+   "category": "decision",
+   "tags": [
+    "benchmarks"
+   ]
+  },
+  "b": {
+   "content": "LoCoMo is CC BY-NC, so benchmark datasets are never committed.",
+   "summary": "do not commit LoCoMo data",
+   "category": "decision",
+   "tags": [
+    "benchmarks"
+   ]
+  }
+ },
+ {
+  "id": "same-023",
+  "kind": "same",
+  "group": "decision",
+  "hard": true,
+  "a": {
+   "content": "Going with Colima instead of Docker Desktop on the Mac.",
+   "summary": "use Colima, not Docker Desktop",
+   "category": "decision",
+   "tags": [
+    "docker"
+   ]
+  },
+  "b": {
+   "content": "Docker on the Mac runs on Colima; Docker Desktop is not used.",
+   "summary": "Mac docker runtime is Colima",
+   "category": "decision",
+   "tags": [
+    "docker"
+   ]
+  }
+ },
+ {
+  "id": "same-024",
+  "kind": "same",
+  "group": "decision",
+  "hard": true,
+  "a": {
+   "content": "Version bumps go in the same push as the code they ship.",
+   "summary": "bump version with the code",
+   "category": "decision",
+   "tags": [
+    "release"
+   ]
+  },
+  "b": {
+   "content": "Always bump src/collivind/version.py in the same push as new code to main.",
+   "summary": "version bump in same push",
+   "category": "decision",
+   "tags": [
+    "release"
+   ]
+  }
+ },
+ {
+  "id": "same-025",
+  "kind": "same",
+  "group": "decision",
+  "hard": true,
+  "a": {
+   "content": "Prefer invalidating stale memories over deleting them so history is kept.",
+   "summary": "invalidate rather than delete",
+   "category": "decision",
+   "tags": [
+    "memory"
+   ]
+  },
+  "b": {
+   "content": "Stale memories are invalidated, not deleted, to keep the history.",
+   "summary": "keep history: invalidate stale memories",
+   "category": "decision",
+   "tags": [
+    "memory"
+   ]
+  }
+ },
+ {
+  "id": "same-026",
+  "kind": "same",
+  "group": "decision",
+  "hard": true,
+  "a": {
+   "content": "Error messages shown to users must not leak stack traces; full traces go to the server log.",
+   "summary": "no stack traces in user-facing errors",
+   "category": "decision",
+   "tags": [
+    "errors"
+   ]
+  },
+  "b": {
+   "content": "Keep stack traces out of user-facing error messages and log them on the server instead.",
+   "summary": "stack traces only in server logs",
+   "category": "decision",
+   "tags": [
+    "errors"
+   ]
+  }
+ },
+ {
+  "id": "same-027",
+  "kind": "same",
+  "group": "detail",
+  "hard": false,
+  "a": {
+   "content": "Docker on Eugene's Mac runs on Colima; the VM disk was resized to 80 GiB.",
+   "summary": "Colima VM disk is 80 GiB",
+   "category": "fact",
+   "tags": [
+    "docker"
+   ]
+  },
+  "b": {
+   "content": "While debugging docker exec, confirmed the Colima VM disk is 80 GiB; it was resized earlier this month.",
+   "summary": "Colima VM disk resized to 80 GiB",
+   "category": "fact",
+   "tags": [
+    "docker"
+   ]
+  }
+ },
+ {
+  "id": "same-028",
+  "kind": "same",
+  "group": "detail",
+  "hard": false,
+  "a": {
+   "content": "The embeddings container memory limit is 1024M in ~/.collivind/docker-compose.yml.",
+   "summary": "embeddings container limit 1024M",
+   "category": "fact",
+   "tags": [
+    "docker"
+   ]
+  },
+  "b": {
+   "content": "Raised the embeddings container memory limit to 1024M in docker-compose.yml after usage hit 657 MB.",
+   "summary": "embeddings container memory limit 1024M",
+   "category": "fact",
+   "tags": [
+    "docker"
+   ]
+  }
+ },
+ {
+  "id": "same-029",
+  "kind": "same",
+  "group": "detail",
+  "hard": false,
+  "a": {
+   "content": "collivind's keyword channel uses SQLite FTS5 in embedded mode.",
+   "summary": "embedded keyword search is FTS5",
+   "category": "architecture",
+   "tags": [
+    "search"
+   ]
+  },
+  "b": {
+   "content": "In embedded mode the keyword channel is SQLite FTS5; docker mode uses a Neo4j full-text index instead.",
+   "summary": "keyword channel: FTS5 embedded, Neo4j full-text in docker",
+   "category": "architecture",
+   "tags": [
+    "search"
+   ]
+  }
+ },
+ {
+  "id": "same-030",
+  "kind": "same",
+  "group": "detail",
+  "hard": false,
+  "a": {
+   "content": "gh is logged in as EugeneZubanov, which only has pull access to the collivind repo.",
+   "summary": "gh account has pull-only access",
+   "category": "fact",
+   "tags": [
+    "github"
+   ]
+  },
+  "b": {
+   "content": "Commenting on the PR failed with 403 because gh is logged in as EugeneZubanov, a pull-only account; writes need the Maiia token.",
+   "summary": "gh user EugeneZubanov is pull-only",
+   "category": "fact",
+   "tags": [
+    "github"
+   ]
+  }
+ },
+ {
+  "id": "same-031",
+  "kind": "same",
+  "group": "detail",
+  "hard": false,
+  "a": {
+   "content": "The cross-encoder reranker is ms-marco-MiniLM-L-6-v2 and truncates inputs at 256 tokens.",
+   "summary": "reranker truncates at 256 tokens",
+   "category": "fact",
+   "tags": [
+    "rerank"
+   ]
+  },
+  "b": {
+   "content": "Long memories rank badly because ms-marco-MiniLM-L-6-v2 truncates at 256 tokens; noticed while testing recall on long notes.",
+   "summary": "MiniLM reranker 256-token truncation",
+   "category": "fact",
+   "tags": [
+    "rerank"
+   ]
+  }
+ },
+ {
+  "id": "same-032",
+  "kind": "same",
+  "group": "detail",
+  "hard": false,
+  "a": {
+   "content": "Large git pushes to the collivind remote disconnect unless http.version is HTTP/1.1.",
+   "summary": "large pushes need HTTP/1.1",
+   "category": "fact",
+   "tags": [
+    "git"
+   ]
+  },
+  "b": {
+   "content": "Pushing the 40 MB site assets failed until I used git -c http.version=HTTP/1.1 push; large pushes to collivind need HTTP/1.1.",
+   "summary": "big git push requires HTTP/1.1",
+   "category": "fact",
+   "tags": [
+    "git"
+   ]
+  }
+ },
+ {
+  "id": "same-033",
+  "kind": "same",
+  "group": "detail",
+  "hard": false,
+  "a": {
+   "content": "The recall cutoff recall_min_score is 0.00002 and applies only to the recall path.",
+   "summary": "recall_min_score 0.00002, recall only",
+   "category": "fact",
+   "tags": [
+    "search"
+   ]
+  },
+  "b": {
+   "content": "[search] recall_min_score = 0.00002 is the recall cutoff; it is applied on the hook recall path only, not on explicit search.",
+   "summary": "recall cutoff 0.00002 on recall path",
+   "category": "fact",
+   "tags": [
+    "search"
+   ]
+  }
+ },
+ {
+  "id": "same-034",
+  "kind": "same",
+  "group": "detail",
+  "hard": false,
+  "a": {
+   "content": "LongMemEval session R@5 through the engine is 97.8% on the 90-question sample.",
+   "summary": "LongMemEval session R@5 97.8%",
+   "category": "fact",
+   "tags": [
+    "benchmarks"
+   ]
+  },
+  "b": {
+   "content": "Re-ran LongMemEval through the engine on the default 90-question sample: session R@5 97.8%, same as before the rerank change.",
+   "summary": "LongMemEval R@5 97.8% on 90 questions",
+   "category": "fact",
+   "tags": [
+    "benchmarks"
+   ]
+  }
+ },
+ {
+  "id": "same-035",
+  "kind": "same",
+  "group": "detail",
+  "hard": false,
+  "a": {
+   "content": "There is no project named Cybergine; its memories live under v5_flask.",
+   "summary": "Cybergine memories are under v5_flask",
+   "category": "fact",
+   "tags": [
+    "projects"
+   ]
+  },
+  "b": {
+   "content": "Cybergine memories are stored under project v5_flask (there is no Cybergine project), which is why the relabel misfiled some.",
+   "summary": "Cybergine = project v5_flask",
+   "category": "fact",
+   "tags": [
+    "projects"
+   ]
+  }
+ },
+ {
+  "id": "same-036",
+  "kind": "same",
+  "group": "detail",
+  "hard": false,
+  "a": {
+   "content": "Prompt hook recall token budget is 2,400 tokens.",
+   "summary": "hook recall budget 2,400 tokens",
+   "category": "fact",
+   "tags": [
+    "hooks"
+   ]
+  },
+  "b": {
+   "content": "Raised the prompt hook recall budget to 2,400 tokens because 800 capped recall at about 6 memories.",
+   "summary": "recall token budget 2,400",
+   "category": "fact",
+   "tags": [
+    "hooks"
+   ]
+  }
+ },
+ {
+  "id": "same-037",
+  "kind": "same",
+  "group": "detail",
+  "hard": true,
+  "a": {
+   "content": "Golden-ranking tests must use a deterministic embedder because float drift differs between Apple silicon and Linux x86-64.",
+   "summary": "golden tests need deterministic embedder",
+   "category": "pattern",
+   "tags": [
+    "tests"
+   ]
+  },
+  "b": {
+   "content": "test_rerank_off_golden passed on macOS and failed on the Linux runner from float drift; lesson: golden ranking tests use a deterministic embedder or a score tolerance.",
+   "summary": "float drift breaks golden ranking tests across platforms",
+   "category": "pattern",
+   "tags": [
+    "tests"
+   ]
+  }
+ },
+ {
+  "id": "same-038",
+  "kind": "same",
+  "group": "detail",
+  "hard": true,
+  "a": {
+   "content": "The relabel on 23 Nov sent unlabelled memories to project collivind if their text mentioned collivind.",
+   "summary": "23 Nov relabel split by word collivind",
+   "category": "error",
+   "tags": [
+    "projects"
+   ]
+  },
+  "b": {
+   "content": "Found why six Cybergine memories were under collivind: the 23 Nov relabel moved any default memory whose text mentioned the word collivind into that project.",
+   "summary": "relabel misfiled memories mentioning collivind",
+   "category": "error",
+   "tags": [
+    "projects"
+   ]
+  }
+ },
+ {
+  "id": "same-039",
+  "kind": "same",
+  "group": "detail",
+  "hard": true,
+  "a": {
+   "content": "Mem0's LoCoMo eval retrieves 30 memories per speaker.",
+   "summary": "Mem0 LoCoMo uses top_k 30",
+   "category": "fact",
+   "tags": [
+    "benchmarks",
+    "mem0"
+   ]
+  },
+  "b": {
+   "content": "Comparing with Mem0 is unfair at depth 5: their LoCoMo eval passes --top_k 30 per speaker and their library search defaults to limit 100.",
+   "summary": "Mem0 eval depth is 30 per speaker",
+   "category": "fact",
+   "tags": [
+    "benchmarks",
+    "mem0"
+   ]
+  }
+ },
+ {
+  "id": "same-040",
+  "kind": "same",
+  "group": "detail",
+  "hard": true,
+  "a": {
+   "content": "Use projects rename --match to move individual memories between projects.",
+   "summary": "move memories with projects rename --match",
+   "category": "pattern",
+   "tags": [
+    "projects"
+   ]
+  },
+  "b": {
+   "content": "Moved six memories back to v5_flask after a dry run; the supported way to move single memories is `collivind projects rename <from> <to> --match <regex> --apply`.",
+   "summary": "projects rename --match moves single memories",
+   "category": "pattern",
+   "tags": [
+    "projects"
+   ]
+  }
+ },
+ {
+  "id": "same-041",
+  "kind": "same",
+  "group": "detail",
+  "hard": true,
+  "a": {
+   "content": "Collivind web explorer listens on port 8765 by default.",
+   "summary": "explorer default port 8765",
+   "category": "fact",
+   "tags": [
+    "web"
+   ]
+  },
+  "b": {
+   "content": "Opened the explorer at http://127.0.0.1:8765 (the default port) to check the local graph panel.",
+   "summary": "web explorer runs on 8765",
+   "category": "fact",
+   "tags": [
+    "web"
+   ]
+  }
+ },
+ {
+  "id": "same-042",
+  "kind": "same",
+  "group": "category",
+  "hard": true,
+  "a": {
+   "content": "Qdrant upgrade to 1.19 requires recreating the collection snapshot first.",
+   "summary": "qdrant 1.19 upgrade needs snapshot",
+   "category": "fact",
+   "tags": [
+    "qdrant"
+   ]
+  },
+  "b": {
+   "content": "Pattern: before upgrading Qdrant to 1.19, recreate the collection snapshot.",
+   "summary": "snapshot before qdrant 1.19 upgrade",
+   "category": "pattern",
+   "tags": [
+    "qdrant"
+   ]
+  }
+ },
+ {
+  "id": "same-043",
+  "kind": "same",
+  "group": "category",
+  "hard": true,
+  "a": {
+   "content": "The embed daemon had a bind-then-rename race on its socket file.",
+   "summary": "embed daemon socket race",
+   "category": "error",
+   "tags": [
+    "embed-daemon"
+   ]
+  },
+  "b": {
+   "content": "The embed daemon socket is bound to a temp path then renamed, which caused a race when two clients started it.",
+   "summary": "embed daemon bind-then-rename race",
+   "category": "architecture",
+   "tags": [
+    "embed-daemon"
+   ]
+  }
+ },
+ {
+  "id": "same-044",
+  "kind": "same",
+  "group": "category",
+  "hard": true,
+  "a": {
+   "content": "Never read or write the owner's live store at ~/.collivind from benchmarks.",
+   "summary": "benchmarks must not touch ~/.collivind",
+   "category": "preference",
+   "tags": [
+    "safety"
+   ]
+  },
+  "b": {
+   "content": "Benchmarks run in a temp embedded store and never read or write ~/.collivind.",
+   "summary": "benchmarks never use the live store",
+   "category": "decision",
+   "tags": [
+    "safety"
+   ]
+  }
+ },
+ {
+  "id": "same-045",
+  "kind": "same",
+  "group": "category",
+  "hard": true,
+  "a": {
+   "content": "The explorer search needed Enter pressed twice to run.",
+   "summary": "explorer search needed two Enters",
+   "category": "error",
+   "tags": [
+    "web"
+   ]
+  },
+  "b": {
+   "content": "Explorer search ran only on the second Enter; fixed so one Enter runs it.",
+   "summary": "search on one Enter",
+   "category": "fact",
+   "tags": [
+    "web"
+   ]
+  }
+ },
+ {
+  "id": "same-046",
+  "kind": "same",
+  "group": "paraphrase",
+  "hard": true,
+  "a": {
+   "content": "Machine is short on RAM, so run benchmark jobs one at a time.",
+   "summary": "run benchmarks serially (low memory)",
+   "category": "preference",
+   "tags": [
+    "benchmarks"
+   ]
+  },
+  "b": {
+   "content": "Do not run several benchmarks in parallel: this laptop does not have enough memory.",
+   "summary": "one benchmark at a time on this laptop",
+   "category": "preference",
+   "tags": [
+    "benchmarks"
+   ]
+  }
+ },
+ {
+  "id": "same-047",
+  "kind": "same",
+  "group": "paraphrase",
+  "hard": true,
+  "a": {
+   "content": "The graph store is down, so writes fail before anything is stored.",
+   "summary": "writes fail cleanly when graph is down",
+   "category": "fact",
+   "tags": [
+    "storage"
+   ]
+  },
+  "b": {
+   "content": "If Neo4j is unreachable, add_memory raises before writing to either index.",
+   "summary": "add_memory fails fast when graph unavailable",
+   "category": "fact",
+   "tags": [
+    "storage"
+   ]
+  }
+ },
+ {
+  "id": "same-048",
+  "kind": "same",
+  "group": "paraphrase",
+  "hard": true,
+  "a": {
+   "content": "Turn off attribution lines in commits; the user disabled them globally.",
+   "summary": "no attribution in commits",
+   "category": "preference",
+   "tags": [
+    "git"
+   ]
+  },
+  "b": {
+   "content": "Commits should not carry Co-Authored-By attribution, it is disabled in settings.",
+   "summary": "no co-author trailer",
+   "category": "preference",
+   "tags": [
+    "git"
+   ]
+  }
+ },
+ {
+  "id": "same-049",
+  "kind": "same",
+  "group": "paraphrase",
+  "hard": false,
+  "a": {
+   "content": "Our CI runs pytest, ruff check, ruff format --check and mypy.",
+   "summary": "CI: pytest, ruff, mypy",
+   "category": "fact",
+   "tags": [
+    "ci"
+   ]
+  },
+  "b": {
+   "content": "CI checks are pytest plus ruff check, ruff format --check and mypy.",
+   "summary": "CI runs pytest ruff mypy",
+   "category": "fact",
+   "tags": [
+    "ci"
+   ]
+  }
+ },
+ {
+  "id": "same-050",
+  "kind": "same",
+  "group": "paraphrase",
+  "hard": false,
+  "a": {
+   "content": "PyPI publishing is not set up; releases ship as GitHub Release assets.",
+   "summary": "no PyPI, GitHub Release assets only",
+   "category": "fact",
+   "tags": [
+    "release"
+   ]
+  },
+  "b": {
+   "content": "Releases are distributed as GitHub Release assets because PyPI publishing has not been set up.",
+   "summary": "release via GitHub assets, no PyPI",
+   "category": "fact",
+   "tags": [
+    "release"
+   ]
+  }
+ },
+ {
+  "id": "same-051",
+  "kind": "same",
+  "group": "paraphrase",
+  "hard": false,
+  "a": {
+   "content": "The docker embeddings service and embedded mode both use BAAI/bge-small-en-v1.5.",
+   "summary": "both modes use bge-small",
+   "category": "fact",
+   "tags": [
+    "embeddings"
+   ]
+  },
+  "b": {
+   "content": "Embedded mode and the docker embeddings container use the same model, BAAI/bge-small-en-v1.5.",
+   "summary": "same embedder in both modes",
+   "category": "fact",
+   "tags": [
+    "embeddings"
+   ]
+  }
+ },
+ {
+  "id": "same-052",
+  "kind": "same",
+  "group": "paraphrase",
+  "hard": false,
+  "a": {
+   "content": "Summaries are written by the agent with collivind_summarize, never by collivind itself.",
+   "summary": "agent writes summaries",
+   "category": "architecture",
+   "tags": [
+    "summaries"
+   ]
+  },
+  "b": {
+   "content": "collivind never writes summary text itself; the agent writes it through collivind_summarize.",
+   "summary": "summaries come from the agent",
+   "category": "architecture",
+   "tags": [
+    "summaries"
+   ]
+  }
+ },
+ {
+  "id": "same-053",
+  "kind": "same",
+  "group": "paraphrase",
+  "hard": false,
+  "a": {
+   "content": "The hybrid search fuses dense and BM25 results with reciprocal rank fusion.",
+   "summary": "dense + BM25 fused by RRF",
+   "category": "architecture",
+   "tags": [
+    "search"
+   ]
+  },
+  "b": {
+   "content": "Dense and BM25 results are combined with reciprocal rank fusion (RRF) in hybrid search.",
+   "summary": "hybrid search uses RRF",
+   "category": "architecture",
+   "tags": [
+    "search"
+   ]
+  }
+ },
+ {
+  "id": "same-054",
+  "kind": "same",
+  "group": "paraphrase",
+  "hard": false,
+  "a": {
+   "content": "Superseded memories leave the vector index but stay in the graph's version chain.",
+   "summary": "superseded memories leave vector index",
+   "category": "architecture",
+   "tags": [
+    "versioning"
+   ]
+  },
+  "b": {
+   "content": "When a memory is superseded its vector is deleted, while the graph keeps it in the version chain.",
+   "summary": "superseded: vector deleted, history kept",
+   "category": "architecture",
+   "tags": [
+    "versioning"
+   ]
+  }
+ },
+ {
+  "id": "same-055",
+  "kind": "same",
+  "group": "paraphrase",
+  "hard": false,
+  "a": {
+   "content": "Batch adds validate every item before storing any of them.",
+   "summary": "batch add validates all first",
+   "category": "architecture",
+   "tags": [
+    "batch"
+   ]
+  },
+  "b": {
+   "content": "collivind_batch_add checks every item up front, so one bad item stores nothing.",
+   "summary": "batch add: one bad item stores nothing",
+   "category": "architecture",
+   "tags": [
+    "batch"
+   ]
+  }
+ },
+ {
+  "id": "same-056",
+  "kind": "same",
+  "group": "paraphrase",
+  "hard": false,
+  "a": {
+   "content": "The explorer's local graph collapses hub entities and caps hops at 2.",
+   "summary": "local graph collapses hubs, 2 hops",
+   "category": "fact",
+   "tags": [
+    "web"
+   ]
+  },
+  "b": {
+   "content": "Local graph in the explorer caps at 2 hops and collapses hub entities.",
+   "summary": "explorer local graph: hubs collapsed, max 2 hops",
+   "category": "fact",
+   "tags": [
+    "web"
+   ]
+  }
+ },
+ {
+  "id": "same-057",
+  "kind": "same",
+  "group": "paraphrase",
+  "hard": false,
+  "a": {
+   "content": "Worktrees go under collivind-oss/.worktrees/<name>.",
+   "summary": "worktrees in .worktrees/",
+   "category": "preference",
+   "tags": [
+    "git"
+   ]
+  },
+  "b": {
+   "content": "Create git worktrees in collivind-oss/.worktrees/<name>.",
+   "summary": "worktree location .worktrees/<name>",
+   "category": "preference",
+   "tags": [
+    "git"
+   ]
+  }
+ },
+ {
+  "id": "same-058",
+  "kind": "same",
+  "group": "paraphrase",
+  "hard": false,
+  "a": {
+   "content": "The local main checkout of collivind-oss is stale; always branch from origin/main.",
+   "summary": "branch from origin/main, local main stale",
+   "category": "preference",
+   "tags": [
+    "git"
+   ]
+  },
+  "b": {
+   "content": "Never base work on the local main checkout, it is stale; use origin/main.",
+   "summary": "local main is stale, use origin/main",
+   "category": "preference",
+   "tags": [
+    "git"
+   ]
+  }
+ },
+ {
+  "id": "same-059",
+  "kind": "same",
+  "group": "paraphrase",
+  "hard": false,
+  "a": {
+   "content": "Ruff line length for the project is 120.",
+   "summary": "ruff line length 120",
+   "category": "fact",
+   "tags": [
+    "lint"
+   ]
+  },
+  "b": {
+   "content": "The project's ruff config sets line-length = 120.",
+   "summary": "line-length 120 in ruff",
+   "category": "fact",
+   "tags": [
+    "lint"
+   ]
+  }
+ },
+ {
+  "id": "same-060",
+  "kind": "same",
+  "group": "paraphrase",
+  "hard": false,
+  "a": {
+   "content": "Embedded mode stores vectors in SQLite, not Qdrant.",
+   "summary": "embedded vectors in SQLite",
+   "category": "architecture",
+   "tags": [
+    "storage"
+   ]
+  },
+  "b": {
+   "content": "In embedded mode the vector store is SQLite rather than Qdrant.",
+   "summary": "embedded mode vector store = SQLite",
+   "category": "architecture",
+   "tags": [
+    "storage"
+   ]
+  }
+ },
+ {
+  "id": "same-061",
+  "kind": "same",
+  "group": "paraphrase",
+  "hard": false,
+  "a": {
+   "content": "Conflict candidates need cosine 0.85 and the same subject.",
+   "summary": "conflict gate 0.85 + same subject",
+   "category": "architecture",
+   "tags": [
+    "conflicts"
+   ]
+  },
+  "b": {
+   "content": "A memory is returned as a possible conflict when cosine is at least 0.85 and it is about the same subject.",
+   "summary": "possible conflict: cos >= 0.85, same subject",
+   "category": "architecture",
+   "tags": [
+    "conflicts"
+   ]
+  }
+ },
+ {
+  "id": "same-062",
+  "kind": "same",
+  "group": "paraphrase",
+  "hard": true,
+  "a": {
+   "content": "The Mac's Docker VM is Colima, not Docker Desktop; one memory wrongly said Docker Desktop.",
+   "summary": "VM is Colima not Docker Desktop",
+   "category": "fact",
+   "tags": [
+    "docker"
+   ]
+  },
+  "b": {
+   "content": "Correction: docker here is Colima. Any note calling it Docker Desktop is wrong.",
+   "summary": "docker is Colima (not Docker Desktop)",
+   "category": "fact",
+   "tags": [
+    "docker"
+   ]
+  }
+ },
+ {
+  "id": "same-063",
+  "kind": "same",
+  "group": "paraphrase",
+  "hard": true,
+  "a": {
+   "content": "Release workflow: tag v*, build wheel and sdist, create GitHub Release with both attached.",
+   "summary": "release: tag, build, GitHub Release",
+   "category": "pattern",
+   "tags": [
+    "release"
+   ]
+  },
+  "b": {
+   "content": "On every v* tag, build the wheel and sdist and attach them to a new GitHub Release.",
+   "summary": "attach wheel+sdist to release on tag",
+   "category": "pattern",
+   "tags": [
+    "release"
+   ]
+  }
+ },
+ {
+  "id": "different-000",
+  "kind": "different",
+  "group": "pr",
+  "hard": false,
+  "a": {
+   "content": "PR 212 is waiting on CI; the macOS job is queued.",
+   "summary": "PR 212 waiting on CI",
+   "category": "fact",
+   "tags": [
+    "ci"
+   ]
+  },
+  "b": {
+   "content": "PR 213 is waiting on CI; the macOS job is queued.",
+   "summary": "PR 213 waiting on CI",
+   "category": "fact",
+   "tags": [
+    "ci"
+   ]
+  }
+ },
+ {
+  "id": "different-001",
+  "kind": "different",
+  "group": "pr",
+  "hard": false,
+  "a": {
+   "content": "Merged PR 63 (hybrid rerank) into main.",
+   "summary": "PR 63 merged",
+   "category": "fact",
+   "tags": [
+    "pr"
+   ]
+  },
+  "b": {
+   "content": "Merged PR 64 (summary memories) into main.",
+   "summary": "PR 64 merged",
+   "category": "fact",
+   "tags": [
+    "pr"
+   ]
+  }
+ },
+ {
+  "id": "different-002",
+  "kind": "different",
+  "group": "pr",
+  "hard": false,
+  "a": {
+   "content": "Opened PR 70 for the dedup evidence-loss fix.",
+   "summary": "opened PR 70",
+   "category": "fact",
+   "tags": [
+    "pr"
+   ]
+  },
+  "b": {
+   "content": "Opened PR 71 for the explorer wiki reader.",
+   "summary": "opened PR 71",
+   "category": "fact",
+   "tags": [
+    "pr"
+   ]
+  }
+ },
+ {
+  "id": "different-003",
+  "kind": "different",
+  "group": "pr",
+  "hard": true,
+  "a": {
+   "content": "Issue #39 is about Neo4j healthchecks and logs.",
+   "summary": "issue 39: neo4j healthchecks",
+   "category": "fact",
+   "tags": [
+    "issues"
+   ]
+  },
+  "b": {
+   "content": "Issue #37 is about batch add validating every item first.",
+   "summary": "issue 37: batch validation",
+   "category": "fact",
+   "tags": [
+    "issues"
+   ]
+  }
+ },
+ {
+  "id": "different-004",
+  "kind": "different",
+  "group": "file",
+  "hard": false,
+  "a": {
+   "content": "Fixed a typo in src/collivind/engine/dedup.py docstring.",
+   "summary": "typo fix in dedup.py",
+   "category": "fact",
+   "tags": [
+    "docs"
+   ]
+  },
+  "b": {
+   "content": "Fixed a typo in src/collivind/engine/conflicts.py docstring.",
+   "summary": "typo fix in conflicts.py",
+   "category": "fact",
+   "tags": [
+    "docs"
+   ]
+  }
+ },
+ {
+  "id": "different-005",
+  "kind": "different",
+  "group": "file",
+  "hard": false,
+  "a": {
+   "content": "tests/unit/test_backup.py fails on Python 3.14 because of a datetime deprecation.",
+   "summary": "test_backup fails on 3.14",
+   "category": "error",
+   "tags": [
+    "tests"
+   ]
+  },
+  "b": {
+   "content": "tests/unit/test_migrate.py fails on Python 3.14 because of a datetime deprecation.",
+   "summary": "test_migrate fails on 3.14",
+   "category": "error",
+   "tags": [
+    "tests"
+   ]
+  }
+ },
+ {
+  "id": "different-006",
+  "kind": "different",
+  "group": "file",
+  "hard": true,
+  "a": {
+   "content": "Config lives in ~/.collivind/config.toml.",
+   "summary": "config path",
+   "category": "fact",
+   "tags": [
+    "config"
+   ]
+  },
+  "b": {
+   "content": "Config lives in ~/.collivind/docker-compose.yml for container limits.",
+   "summary": "compose file path",
+   "category": "fact",
+   "tags": [
+    "config"
+   ]
+  }
+ },
+ {
+  "id": "different-007",
+  "kind": "different",
+  "group": "file",
+  "hard": true,
+  "a": {
+   "content": "Added a regression test in tests/unit/test_conflicts.py for PR-number vetoes.",
+   "summary": "regression test in test_conflicts",
+   "category": "fact",
+   "tags": [
+    "tests"
+   ]
+  },
+  "b": {
+   "content": "Added a regression test in tests/unit/test_summaries.py for PR-number vetoes.",
+   "summary": "regression test in test_summaries",
+   "category": "fact",
+   "tags": [
+    "tests"
+   ]
+  }
+ },
+ {
+  "id": "different-008",
+  "kind": "different",
+  "group": "file",
+  "hard": false,
+  "a": {
+   "content": "The explorer styles are in src/collivind/web/static/app.css.",
+   "summary": "explorer CSS file",
+   "category": "fact",
+   "tags": [
+    "web"
+   ]
+  },
+  "b": {
+   "content": "The explorer graph code is in src/collivind/web/static/graph.js.",
+   "summary": "explorer graph JS file",
+   "category": "fact",
+   "tags": [
+    "web"
+   ]
+  }
+ },
+ {
+  "id": "different-009",
+  "kind": "different",
+  "group": "value",
+  "hard": false,
+  "a": {
+   "content": "The request timeout for the embeddings client is 30 seconds.",
+   "summary": "embeddings timeout 30s",
+   "category": "fact",
+   "tags": [
+    "config"
+   ]
+  },
+  "b": {
+   "content": "The request timeout for the embeddings client is 60 seconds.",
+   "summary": "embeddings timeout 60s",
+   "category": "fact",
+   "tags": [
+    "config"
+   ]
+  }
+ },
+ {
+  "id": "different-010",
+  "kind": "different",
+  "group": "value",
+  "hard": false,
+  "a": {
+   "content": "Hook recall_limit default is 20.",
+   "summary": "recall_limit 20",
+   "category": "fact",
+   "tags": [
+    "hooks"
+   ]
+  },
+  "b": {
+   "content": "Hook recall_limit default is 10.",
+   "summary": "recall_limit 10",
+   "category": "fact",
+   "tags": [
+    "hooks"
+   ]
+  }
+ },
+ {
+  "id": "different-011",
+  "kind": "different",
+  "group": "value",
+  "hard": true,
+  "a": {
+   "content": "Retry the embed request 3 times before failing.",
+   "summary": "3 retries",
+   "category": "fact",
+   "tags": [
+    "embed"
+   ]
+  },
+  "b": {
+   "content": "Retry the embed request 5 times before failing.",
+   "summary": "5 retries",
+   "category": "fact",
+   "tags": [
+    "embed"
+   ]
+  }
+ },
+ {
+  "id": "different-012",
+  "kind": "different",
+  "group": "value",
+  "hard": true,
+  "a": {
+   "content": "The API is on v2 of the schema.",
+   "summary": "schema v2",
+   "category": "fact",
+   "tags": [
+    "api"
+   ]
+  },
+  "b": {
+   "content": "The API is on v3 of the schema.",
+   "summary": "schema v3",
+   "category": "fact",
+   "tags": [
+    "api"
+   ]
+  }
+ },
+ {
+  "id": "different-013",
+  "kind": "different",
+  "group": "value",
+  "hard": false,
+  "a": {
+   "content": "Neo4j heap is set to 512 MB.",
+   "summary": "neo4j heap 512 MB",
+   "category": "fact",
+   "tags": [
+    "neo4j"
+   ]
+  },
+  "b": {
+   "content": "Neo4j heap is set to 1 GB.",
+   "summary": "neo4j heap 1 GB",
+   "category": "fact",
+   "tags": [
+    "neo4j"
+   ]
+  }
+ },
+ {
+  "id": "different-014",
+  "kind": "different",
+  "group": "value",
+  "hard": false,
+  "a": {
+   "content": "Embeddings container memory limit is 768M.",
+   "summary": "embeddings limit 768M",
+   "category": "fact",
+   "tags": [
+    "docker"
+   ]
+  },
+  "b": {
+   "content": "Embeddings container memory limit is 1024M.",
+   "summary": "embeddings limit 1024M",
+   "category": "fact",
+   "tags": [
+    "docker"
+   ]
+  }
+ },
+ {
+  "id": "different-015",
+  "kind": "different",
+  "group": "value",
+  "hard": false,
+  "a": {
+   "content": "dedup_threshold is 0.92 by default.",
+   "summary": "dedup threshold 0.92",
+   "category": "fact",
+   "tags": [
+    "config"
+   ]
+  },
+  "b": {
+   "content": "dedup_threshold is 0.98 by default.",
+   "summary": "dedup threshold 0.98",
+   "category": "fact",
+   "tags": [
+    "config"
+   ]
+  }
+ },
+ {
+  "id": "different-016",
+  "kind": "different",
+  "group": "value",
+  "hard": true,
+  "a": {
+   "content": "Rerank the top 50 fused results.",
+   "summary": "rerank top 50",
+   "category": "decision",
+   "tags": [
+    "rerank"
+   ]
+  },
+  "b": {
+   "content": "Rerank the top 20 fused results.",
+   "summary": "rerank top 20",
+   "category": "decision",
+   "tags": [
+    "rerank"
+   ]
+  }
+ },
+ {
+  "id": "different-017",
+  "kind": "different",
+  "group": "value",
+  "hard": false,
+  "a": {
+   "content": "Python version for the project is 3.12.",
+   "summary": "python 3.12",
+   "category": "fact",
+   "tags": [
+    "python"
+   ]
+  },
+  "b": {
+   "content": "Python version for the project is 3.14.",
+   "summary": "python 3.14",
+   "category": "fact",
+   "tags": [
+    "python"
+   ]
+  }
+ },
+ {
+  "id": "different-018",
+  "kind": "different",
+  "group": "value",
+  "hard": true,
+  "a": {
+   "content": "The explorer listens on port 8765.",
+   "summary": "explorer port 8765",
+   "category": "fact",
+   "tags": [
+    "web"
+   ]
+  },
+  "b": {
+   "content": "The explorer listens on port 8766.",
+   "summary": "explorer port 8766",
+   "category": "fact",
+   "tags": [
+    "web"
+   ]
+  }
+ },
+ {
+  "id": "different-019",
+  "kind": "different",
+  "group": "date",
+  "hard": false,
+  "a": {
+   "content": "Standup moved to 2026-11-27 at 10:00.",
+   "summary": "standup on 2026-11-27",
+   "category": "fact",
+   "tags": [
+    "meeting"
+   ]
+  },
+  "b": {
+   "content": "Standup moved to 2026-11-28 at 10:00.",
+   "summary": "standup on 2026-11-28",
+   "category": "fact",
+   "tags": [
+    "meeting"
+   ]
+  }
+ },
+ {
+  "id": "different-020",
+  "kind": "different",
+  "group": "date",
+  "hard": false,
+  "a": {
+   "content": "Backup taken on 2026-11-24 before the relabel.",
+   "summary": "backup 2026-11-24",
+   "category": "fact",
+   "tags": [
+    "backup"
+   ]
+  },
+  "b": {
+   "content": "Backup taken on 2026-11-25 before the 0.21 upgrade.",
+   "summary": "backup 2026-11-25",
+   "category": "fact",
+   "tags": [
+    "backup"
+   ]
+  }
+ },
+ {
+  "id": "different-021",
+  "kind": "different",
+  "group": "date",
+  "hard": true,
+  "a": {
+   "content": "On 2026-11-25 the benchmark run finished at hit@5 72.4.",
+   "summary": "benchmark run 11-25",
+   "category": "fact",
+   "tags": [
+    "benchmarks"
+   ]
+  },
+  "b": {
+   "content": "On 2026-11-26 the benchmark run finished at hit@5 72.4.",
+   "summary": "benchmark run 11-26",
+   "category": "fact",
+   "tags": [
+    "benchmarks"
+   ]
+  }
+ },
+ {
+  "id": "different-022",
+  "kind": "different",
+  "group": "date",
+  "hard": true,
+  "a": {
+   "content": "The certificate for api.example.com expires on 2026-12-01.",
+   "summary": "api cert expires 12-01",
+   "category": "fact",
+   "tags": [
+    "tls"
+   ]
+  },
+  "b": {
+   "content": "The certificate for api.example.com expires on 2027-12-01.",
+   "summary": "api cert expires 2027-12-01",
+   "category": "fact",
+   "tags": [
+    "tls"
+   ]
+  }
+ },
+ {
+  "id": "different-023",
+  "kind": "different",
+  "group": "outcome",
+  "hard": false,
+  "a": {
+   "content": "The migration of the orders table succeeded.",
+   "summary": "orders migration succeeded",
+   "category": "fact",
+   "tags": [
+    "migration"
+   ]
+  },
+  "b": {
+   "content": "The migration of the orders table failed.",
+   "summary": "orders migration failed",
+   "category": "fact",
+   "tags": [
+    "migration"
+   ]
+  }
+ },
+ {
+  "id": "different-024",
+  "kind": "different",
+  "group": "outcome",
+  "hard": false,
+  "a": {
+   "content": "CI on PR 212 passed.",
+   "summary": "PR 212 CI passed",
+   "category": "fact",
+   "tags": [
+    "ci"
+   ]
+  },
+  "b": {
+   "content": "CI on PR 212 failed.",
+   "summary": "PR 212 CI failed",
+   "category": "fact",
+   "tags": [
+    "ci"
+   ]
+  }
+ },
+ {
+  "id": "different-025",
+  "kind": "different",
+  "group": "outcome",
+  "hard": true,
+  "a": {
+   "content": "The flaky test is fixed.",
+   "summary": "flaky test fixed",
+   "category": "fact",
+   "tags": [
+    "tests"
+   ]
+  },
+  "b": {
+   "content": "The flaky test is not fixed.",
+   "summary": "flaky test not fixed",
+   "category": "fact",
+   "tags": [
+    "tests"
+   ]
+  }
+ },
+ {
+  "id": "different-026",
+  "kind": "different",
+  "group": "outcome",
+  "hard": true,
+  "a": {
+   "content": "Rerank improves multi-hop questions.",
+   "summary": "rerank helps multi-hop",
+   "category": "fact",
+   "tags": [
+    "rerank"
+   ]
+  },
+  "b": {
+   "content": "Rerank does not improve multi-hop questions.",
+   "summary": "rerank no help on multi-hop",
+   "category": "fact",
+   "tags": [
+    "rerank"
+   ]
+  }
+ },
+ {
+  "id": "different-027",
+  "kind": "different",
+  "group": "outcome",
+  "hard": false,
+  "a": {
+   "content": "Deploy to staging was approved by the platform team.",
+   "summary": "staging deploy approved",
+   "category": "fact",
+   "tags": [
+    "deploy"
+   ]
+  },
+  "b": {
+   "content": "Deploy to staging was rejected by the platform team.",
+   "summary": "staging deploy rejected",
+   "category": "fact",
+   "tags": [
+    "deploy"
+   ]
+  }
+ },
+ {
+  "id": "different-028",
+  "kind": "different",
+  "group": "outcome",
+  "hard": true,
+  "a": {
+   "content": "The embed daemon starts on login.",
+   "summary": "daemon starts on login",
+   "category": "fact",
+   "tags": [
+    "embed-daemon"
+   ]
+  },
+  "b": {
+   "content": "The embed daemon no longer starts on login.",
+   "summary": "daemon no longer starts on login",
+   "category": "fact",
+   "tags": [
+    "embed-daemon"
+   ]
+  }
+ },
+ {
+  "id": "different-029",
+  "kind": "different",
+  "group": "update",
+  "hard": false,
+  "a": {
+   "content": "The default embedding model is all-MiniLM-L6-v2.",
+   "summary": "default embedder MiniLM",
+   "category": "decision",
+   "tags": [
+    "embeddings"
+   ]
+  },
+  "b": {
+   "content": "The default embedding model is now bge-small-en-v1.5, replacing all-MiniLM-L6-v2.",
+   "summary": "default embedder now bge-small",
+   "category": "decision",
+   "tags": [
+    "embeddings"
+   ]
+  }
+ },
+ {
+  "id": "different-030",
+  "kind": "different",
+  "group": "update",
+  "hard": false,
+  "a": {
+   "content": "Hook recall token budget is 800.",
+   "summary": "recall budget 800",
+   "category": "fact",
+   "tags": [
+    "hooks"
+   ]
+  },
+  "b": {
+   "content": "Hook recall token budget raised to 2,400.",
+   "summary": "recall budget 2,400",
+   "category": "fact",
+   "tags": [
+    "hooks"
+   ]
+  }
+ },
+ {
+  "id": "different-031",
+  "kind": "different",
+  "group": "update",
+  "hard": false,
+  "a": {
+   "content": "Installed collivind version on the Mac is 0.20.0.",
+   "summary": "installed 0.20.0",
+   "category": "fact",
+   "tags": [
+    "install"
+   ]
+  },
+  "b": {
+   "content": "Installed collivind version on the Mac is 0.21.0.",
+   "summary": "installed 0.21.0",
+   "category": "fact",
+   "tags": [
+    "install"
+   ]
+  }
+ },
+ {
+  "id": "different-032",
+  "kind": "different",
+  "group": "update",
+  "hard": false,
+  "a": {
+   "content": "The marketing site is hosted on Netlify.",
+   "summary": "site on Netlify",
+   "category": "architecture",
+   "tags": [
+    "site"
+   ]
+  },
+  "b": {
+   "content": "The marketing site moved from Netlify to GitHub Pages.",
+   "summary": "site on GitHub Pages",
+   "category": "architecture",
+   "tags": [
+    "site"
+   ]
+  }
+ },
+ {
+  "id": "different-033",
+  "kind": "different",
+  "group": "update",
+  "hard": true,
+  "a": {
+   "content": "Team lead for the billing service is Ana.",
+   "summary": "billing lead Ana",
+   "category": "fact",
+   "tags": [
+    "team"
+   ]
+  },
+  "b": {
+   "content": "Team lead for the billing service is Ben.",
+   "summary": "billing lead Ben",
+   "category": "fact",
+   "tags": [
+    "team"
+   ]
+  }
+ },
+ {
+  "id": "different-034",
+  "kind": "different",
+  "group": "update",
+  "hard": true,
+  "a": {
+   "content": "We use Postgres 15 in production.",
+   "summary": "prod postgres 15",
+   "category": "fact",
+   "tags": [
+    "db"
+   ]
+  },
+  "b": {
+   "content": "We use Postgres 16 in production.",
+   "summary": "prod postgres 16",
+   "category": "fact",
+   "tags": [
+    "db"
+   ]
+  }
+ },
+ {
+  "id": "different-035",
+  "kind": "different",
+  "group": "update",
+  "hard": false,
+  "a": {
+   "content": "LoCoMo strict hit@5 is 57.6.",
+   "summary": "LoCoMo hit@5 57.6",
+   "category": "fact",
+   "tags": [
+    "benchmarks"
+   ]
+  },
+  "b": {
+   "content": "LoCoMo strict hit@5 is 72.4 after the rerank change.",
+   "summary": "LoCoMo hit@5 72.4",
+   "category": "fact",
+   "tags": [
+    "benchmarks"
+   ]
+  }
+ },
+ {
+  "id": "different-036",
+  "kind": "different",
+  "group": "update",
+  "hard": true,
+  "a": {
+   "content": "Primary region is eu-west-1.",
+   "summary": "region eu-west-1",
+   "category": "architecture",
+   "tags": [
+    "infra"
+   ]
+  },
+  "b": {
+   "content": "Primary region is eu-central-1.",
+   "summary": "region eu-central-1",
+   "category": "architecture",
+   "tags": [
+    "infra"
+   ]
+  }
+ },
+ {
+  "id": "different-037",
+  "kind": "different",
+  "group": "fix",
+  "hard": false,
+  "a": {
+   "content": "docker exec fails with 'no space left on device' in the Colima VM.",
+   "summary": "docker exec no space left",
+   "category": "error",
+   "tags": [
+    "docker"
+   ]
+  },
+  "b": {
+   "content": "Fixed docker exec 'no space left on device' by resizing the Colima VM disk to 80 GiB.",
+   "summary": "resized Colima disk to fix docker exec",
+   "category": "fact",
+   "tags": [
+    "docker"
+   ]
+  }
+ },
+ {
+  "id": "different-038",
+  "kind": "different",
+  "group": "fix",
+  "hard": false,
+  "a": {
+   "content": "git push of the site assets disconnects with 'unexpected disconnect while reading sideband packet'.",
+   "summary": "large push disconnects",
+   "category": "error",
+   "tags": [
+    "git"
+   ]
+  },
+  "b": {
+   "content": "Fixed the sideband disconnect on large pushes with git -c http.version=HTTP/1.1 push.",
+   "summary": "HTTP/1.1 fixes large push",
+   "category": "fact",
+   "tags": [
+    "git"
+   ]
+  }
+ },
+ {
+  "id": "different-039",
+  "kind": "different",
+  "group": "fix",
+  "hard": false,
+  "a": {
+   "content": "test_rerank_off_golden fails on the Linux runner with score mismatches.",
+   "summary": "golden test fails on linux",
+   "category": "error",
+   "tags": [
+    "tests"
+   ]
+  },
+  "b": {
+   "content": "test_rerank_off_golden fixed by comparing order with a score tolerance.",
+   "summary": "golden test fixed with tolerance",
+   "category": "fact",
+   "tags": [
+    "tests"
+   ]
+  }
+ },
+ {
+  "id": "different-040",
+  "kind": "different",
+  "group": "fix",
+  "hard": true,
+  "a": {
+   "content": "mypy fails: Incompatible types in assignment in storage/graph_sqlite.py line 410.",
+   "summary": "mypy error graph_sqlite 410",
+   "category": "error",
+   "tags": [
+    "typing"
+   ]
+  },
+  "b": {
+   "content": "mypy passes after annotating the assignment in storage/graph_sqlite.py line 410.",
+   "summary": "mypy fixed graph_sqlite 410",
+   "category": "fact",
+   "tags": [
+    "typing"
+   ]
+  }
+ },
+ {
+  "id": "different-041",
+  "kind": "different",
+  "group": "fix",
+  "hard": true,
+  "a": {
+   "content": "Embeddings container OOM-killed at 768M.",
+   "summary": "embeddings OOM at 768M",
+   "category": "error",
+   "tags": [
+    "docker"
+   ]
+  },
+  "b": {
+   "content": "Embeddings container no longer OOM-killed after raising the limit to 1024M.",
+   "summary": "OOM fixed with 1024M",
+   "category": "fact",
+   "tags": [
+    "docker"
+   ]
+  }
+ },
+ {
+  "id": "different-042",
+  "kind": "different",
+  "group": "fix",
+  "hard": false,
+  "a": {
+   "content": "collivind status reports the MCP server entry as duplicated.",
+   "summary": "status: duplicated MCP entry",
+   "category": "error",
+   "tags": [
+    "mcp"
+   ]
+  },
+  "b": {
+   "content": "Removed the duplicated MCP server entry; collivind status is clean.",
+   "summary": "duplicated MCP entry removed",
+   "category": "fact",
+   "tags": [
+    "mcp"
+   ]
+  }
+ },
+ {
+  "id": "different-043",
+  "kind": "different",
+  "group": "neighbour",
+  "hard": false,
+  "a": {
+   "content": "The keyword channel uses SQLite FTS5 in embedded mode.",
+   "summary": "embedded keyword = FTS5",
+   "category": "architecture",
+   "tags": [
+    "search"
+   ]
+  },
+  "b": {
+   "content": "The keyword channel uses a Neo4j full-text index in docker mode.",
+   "summary": "docker keyword = neo4j full-text",
+   "category": "architecture",
+   "tags": [
+    "search"
+   ]
+  }
+ },
+ {
+  "id": "different-044",
+  "kind": "different",
+  "group": "neighbour",
+  "hard": false,
+  "a": {
+   "content": "Agents must not push to main.",
+   "summary": "no push to main",
+   "category": "preference",
+   "tags": [
+    "git"
+   ]
+  },
+  "b": {
+   "content": "Agents must not create release tags.",
+   "summary": "no release tags by agents",
+   "category": "preference",
+   "tags": [
+    "git"
+   ]
+  }
+ },
+ {
+  "id": "different-045",
+  "kind": "different",
+  "group": "neighbour",
+  "hard": true,
+  "a": {
+   "content": "The billing service depends on the auth service.",
+   "summary": "billing depends on auth",
+   "category": "architecture",
+   "tags": [
+    "services"
+   ]
+  },
+  "b": {
+   "content": "The auth service depends on the billing service.",
+   "summary": "auth depends on billing",
+   "category": "architecture",
+   "tags": [
+    "services"
+   ]
+  }
+ },
+ {
+  "id": "different-046",
+  "kind": "different",
+  "group": "neighbour",
+  "hard": true,
+  "a": {
+   "content": "Run ruff check before committing.",
+   "summary": "ruff check before commit",
+   "category": "preference",
+   "tags": [
+    "lint"
+   ]
+  },
+  "b": {
+   "content": "Run ruff format --check before committing.",
+   "summary": "ruff format check before commit",
+   "category": "preference",
+   "tags": [
+    "lint"
+   ]
+  }
+ },
+ {
+  "id": "different-047",
+  "kind": "different",
+  "group": "neighbour",
+  "hard": false,
+  "a": {
+   "content": "Eugene prefers short commit messages in conventional format.",
+   "summary": "short conventional commits",
+   "category": "preference",
+   "tags": [
+    "git"
+   ]
+  },
+  "b": {
+   "content": "Eugene prefers PR descriptions with a test plan checklist.",
+   "summary": "PRs need test plan",
+   "category": "preference",
+   "tags": [
+    "git"
+   ]
+  }
+ },
+ {
+  "id": "different-048",
+  "kind": "different",
+  "group": "neighbour",
+  "hard": false,
+  "a": {
+   "content": "LoCoMo text is CC BY-NC.",
+   "summary": "LoCoMo licence",
+   "category": "fact",
+   "tags": [
+    "benchmarks"
+   ]
+  },
+  "b": {
+   "content": "LongMemEval data is MIT licensed.",
+   "summary": "LongMemEval licence",
+   "category": "fact",
+   "tags": [
+    "benchmarks"
+   ]
+  }
+ },
+ {
+  "id": "different-049",
+  "kind": "different",
+  "group": "neighbour",
+  "hard": true,
+  "a": {
+   "content": "Summary memories route recall to at most 3 summaries.",
+   "summary": "recall routes to 3 summaries",
+   "category": "architecture",
+   "tags": [
+    "summaries"
+   ]
+  },
+  "b": {
+   "content": "Possible conflicts return at most 3 candidates.",
+   "summary": "max 3 conflict candidates",
+   "category": "architecture",
+   "tags": [
+    "conflicts"
+   ]
+  }
+ },
+ {
+  "id": "different-050",
+  "kind": "different",
+  "group": "neighbour",
+  "hard": false,
+  "a": {
+   "content": "The web explorer shows version chains as dotted SUPERSEDES links.",
+   "summary": "version chains dotted",
+   "category": "fact",
+   "tags": [
+    "web"
+   ]
+  },
+  "b": {
+   "content": "The web explorer draws superseded versions hollow.",
+   "summary": "superseded drawn hollow",
+   "category": "fact",
+   "tags": [
+    "web"
+   ]
+  }
+ },
+ {
+  "id": "different-051",
+  "kind": "different",
+  "group": "neighbour",
+  "hard": true,
+  "a": {
+   "content": "Use the Maiia token for GitHub comments.",
+   "summary": "Maiia token for comments",
+   "category": "preference",
+   "tags": [
+    "github"
+   ]
+  },
+  "b": {
+   "content": "Use the Maiia token for closing GitHub issues.",
+   "summary": "Maiia token for closing issues",
+   "category": "preference",
+   "tags": [
+    "github"
+   ]
+  }
+ },
+ {
+  "id": "different-052",
+  "kind": "different",
+  "group": "neighbour",
+  "hard": false,
+  "a": {
+   "content": "Unit tests run against a real SQLite store.",
+   "summary": "tests use real SQLite",
+   "category": "pattern",
+   "tags": [
+    "tests"
+   ]
+  },
+  "b": {
+   "content": "Integration tests run against real Neo4j and Qdrant containers.",
+   "summary": "integration tests use containers",
+   "category": "pattern",
+   "tags": [
+    "tests"
+   ]
+  }
+ },
+ {
+  "id": "different-053",
+  "kind": "different",
+  "group": "neighbour",
+  "hard": true,
+  "a": {
+   "content": "The staging database is Postgres 16.",
+   "summary": "staging postgres 16",
+   "category": "fact",
+   "tags": [
+    "db"
+   ]
+  },
+  "b": {
+   "content": "The production database is Postgres 16.",
+   "summary": "prod postgres 16",
+   "category": "fact",
+   "tags": [
+    "db"
+   ]
+  }
+ },
+ {
+  "id": "different-054",
+  "kind": "different",
+  "group": "neighbour",
+  "hard": true,
+  "a": {
+   "content": "Alice owns the billing service.",
+   "summary": "Alice owns billing",
+   "category": "fact",
+   "tags": [
+    "team"
+   ]
+  },
+  "b": {
+   "content": "Alice owns the auth service.",
+   "summary": "Alice owns auth",
+   "category": "fact",
+   "tags": [
+    "team"
+   ]
+  }
+ },
+ {
+  "id": "different-055",
+  "kind": "different",
+  "group": "neighbour",
+  "hard": false,
+  "a": {
+   "content": "Error: ImportError for sentence_transformers when the embedded extra is missing.",
+   "summary": "missing embedded extra import error",
+   "category": "error",
+   "tags": [
+    "install"
+   ]
+  },
+  "b": {
+   "content": "Error: ImportError for neo4j when the docker extra is missing.",
+   "summary": "missing docker extra import error",
+   "category": "error",
+   "tags": [
+    "install"
+   ]
+  }
+ },
+ {
+  "id": "different-056",
+  "kind": "different",
+  "group": "neighbour",
+  "hard": true,
+  "a": {
+   "content": "Run benchmarks with uv run --extra embedded.",
+   "summary": "bench with embedded extra",
+   "category": "pattern",
+   "tags": [
+    "benchmarks"
+   ]
+  },
+  "b": {
+   "content": "Run the docker integration tests with uv run --extra docker.",
+   "summary": "integration tests with docker extra",
+   "category": "pattern",
+   "tags": [
+    "tests"
+   ]
+  }
+ },
+ {
+  "id": "different-057",
+  "kind": "different",
+  "group": "neighbour",
+  "hard": false,
+  "a": {
+   "content": "Decided to cap the local graph at 2 hops.",
+   "summary": "local graph 2 hops",
+   "category": "decision",
+   "tags": [
+    "web"
+   ]
+  },
+  "b": {
+   "content": "Decided to collapse hub entities in the local graph.",
+   "summary": "collapse hub entities",
+   "category": "decision",
+   "tags": [
+    "web"
+   ]
+  }
+ },
+ {
+  "id": "different-058",
+  "kind": "different",
+  "group": "neighbour",
+  "hard": true,
+  "a": {
+   "content": "I went to the gym on Monday.",
+   "summary": "gym monday",
+   "category": "fact",
+   "tags": [
+    "personal"
+   ]
+  },
+  "b": {
+   "content": "I went to the gym on Tuesday.",
+   "summary": "gym tuesday",
+   "category": "fact",
+   "tags": [
+    "personal"
+   ]
+  }
+ },
+ {
+  "id": "different-059",
+  "kind": "different",
+  "group": "neighbour",
+  "hard": true,
+  "a": {
+   "content": "Melanie painted a sunset last week.",
+   "summary": "Melanie painted sunset",
+   "category": "fact",
+   "tags": [
+    "personal"
+   ]
+  },
+  "b": {
+   "content": "Melanie painted a lake last week.",
+   "summary": "Melanie painted lake",
+   "category": "fact",
+   "tags": [
+    "personal"
+   ]
+  }
+ },
+ {
+  "id": "different-060",
+  "kind": "different",
+  "group": "neighbour",
+  "hard": true,
+  "a": {
+   "content": "Caroline went to the LGBTQ support group yesterday.",
+   "summary": "support group visit",
+   "category": "fact",
+   "tags": [
+    "personal"
+   ]
+  },
+  "b": {
+   "content": "Caroline went to the LGBTQ pride parade yesterday.",
+   "summary": "pride parade visit",
+   "category": "fact",
+   "tags": [
+    "personal"
+   ]
+  }
+ },
+ {
+  "id": "different-061",
+  "kind": "different",
+  "group": "neighbour",
+  "hard": true,
+  "a": {
+   "content": "The cat's name is Oliver.",
+   "summary": "cat Oliver",
+   "category": "fact",
+   "tags": [
+    "personal"
+   ]
+  },
+  "b": {
+   "content": "The dog's name is Oliver.",
+   "summary": "dog Oliver",
+   "category": "fact",
+   "tags": [
+    "personal"
+   ]
+  }
+ },
+ {
+  "id": "different-062",
+  "kind": "different",
+  "group": "neighbour",
+  "hard": false,
+  "a": {
+   "content": "Use Haiku for lightweight worker agents.",
+   "summary": "Haiku for workers",
+   "category": "preference",
+   "tags": [
+    "models"
+   ]
+  },
+  "b": {
+   "content": "Use Opus for architecture decisions.",
+   "summary": "Opus for architecture",
+   "category": "preference",
+   "tags": [
+    "models"
+   ]
+  }
+ },
+ {
+  "id": "different-063",
+  "kind": "different",
+  "group": "neighbour",
+  "hard": true,
+  "a": {
+   "content": "Added an index on orders.customer_id.",
+   "summary": "index orders.customer_id",
+   "category": "fact",
+   "tags": [
+    "db"
+   ]
+  },
+  "b": {
+   "content": "Added an index on orders.created_at.",
+   "summary": "index orders.created_at",
+   "category": "fact",
+   "tags": [
+    "db"
+   ]
+  }
+ },
+ {
+  "id": "different-064",
+  "kind": "different",
+  "group": "neighbour",
+  "hard": true,
+  "a": {
+   "content": "Commit 3f2a9c1 added the FTS5 table.",
+   "summary": "3f2a9c1 adds FTS5",
+   "category": "fact",
+   "tags": [
+    "git"
+   ]
+  },
+  "b": {
+   "content": "Commit 8be4d07 added the FTS5 table trigger.",
+   "summary": "8be4d07 adds FTS5 trigger",
+   "category": "fact",
+   "tags": [
+    "git"
+   ]
+  }
+ },
+ {
+  "id": "different-065",
+  "kind": "different",
+  "group": "neighbour",
+  "hard": true,
+  "a": {
+   "content": "The checkout page loads in 1.2 seconds.",
+   "summary": "checkout 1.2s",
+   "category": "fact",
+   "tags": [
+    "perf"
+   ]
+  },
+  "b": {
+   "content": "The checkout page loads in 4.8 seconds.",
+   "summary": "checkout 4.8s",
+   "category": "fact",
+   "tags": [
+    "perf"
+   ]
+  }
+ },
+ {
+  "id": "rev-diff-01",
+  "kind": "different",
+  "group": "review:git-range",
+  "hard": true,
+  "a": {
+   "content": "To review only the branch's own changes run git diff origin/main...",
+   "summary": "PR review uses three-dot diff (since merge base)",
+   "category": "pattern",
+   "tags": [
+    "git",
+    "review"
+   ]
+  },
+  "b": {
+   "content": "To review only the branch's own changes run git diff origin/main..",
+   "summary": "PR review uses two-dot diff (tip to tip)",
+   "category": "pattern",
+   "tags": [
+    "git",
+    "review"
+   ]
+  }
+ },
+ {
+  "id": "rev-diff-02",
+  "kind": "different",
+  "group": "review:docker-context",
+  "hard": true,
+  "a": {
+   "content": "Build the api image with: docker build -f services/api/Dockerfile .",
+   "summary": "api image builds with services/api as context",
+   "category": "snippet",
+   "tags": [
+    "docker",
+    "api"
+   ]
+  },
+  "b": {
+   "content": "Build the api image with: docker build -f services/api/Dockerfile ..",
+   "summary": "api image builds with the repo root as context",
+   "category": "snippet",
+   "tags": [
+    "docker",
+    "api"
+   ]
+  }
+ },
+ {
+  "id": "rev-diff-03",
+  "kind": "different",
+  "group": "review:python-indent",
+  "hard": true,
+  "a": {
+   "content": "first_truthy helper:\ndef first_truthy(xs):\n    for x in xs:\n        if x:\n            return x\n    return None",
+   "summary": "first_truthy scans the whole list",
+   "category": "snippet",
+   "tags": [
+    "python",
+    "utils"
+   ]
+  },
+  "b": {
+   "content": "first_truthy helper:\ndef first_truthy(xs):\n    for x in xs:\n        if x:\n            return x\n        return None",
+   "summary": "buggy first_truthy returns after the first item",
+   "category": "error",
+   "tags": [
+    "python",
+    "utils"
+   ]
+  }
+ },
+ {
+  "id": "rev-diff-04",
+  "kind": "different",
+  "group": "review:yaml-indent",
+  "hard": true,
+  "a": {
+   "content": "In ci.yml the cache key is set as:\njobs:\n  test:\n    cache:\n      key: uv-lock",
+   "summary": "cache key nested under the test job",
+   "category": "fact",
+   "tags": [
+    "ci",
+    "yaml"
+   ]
+  },
+  "b": {
+   "content": "In ci.yml the cache key is set as:\njobs:\n  test:\n    cache:\n  key: uv-lock",
+   "summary": "cache key accidentally at jobs level (the bug)",
+   "category": "error",
+   "tags": [
+    "ci",
+    "yaml"
+   ]
+  }
+ },
+ {
+  "id": "rev-diff-05",
+  "kind": "different",
+  "group": "review:case-filename",
+  "hard": true,
+  "a": {
+   "content": "The component file is src/components/Button.tsx",
+   "summary": "Button component filename is capitalised",
+   "category": "fact",
+   "tags": [
+    "frontend",
+    "filenames"
+   ]
+  },
+  "b": {
+   "content": "The component file is src/components/button.tsx",
+   "summary": "button component filename is lowercase after the rename",
+   "category": "fact",
+   "tags": [
+    "frontend",
+    "filenames"
+   ]
+  }
+ },
+ {
+  "id": "rev-diff-06",
+  "kind": "different",
+  "group": "review:case-sql-column",
+  "hard": true,
+  "a": {
+   "content": "The orders table column is \"userId\"",
+   "summary": "orders.userId is camelCase and must be quoted",
+   "category": "fact",
+   "tags": [
+    "postgres",
+    "schema"
+   ]
+  },
+  "b": {
+   "content": "The orders table column is \"userid\"",
+   "summary": "orders.userid is lowercase after migration 0043",
+   "category": "fact",
+   "tags": [
+    "postgres",
+    "schema"
+   ]
+  }
+ },
+ {
+  "id": "rev-diff-07",
+  "kind": "different",
+  "group": "review:case-env",
+  "hard": true,
+  "a": {
+   "content": "The worker reads its port from PORT",
+   "summary": "worker port env var is upper-case PORT",
+   "category": "fact",
+   "tags": [
+    "config",
+    "worker"
+   ]
+  },
+  "b": {
+   "content": "The worker reads its port from port",
+   "summary": "worker port comes from the 'port' key in settings.toml",
+   "category": "fact",
+   "tags": [
+    "config",
+    "worker"
+   ]
+  }
+ },
+ {
+  "id": "rev-diff-08",
+  "kind": "different",
+  "group": "review:case-go-export",
+  "hard": true,
+  "a": {
+   "content": "Use settings.Load to read the config",
+   "summary": "exported settings.Load is the public entry point",
+   "category": "pattern",
+   "tags": [
+    "go",
+    "config"
+   ]
+  },
+  "b": {
+   "content": "Use settings.load to read the config",
+   "summary": "inside package settings use the unexported load",
+   "category": "pattern",
+   "tags": [
+    "go",
+    "config"
+   ]
+  }
+ },
+ {
+  "id": "rev-diff-09",
+  "kind": "different",
+  "group": "review:bang",
+  "hard": true,
+  "a": {
+   "content": "After a permission error, rerun with sudo !!",
+   "summary": "rerun last command as root via history expansion",
+   "category": "pattern",
+   "tags": [
+    "shell"
+   ]
+  },
+  "b": {
+   "content": "After a permission error, rerun with sudo",
+   "summary": "rerun the command manually with sudo",
+   "category": "pattern",
+   "tags": [
+    "shell"
+   ]
+  }
+ },
+ {
+  "id": "rev-diff-10",
+  "kind": "different",
+  "group": "review:status-tags-pr",
+  "hard": true,
+  "a": {
+   "content": "CI is green, ready to merge.",
+   "summary": "PR 212 CI passed",
+   "category": "fact",
+   "tags": [
+    "pr-212",
+    "ci"
+   ]
+  },
+  "b": {
+   "content": "CI is green, ready to merge.",
+   "summary": "PR 213 CI passed",
+   "category": "fact",
+   "tags": [
+    "pr-213",
+    "ci"
+   ]
+  }
+ },
+ {
+  "id": "rev-diff-11",
+  "kind": "different",
+  "group": "review:migration-summary",
+  "hard": true,
+  "a": {
+   "content": "Migration applied cleanly on staging.",
+   "summary": "0042_add_orders_index applied on staging",
+   "category": "fact",
+   "tags": [
+    "migrations",
+    "staging"
+   ]
+  },
+  "b": {
+   "content": "Migration applied cleanly on staging.",
+   "summary": "0043_drop_legacy_column applied on staging",
+   "category": "fact",
+   "tags": [
+    "migrations",
+    "staging"
+   ]
+  }
+ },
+ {
+  "id": "rev-diff-12",
+  "kind": "different",
+  "group": "review:revert-tags",
+  "hard": true,
+  "a": {
+   "content": "Reverted the last deploy because of elevated 5xx.",
+   "summary": "billing-service deploy reverted",
+   "category": "error",
+   "tags": [
+    "billing-service",
+    "deploy"
+   ]
+  },
+  "b": {
+   "content": "Reverted the last deploy because of elevated 5xx.",
+   "summary": "search-service deploy reverted",
+   "category": "error",
+   "tags": [
+    "search-service",
+    "deploy"
+   ]
+  }
+ },
+ {
+  "id": "rev-diff-13",
+  "kind": "different",
+  "group": "review:category-only",
+  "hard": true,
+  "a": {
+   "content": "Pin httpx below 0.28.",
+   "summary": "httpx 0.28 broke the proxy kwarg in tests",
+   "category": "error",
+   "tags": [
+    "httpx",
+    "deps"
+   ]
+  },
+  "b": {
+   "content": "Pin httpx below 0.28.",
+   "summary": "team decided to keep httpx pinned until the client is rewritten",
+   "category": "decision",
+   "tags": [
+    "httpx",
+    "deps"
+   ]
+  }
+ },
+ {
+  "id": "rev-diff-14",
+  "kind": "different",
+  "group": "review:join-separator",
+  "hard": true,
+  "a": {
+   "content": "Fixed-width report columns are joined with \"  \".join(cols)",
+   "summary": "report uses a two-space column separator",
+   "category": "snippet",
+   "tags": [
+    "reports",
+    "formatting"
+   ]
+  },
+  "b": {
+   "content": "Fixed-width report columns are joined with \" \".join(cols)",
+   "summary": "report uses a one-space separator (breaks the parser)",
+   "category": "error",
+   "tags": [
+    "reports",
+    "formatting"
+   ]
+  }
+ },
+ {
+  "id": "rev-same-01",
+  "kind": "same",
+  "group": "review:ref-mismatch",
+  "hard": true,
+  "a": {
+   "content": "Fixed the flaky login test (issue #198) by awaiting the session cookie",
+   "summary": "flaky login test fixed",
+   "category": "error",
+   "tags": [
+    "tests",
+    "flaky"
+   ]
+  },
+  "b": {
+   "content": "PR #212 fixes the flaky login test: it now awaits the session cookie",
+   "summary": "flaky login test fix",
+   "category": "error",
+   "tags": [
+    "tests",
+    "flaky"
+   ]
+  }
+ },
+ {
+  "id": "rev-same-02",
+  "kind": "same",
+  "group": "review:incidental-ref",
+  "hard": true,
+  "a": {
+   "content": "Redis must listen on 6380 locally, not 6379 (see #45)",
+   "summary": "local redis on 6380",
+   "category": "fact",
+   "tags": [
+    "redis",
+    "dev-env"
+   ]
+  },
+  "b": {
+   "content": "Local Redis port is 6380 because 6379 clashes with the system redis; noted in PR #61",
+   "summary": "redis dev port 6380",
+   "category": "fact",
+   "tags": [
+    "redis",
+    "dev-env"
+   ]
+  }
+ },
+ {
+  "id": "rev-same-05",
+  "kind": "same",
+  "group": "review:synonym-rewrite",
+  "hard": true,
+  "a": {
+   "content": "We chose Postgres over MongoDB because reports need joins across orders and customers.",
+   "summary": "Postgres chosen for joins",
+   "category": "decision",
+   "tags": [
+    "database"
+   ]
+  },
+  "b": {
+   "content": "Relational database picked instead of a document store, since reporting queries combine order and client records.",
+   "summary": "relational DB for reporting",
+   "category": "architecture",
+   "tags": [
+    "db",
+    "reporting"
+   ]
+  }
+ },
+ {
+  "id": "rev-same-06",
+  "kind": "same",
+  "group": "review:cross-category-short",
+  "hard": true,
+  "a": {
+   "content": "Run uv run pytest tests/unit before every push.",
+   "summary": "Run uv run pytest tests/unit before every push.",
+   "category": "preference",
+   "tags": [
+    "testing"
+   ]
+  },
+  "b": {
+   "content": "Before pushing, always run the unit tests with uv run pytest tests/unit.",
+   "summary": "Before pushing, always run the unit tests with uv run pytest tests/unit.",
+   "category": "pattern",
+   "tags": [
+    "workflow",
+    "ci"
+   ]
+  }
+ },
+ {
+  "id": "rev-same-07",
+  "kind": "same",
+  "group": "review:status-repeat-different-tags",
+  "hard": true,
+  "a": {
+   "content": "Benchmark still running on the M2; do not start other model jobs.",
+   "summary": "benchmark running, avoid model jobs",
+   "category": "fact",
+   "tags": [
+    "benchmark",
+    "memory-pressure"
+   ]
+  },
+  "b": {
+   "content": "Do not launch anything that loads a model while the benchmark is going on the M2 laptop.",
+   "summary": "no model loads during benchmark",
+   "category": "preference",
+   "tags": [
+    "laptop",
+    "ram",
+    "locomo"
+   ]
+  }
+ },
+ {
+  "id": "rev-same-08",
+  "kind": "same",
+  "group": "review:russian-english",
+  "hard": true,
+  "a": {
+   "content": "Релизный тег требует GitHub Release с собранными артефактами.",
+   "summary": "тег требует GitHub Release",
+   "category": "pattern",
+   "tags": [
+    "release"
+   ]
+  },
+  "b": {
+   "content": "Every release tag needs a GitHub Release with the built assets attached.",
+   "summary": "tag needs GitHub Release",
+   "category": "pattern",
+   "tags": [
+    "release",
+    "github"
+   ]
+  }
+ },
+ {
+  "id": "rev-same-09",
+  "kind": "same",
+  "group": "review:short-tokens",
+  "hard": true,
+  "a": {
+   "content": "CI: uv sync needs --frozen.",
+   "summary": "CI uses uv sync --frozen",
+   "category": "pattern",
+   "tags": [
+    "ci",
+    "uv"
+   ]
+  },
+  "b": {
+   "content": "In the GitHub workflow always install deps with the frozen lockfile flag.",
+   "summary": "workflow installs with frozen lockfile",
+   "category": "pattern",
+   "tags": [
+    "github-actions"
+   ]
+  }
+ },
+ {
+  "id": "rev-same-10",
+  "kind": "same",
+  "group": "review:summary-granularity",
+  "hard": true,
+  "a": {
+   "content": "Large git pushes to the collivind remote drop the connection; push with -c http.version=HTTP/1.1.",
+   "summary": "git push workaround",
+   "category": "error",
+   "tags": [
+    "git"
+   ]
+  },
+  "b": {
+   "content": "Use HTTP/1.1 for multi-megabyte pushes to collivind, otherwise the remote hangs up mid-transfer.",
+   "summary": "multi-MB push to collivind needs HTTP/1.1 or it disconnects",
+   "category": "pattern",
+   "tags": [
+    "git",
+    "push",
+    "network"
+   ]
+  }
+ },
+ {
+  "id": "rev-same-11",
+  "kind": "same",
+  "group": "review:pr-dash",
+  "hard": true,
+  "a": {
+   "content": "PR-212 adds the superseded report command",
+   "summary": "superseded report command",
+   "category": "fact",
+   "tags": [
+    "cli"
+   ]
+  },
+  "b": {
+   "content": "The fix/dedup-evidence-loss branch adds a read-only report listing memories retired on similarity",
+   "summary": "read-only superseded listing",
+   "category": "fact",
+   "tags": [
+    "cli",
+    "dedup"
+   ]
+  }
+ },
+ {
+  "id": "rev-same-12",
+  "kind": "same",
+  "group": "review:different-numbers-format",
+  "hard": true,
+  "a": {
+   "content": "HTTP client timeout for the embedding service is 30s.",
+   "summary": "embed timeout 30s",
+   "category": "fact",
+   "tags": [
+    "embedding",
+    "timeouts"
+   ]
+  },
+  "b": {
+   "content": "embedding_service.py sets requests timeout=30_000 ms",
+   "summary": "embedding timeout set in ms",
+   "category": "snippet",
+   "tags": [
+    "python",
+    "http"
+   ]
+  }
+ },
+ {
+  "id": "rev-same-13",
+  "kind": "same",
+  "group": "review:restatement (written for the batch path, run as two single adds)",
+  "hard": true,
+  "a": {
+   "content": "The MCP server must never print to stdout outside JSON-RPC frames.",
+   "summary": "no stray stdout in MCP server",
+   "category": "pattern",
+   "tags": [
+    "mcp"
+   ]
+  },
+  "b": {
+   "content": "Never write non-JSON-RPC output to stdout from the MCP server; it corrupts the stream.",
+   "summary": "MCP stdout must be JSON-RPC only",
+   "category": "pattern",
+   "tags": [
+    "mcp",
+    "stdio"
+   ]
+  }
+ }
+]

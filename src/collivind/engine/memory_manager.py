@@ -4,7 +4,8 @@ from dataclasses import replace
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 from collivind.config import CollivindConfig
-from collivind.engine.dedup import Deduplicator
+from collivind.engine.conflicts import MAX_CANDIDATES, is_live, same_memory
+from collivind.engine.dedup import Deduplicator, Neighbour
 from collivind.engine.enrichment import build_enriched_text
 from collivind.engine.search_engine import SearchEngine
 from collivind.exceptions import BatchPartiallyStoredError, GraphStoreUnavailableError
@@ -71,7 +72,7 @@ class MemoryManager:
         self.graph_store = graph_store
         self.embedding_provider = embedding_provider
         self.config = config
-        self.deduplicator = Deduplicator(vector_store, config.search)
+        self.deduplicator = Deduplicator(vector_store, config.search, embedding_provider)
         self.search_engine = SearchEngine(vector_store, graph_store, embedding_provider, config.search)
         self._aliases: Dict[str, str] = {}
         self._aliases_read_at = float("-inf")
@@ -99,9 +100,11 @@ class MemoryManager:
     ) -> Tuple[MemoryNode, List[SearchResult]]:
         """Store a memory and return it with the live memories it may conflict with.
 
-        Nothing is linked or retired here below the dedup threshold: the
-        caller (an agent, via the MCP response) decides whether a candidate
-        is an older version, a real conflict or just a neighbour.
+        Only a resubmission (conflicts.same_memory) is rejected.
+        Nothing is retired here: close neighbours and likely duplicates come
+        back as conflict candidates, and the caller (an agent, via the MCP
+        response) decides whether one is an older version, a real conflict or
+        just a neighbour. See engine/dedup.py for why.
         """
         if memory_create.category == MemoryCategory.SUMMARY:
             raise ValueError("summaries are written with collivind_summarize (`collivind summarize`), not add")
@@ -109,36 +112,19 @@ class MemoryManager:
         enriched = build_enriched_text(memory_create, entity_names=entity_names)
         vector = self.embedding_provider.embed(enriched)
 
-        stale = None
-        dup_match = self.deduplicator.find_duplicate_detailed(vector, memory_create.project_id)
-        if dup_match:
-            existing = self._graph_write(self.graph_store.get_memory, dup_match.memory_id)
-            if existing:
-                if dup_match.is_exact:
-                    # identical content resubmitted — keep existing as-is, but the
-                    # links the save states are new knowledge ("this fix resolves
-                    # that error") and must not vanish with the duplicate text
-                    self._write_relationships(existing.id, relationships)
-                    return existing, []
-                # near-duplicate with different content: the incoming memory is
-                # the fresh version — store it and retire the stale one below,
-                # instead of keeping old and new side by side
-                stale = existing
+        neighbours = self.deduplicator.neighbours(vector, memory_create.project_id)
+        for candidate in self.deduplicator.same_text(memory_create.content, neighbours):
+            # the graph is the truth: a payload can lag an edit or outlive an invalidation
+            existing = self._graph_write(self.graph_store.get_memory, candidate.memory_id)
+            if existing is not None and is_live(existing) and same_memory(existing, memory_create):
+                # identical content resubmitted — keep existing as-is, but the
+                # links the save states are new knowledge ("this fix resolves
+                # that error") and must not vanish with the duplicate text
+                self._write_relationships(existing.id, relationships)
+                return existing, []
 
         memory_node = self._graph_write(self.graph_store.create_memory, memory_create)
-
-        if stale:
-            inherited = self._merge_tags(stale, memory_create.tags)
-            if inherited != memory_create.tags:
-                self.graph_store.update_memory(memory_node.id, tags=inherited)
-            self.graph_store.invalidate_memory(stale.id, memory_node.id, "superseded_by_update")
-            # history stays in the graph (version chain); the live vector index
-            # must only serve current knowledge
-            self.vector_store.delete(stale.id)
-            memory_node = self.graph_store.get_memory(memory_node.id) or memory_node
-
-        payload = memory_node.to_dict()
-        self.vector_store.upsert(memory_node.id, vector, payload)
+        self.vector_store.upsert(memory_node.id, vector, memory_node.to_dict())
 
         if entities:
             for ent_create in entities:
@@ -160,14 +146,28 @@ class MemoryManager:
 
         # No CONTRADICTS edge from similarity: on a real store it flagged
         # thousands of compatible pairs (see engine/conflicts.py).
-        exclude = (stale.id,) if stale else ()
         try:
-            conflicts = self.search_engine.conflict_candidates(memory_node, vector, exclude=exclude)
+            conflicts = self._possible_conflicts(memory_create, memory_node, vector, neighbours)
         except Exception:
             # the memory is stored; a failed lookup must not turn that into an error
             logger.warning("conflict check failed for %s", memory_node.id, exc_info=True)
             conflicts = []
         return memory_node, conflicts
+
+    def _possible_conflicts(
+        self, memory_create: MemoryCreate, node: MemoryNode, vector: List[float], neighbours: List[Neighbour]
+    ) -> List[SearchResult]:
+        """Up to MAX_CANDIDATES likely duplicates (any category), then up to MAX_CANDIDATES same-category conflicts.
+
+        Separate caps, so a pile of near-identical notes cannot crowd out a real conflict.
+        """
+        found: List[SearchResult] = []
+        for n in self.deduplicator.likely_duplicates(memory_create, neighbours)[:MAX_CANDIDATES]:
+            existing = self.graph_store.get_memory(n.memory_id)
+            if existing is not None and is_live(existing):
+                found.append(SearchResult(memory=existing, score=n.score, vector_score=n.score, graph_score=0.0))
+        seen = {r.memory.id for r in found}
+        return found + [c for c in self.search_engine.conflict_candidates(node, vector) if c.memory.id not in seen]
 
     def _write_relationships(
         self, memory_id: str, relationships: Optional[Sequence[Union[RelationshipCreate, EntityRelation]]]

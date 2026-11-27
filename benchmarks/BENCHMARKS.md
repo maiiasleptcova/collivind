@@ -603,3 +603,34 @@ LoCoMo-length turns took about 25 ms warm. The first request after the
 daemon starts took about 1 s.
 Both were measured 2026-11-19 on an Apple-silicon laptop. The docker row uses
 the same data set, 30 queries per pass, against throwaway containers.
+
+## Write-time dedup: 0.22 stops retiring memories on similarity
+
+Before 0.22 a new memory within cosine 0.92 of a live one retired it. In 0.22
+only an identical memory (same content, summary, category and tags) is
+rejected, and close ones are returned to the agent as `possible_conflicts`.
+Measured 2026-11-26 through `MemoryManager`, embedded mode, strict scoring (a
+returned memory's text is a gold evidence turn). LoCoMo development
+conversations are conv-26/30/41/42/43/44/47 and held-out are conv-48/49/50,
+fixed before tuning; the held-out set was run once at the end.
+
+| LoCoMo, 1,536 questions | live memories | hit@5 | hit@10 | dev hit@5 / @10 | held-out hit@5 / @10 |
+|---|---|---|---|---|---|
+| 0.21, dedup 0.92 | 5,539 of 5,882 | 72.4 | 77.5 | 72.0 / 77.0 | 73.2 / 78.7 |
+| 0.21, dedup 0.98 | 5,882 | 76.0 | 81.7 | 76.0 / 81.5 | 76.1 / 82.1 |
+| 0.22 defaults | 5,882 | 76.0 | 81.7 | 76.0 / 81.5 | 76.1 / 82.1 |
+| 0.22, sentence wording (`LOCOMO_TEMPLATE=sentence`) | 5,882 | 77.7 | 83.4 | 77.2 / 82.9 | 78.7 / 84.5 |
+
+LongMemEval-S through the engine, 90-question sample: session R@5 97.8 in both
+versions; turn hit@5 75.6 to 87.8, turn hit@10 83.3 to 94.4.
+
+Synthetic coding-agent pairs (`tests/fixtures/dedup_pairs.json`, run with
+`benchmarks/dedup_pairs_bench.py`): 75 restatement pairs and 80 pairs of
+different facts. For each pair the second memory is rejected, merged (it
+retires the first), surfaced (both kept and the first returned in
+`possible_conflicts`), or kept (both kept and the agent is not told).
+
+| | restatements handled | different facts losing a memory |
+|---|---|---|
+| 0.21 | 52 of 75 (69%): 6 rejected, 33 merged, 13 surfaced | 39 of 80 (49%) |
+| 0.22 | 61 of 75 (81%): all surfaced | 0 of 80 |

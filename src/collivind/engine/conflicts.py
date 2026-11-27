@@ -9,19 +9,22 @@ overlap does not separate them either. So similarity alone never decides that
 something is a contradiction. On write the server returns a few gated
 candidates and the agent judges them (see CONFLICT_INSTRUCTION). The review
 command only re-labels what the new gate would not have surfaced, and it
-retires only near-duplicates at the dedup threshold, the same rule add_memory
-already applies.
+retires only one of two identical memories (same_memory), the same rule
+add_memory applies (see engine/dedup.py).
 """
 
 import math
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Sequence, Set
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Sequence, Set, Union
 
-from collivind.models import MemoryNode, RelationshipCreate, RelType
+from collivind.models import MemoryCategory, MemoryNode, RelationshipCreate, RelType
 
 if TYPE_CHECKING:
     from collivind.engine.memory_manager import MemoryManager
+    from collivind.models import MemoryCreate
+    from collivind.storage.interfaces import GraphStore
 
 # Cosine (enriched text vs enriched text) a stored memory must reach before a
 # new one is checked against it. ponytail: tuned on one store; if agents see too
@@ -32,13 +35,14 @@ MIN_WORD_OVERLAP = 0.15
 
 CONFLICT_INSTRUCTION = (
     "These existing memories are close to the one just saved. Check each one. "
-    "If it is compatible (a different detail, or the same thing said differently), ignore it. "
-    "If one replaces the other (a newer state of the same fact), call collivind_invalidate on the "
-    "stale one with superseded_by set to the current one. If they genuinely disagree, check the "
-    "source of truth (the code, docs, git history, the user's own words) and invalidate the wrong "
-    "one the same way. If you still cannot tell, ask the user one short question, invalidate the "
-    "wrong one after they answer, and save their answer as a memory. If nobody can be asked now, "
-    "call collivind_mark_conflict on the pair so it is flagged for review. Do not use "
+    "If it states the same fact as the new memory (said differently, or with other detail around it), "
+    "or the new memory is a newer state of it, call collivind_invalidate on the existing one with "
+    "superseded_by set to the memory just saved; keep both only if the existing one holds detail the "
+    "new one lacks. If it is a different fact that only looks similar, ignore it. If they genuinely "
+    "disagree, check the source of truth (the code, docs, git history, the user's own words) and "
+    "invalidate the wrong one the same way. If you still cannot tell, ask the user one short question, "
+    "invalidate the wrong one after they answer, and save their answer as a memory. If nobody can be "
+    "asked now, call collivind_mark_conflict on the pair so it is flagged for review. Do not use "
     "collivind_forget for this, because invalidating keeps the history."
 )
 
@@ -84,6 +88,21 @@ def same_subject(a: str, b: str) -> bool:
     return len(wa & wb) / max(1, len(wa | wb)) >= MIN_WORD_OVERLAP
 
 
+def same_memory(a: Union[MemoryNode, "MemoryCreate"], b: Union[MemoryNode, "MemoryCreate"]) -> bool:
+    """A resubmission: the same content, summary, category and tags; only outer whitespace may differ.
+
+    Nothing looser. Case and inner whitespace matter in code (Button.tsx vs
+    button.tsx, indentation), and the same status line tagged pr-212 and
+    pr-213 is two facts.
+    """
+    return (
+        a.content.strip() == b.content.strip()
+        and (a.summary or "").strip() == (b.summary or "").strip()
+        and MemoryCategory(a.category) == MemoryCategory(b.category)
+        and set(a.tags or []) == set(b.tags or [])
+    )
+
+
 def is_live(memory: Optional[MemoryNode]) -> bool:
     return memory is not None and memory.valid_to is None and not memory.superseded_by
 
@@ -97,7 +116,7 @@ def cosine(a: Sequence[float], b: Sequence[float]) -> float:
 # Review buckets. Only REVIEW keeps its CONTRADICTS edge.
 RESOLVED = "resolved"  # an endpoint is gone or already invalidated: the edge is history
 UNRELATED = "unrelated"  # below the new gate: re-label to RELATES_TO
-DUPLICATE = "duplicate"  # at the dedup threshold: retire the older one
+DUPLICATE = "duplicate"  # identical memories (same_memory): retire the older one
 REVIEW = "review"  # passes the gate: a person or agent has to read it
 
 
@@ -117,6 +136,8 @@ def classify_edge(
     if not is_live(a) or not is_live(b):
         return RESOLVED, "one side is already invalidated or deleted"
     assert a is not None and b is not None
+    if same_memory(a, b):
+        return DUPLICATE, "identical content, summary, category and tags"
     if score is None:
         return REVIEW, "no live vector to compare"
     if score < CONFLICT_THRESHOLD:
@@ -124,7 +145,7 @@ def classify_edge(
     if not same_subject(a.content, b.content):
         return UNRELATED, f"cosine {score:.3f} but no shared identifier or wording"
     if score >= dedup_threshold:
-        return DUPLICATE, f"cosine {score:.3f} >= dedup threshold {dedup_threshold}, same subject"
+        return REVIEW, f"cosine {score:.3f} >= dedup threshold {dedup_threshold}, same subject: likely duplicate"
     return REVIEW, f"cosine {score:.3f}, same subject"
 
 
@@ -212,3 +233,34 @@ def _apply(manager: "MemoryManager", verdicts: List[EdgeVerdict], memories: Dict
 
 def _created(m: Optional[MemoryNode]) -> str:
     return m.created_at.isoformat() if m is not None and m.created_at else ""
+
+
+# Before 0.22 add_memory retired a live memory whenever a new one landed within
+# cosine 0.92 of it, in the same call that stored the new one.
+AUTO_SUPERSEDE_WINDOW = 2.0  # seconds between the successor's creation and the retirement
+
+
+def auto_superseded(graph: "GraphStore", project_id: Optional[str] = None) -> List[tuple[MemoryNode, MemoryNode]]:
+    """(retired, successor) pairs that look retired by similarity alone, oldest first. Read only.
+
+    ponytail: neither store records who retired a memory, so this goes by
+    timing: retired within AUTO_SUPERSEDE_WINDOW of the successor's creation
+    means the same add call did it. An agent's collivind_invalidate that fast
+    would be listed too, and a `contradictions review --apply` retirement is not.
+    """
+    nodes = {m.id: m for m in graph.iter_memories()}
+    pairs = []
+    for m in nodes.values():
+        new = nodes.get(m.superseded_by or "")
+        if new is None or m.valid_to is None or new.created_at is None or m.category == MemoryCategory.SUMMARY:
+            continue
+        if project_id is not None and m.project_id != project_id:
+            continue
+        if abs((_aware(m.valid_to) - _aware(new.created_at)).total_seconds()) <= AUTO_SUPERSEDE_WINDOW:
+            pairs.append((m, new))
+    return sorted(pairs, key=lambda p: _created(p[0]))
+
+
+def _aware(when: datetime) -> datetime:
+    # legacy rows may hold naive timestamps; everything collivind writes is UTC
+    return when if when.tzinfo else when.replace(tzinfo=timezone.utc)

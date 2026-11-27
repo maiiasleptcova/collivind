@@ -61,6 +61,9 @@ class SearchConfig:
     vector_weight: float = 0.7
     graph_weight: float = 0.3
     similarity_threshold: float = 0.3
+    # Cosine at or above which a close memory about the same subject is returned
+    # to the agent as a likely duplicate (possible_conflicts), in any category.
+    # Nothing is retired on similarity; only identical text is rejected.
     dedup_threshold: float = 0.92
     temporal_decay_rate: float = 0.01
     temporal_decay_max: float = 0.3
@@ -236,6 +239,8 @@ default_limit = 10
 vector_weight = 0.7
 graph_weight = 0.3
 similarity_threshold = 0.3
+# likely-duplicate cosine: such a memory is returned to the agent as a possible
+# conflict; only identical text is rejected, nothing is retired on similarity
 dedup_threshold = 0.92
 temporal_decay_rate = 0.01
 temporal_decay_max = 0.3
