@@ -1,0 +1,1556 @@
+{
+  "n": 300,
+  "model": "haiku",
+  "arms": {
+    "hook_old": {
+      "words": 237,
+      "overall": 70.0,
+      "multi-hop": 43.9,
+      "n_multi-hop": 57,
+      "temporal": 66.7,
+      "n_temporal": 54,
+      "open-domain": 68.2,
+      "n_open-domain": 22,
+      "single-hop": 80.2,
+      "n_single-hop": 167
+    },
+    "hook_default": {
+      "words": 859,
+      "overall": 73.33333333333333,
+      "multi-hop": 63.2,
+      "n_multi-hop": 57,
+      "temporal": 68.5,
+      "n_temporal": 54,
+      "open-domain": 50.0,
+      "n_open-domain": 22,
+      "single-hop": 81.4,
+      "n_single-hop": 167
+    },
+    "hook_default_summ": {
+      "words": 1606,
+      "overall": 81.66666666666667,
+      "multi-hop": 68.4,
+      "n_multi-hop": 57,
+      "temporal": 83.3,
+      "n_temporal": 54,
+      "open-domain": 63.6,
+      "n_open-domain": 22,
+      "single-hop": 88.0,
+      "n_single-hop": 167
+    }
+  },
+  "mcnemar": {
+    "hook_default vs hook_old": {
+      "hook_default only": 33,
+      "hook_old only": 23,
+      "p": 0.2288
+    },
+    "hook_default_summ vs hook_default": {
+      "hook_default_summ only": 41,
+      "hook_default only": 16,
+      "p": 0.0013
+    }
+  },
+  "per_question": {
+    "conv-44:94": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-44:61": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-26:14": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": false
+    },
+    "conv-30:2": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-30:4": {
+      "hook_old": true,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-47:59": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": false
+    },
+    "conv-47:94": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:190": {
+      "hook_old": true,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-26:38": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-41:86": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-43:59": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-50:26": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-43:136": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-42:93": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-49:118": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-42:182": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-50:13": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-41:128": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-26:15": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-30:31": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-47:123": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-44:59": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": false
+    },
+    "conv-50:49": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-43:72": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:160": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-41:39": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-49:92": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-41:113": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-43:52": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-43:29": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-50:90": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-26:87": {
+      "hook_old": true,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-43:88": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-42:1": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-41:50": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-43:71": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-42:85": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-26:140": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-26:53": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-49:109": {
+      "hook_old": true,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-42:174": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-42:11": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": false
+    },
+    "conv-48:134": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-42:170": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-26:98": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-50:124": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-43:8": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-44:84": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-43:165": {
+      "hook_old": true,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-42:178": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-42:36": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-26:93": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-47:53": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-47:81": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-48:112": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-47:52": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-49:1": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-41:28": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-42:50": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-42:189": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-42:160": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-47:51": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-43:144": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-49:75": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:176": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-42:144": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-50:61": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-26:51": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-50:118": {
+      "hook_old": true,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-42:176": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:28": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-26:133": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:157": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-43:93": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-42:19": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-30:19": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:12": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-47:107": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-44:120": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-49:13": {
+      "hook_old": true,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-43:168": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-43:21": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-44:77": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:125": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-42:56": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-48:151": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-42:52": {
+      "hook_old": true,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-49:93": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-41:89": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-49:37": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-41:111": {
+      "hook_old": true,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-44:72": {
+      "hook_old": true,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-26:59": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-26:101": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-41:0": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-50:73": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:120": {
+      "hook_old": true,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-26:36": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": false
+    },
+    "conv-50:48": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-41:16": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-50:101": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:93": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-44:20": {
+      "hook_old": true,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-49:104": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-26:65": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-26:91": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:111": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-43:138": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-47:11": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-26:24": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:178": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-41:140": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-47:7": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-49:136": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-49:67": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-49:79": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-41:119": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-43:32": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": false
+    },
+    "conv-49:34": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-42:132": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-44:33": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-26:54": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-44:66": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-49:57": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-44:81": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-41:49": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": false
+    },
+    "conv-47:26": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-50:65": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-50:31": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-43:171": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-50:56": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-41:56": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:100": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-47:78": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:136": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-44:85": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-26:83": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:11": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:163": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-42:84": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-42:34": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-48:99": {
+      "hook_old": true,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-42:28": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-47:118": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-41:13": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-49:36": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-50:146": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-30:54": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-43:155": {
+      "hook_old": true,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-44:13": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-44:92": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-49:84": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-47:20": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:183": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-49:44": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-49:132": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-42:185": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-26:73": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-26:110": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-49:102": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-26:17": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-42:134": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-41:102": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-47:68": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-43:154": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-43:160": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-41:18": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-26:33": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-42:133": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-42:89": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-42:63": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": false
+    },
+    "conv-44:105": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-49:77": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": false
+    },
+    "conv-42:186": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:53": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-30:3": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-42:164": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-30:74": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-43:58": {
+      "hook_old": true,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-47:120": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-50:62": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-43:17": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-48:32": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-41:109": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-30:40": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:149": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-50:138": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-49:59": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-50:105": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-41:61": {
+      "hook_old": true,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-49:72": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-42:127": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-43:24": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-44:6": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:64": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-44:70": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-44:103": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-44:73": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-42:5": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:158": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-47:64": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-48:6": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-43:129": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-49:49": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-50:137": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-47:144": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": false
+    },
+    "conv-47:126": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-48:86": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-30:60": {
+      "hook_old": true,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-41:64": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-48:31": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:21": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-42:139": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": false
+    },
+    "conv-30:48": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-30:29": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-26:150": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-30:67": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:55": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-42:102": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": false
+    },
+    "conv-43:6": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-44:8": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-41:137": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-26:5": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-47:62": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-44:67": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-50:153": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-41:21": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-49:110": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-30:34": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-50:71": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-47:38": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:13": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:96": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": false
+    },
+    "conv-44:43": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-48:25": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-43:87": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": false
+    },
+    "conv-26:138": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-42:171": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-47:109": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-50:115": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-26:142": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-47:147": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-30:81": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-41:66": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-47:90": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-42:60": {
+      "hook_old": true,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-26:102": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-41:10": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-41:47": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-41:120": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-47:141": {
+      "hook_old": true,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-41:44": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-47:111": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-50:52": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-44:64": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-43:81": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-47:122": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-44:31": {
+      "hook_old": true,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-49:71": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-42:167": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-49:105": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-50:83": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:131": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-50:130": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-48:168": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-43:9": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-50:38": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-30:24": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-26:131": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-49:151": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-26:78": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-41:3": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-42:184": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-42:113": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": false
+    },
+    "conv-41:51": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:36": {
+      "hook_old": true,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-48:23": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-42:78": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-48:138": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-44:86": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-43:118": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:177": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-41:124": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-26:77": {
+      "hook_old": true,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-50:143": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-47:4": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-41:25": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": false
+    },
+    "conv-47:24": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": false
+    },
+    "conv-48:118": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:71": {
+      "hook_old": false,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-42:26": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-43:22": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-50:84": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-50:109": {
+      "hook_old": true,
+      "hook_default": false,
+      "hook_default_summ": true
+    },
+    "conv-42:80": {
+      "hook_old": false,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-49:101": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-49:3": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-44:51": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-48:162": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    },
+    "conv-49:21": {
+      "hook_old": true,
+      "hook_default": true,
+      "hook_default_summ": true
+    }
+  }
+}

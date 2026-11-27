@@ -1,0 +1,203 @@
+{
+  "locomo": {
+    "collivind 0.21.0 (default)": {
+      "n": 1536,
+      "session_hit@5": 91.86197916666667,
+      "session_recall@5": 86.04502521494709,
+      "chance_session_hit@5": 23.63368946140571,
+      "turn_hit@5": 75.06510416666667,
+      "turn_hit_strict@5": 72.8515625,
+      "session_hit@10": 96.15885416666667,
+      "session_recall@10": 92.212482432209,
+      "chance_session_hit@10": 43.975466392129555,
+      "turn_hit@10": 81.25,
+      "turn_hit_strict@10": 78.25520833333333
+    },
+    "collivind, rerank off": {
+      "n": 1536,
+      "session_hit@5": 86.1328125,
+      "session_recall@5": 80.0516441385582,
+      "chance_session_hit@5": 23.63368946140571,
+      "turn_hit@5": 59.830729166666664,
+      "turn_hit_strict@5": 57.6171875,
+      "session_hit@10": 94.01041666666667,
+      "session_recall@10": 89.7083488343254,
+      "chance_session_hit@10": 43.975466392129555,
+      "turn_hit@10": 70.05208333333333,
+      "turn_hit_strict@10": 67.1875
+    },
+    "dense bge-small, per turn": {
+      "n": 1536,
+      "session_hit@5": 85.546875,
+      "session_recall@5": 79.17111028439153,
+      "chance_session_hit@5": 23.63368946140571,
+      "turn_hit@5": 56.8359375,
+      "session_hit@10": 93.88020833333333,
+      "session_recall@10": 89.65102099867725,
+      "chance_session_hit@10": 43.975466392129555,
+      "turn_hit@10": 66.2109375
+    },
+    "BM25, per turn": {
+      "n": 1536,
+      "session_hit@5": 89.77864583333333,
+      "session_recall@5": 82.95885520006614,
+      "chance_session_hit@5": 23.63368946140571,
+      "turn_hit@5": 57.942708333333336,
+      "session_hit@10": 95.44270833333333,
+      "session_recall@10": 90.5984157986111,
+      "chance_session_hit@10": 43.975466392129555,
+      "turn_hit@10": 65.36458333333333
+    },
+    "MemPalace raw, per session (its --top-k 5 / 10 runs)": {
+      "n": 1536,
+      "session_hit@5": 51.888020833333336,
+      "session_recall@5": 45.81258783895502,
+      "chance_session_hit@5": 23.63368946140571,
+      "session_hit@10": 65.8203125,
+      "session_recall@10": 59.72062045304233,
+      "chance_session_hit@10": 43.975466392129555
+    },
+    "MemPalace hybrid v5, per session (its --top-k 5 / 10 runs)": {
+      "n": 1536,
+      "session_hit@5": 70.44270833333333,
+      "session_recall@5": 63.7772300760582,
+      "chance_session_hit@5": 23.63368946140571,
+      "session_hit@10": 91.86197916666667,
+      "session_recall@10": 87.0274780919312,
+      "chance_session_hit@10": 43.975466392129555
+    },
+    "MemPalace hybrid v5, per session (requested 50)": {
+      "n": 1536,
+      "session_hit@5": 82.29166666666667,
+      "session_recall@5": 75.69563285383599,
+      "chance_session_hit@5": 23.63368946140571,
+      "session_hit@10": 92.25260416666667,
+      "session_recall@10": 87.4181030919312,
+      "chance_session_hit@10": 43.975466392129555
+    },
+    "MemPalace raw, per session (requested 50)": {
+      "n": 1536,
+      "session_hit@5": 51.888020833333336,
+      "session_recall@5": 45.81258783895502,
+      "chance_session_hit@5": 23.63368946140571,
+      "session_hit@10": 65.8203125,
+      "session_recall@10": 59.72062045304233,
+      "chance_session_hit@10": 43.975466392129555
+    },
+    "MemPalace raw, per turn": {
+      "n": 1536,
+      "session_hit@5": 78.25520833333333,
+      "session_recall@5": 71.60755621693121,
+      "chance_session_hit@5": 23.63368946140571,
+      "turn_hit@5": 49.609375,
+      "session_hit@10": 89.38802083333333,
+      "session_recall@10": 84.27463107638889,
+      "chance_session_hit@10": 43.975466392129555,
+      "turn_hit@10": 58.463541666666664
+    },
+    "MemPalace hybrid v5, per turn": {
+      "n": 1536,
+      "session_hit@5": 85.48177083333333,
+      "session_recall@5": 79.32022982804233,
+      "chance_session_hit@5": 23.63368946140571,
+      "turn_hit@5": 60.546875,
+      "session_hit@10": 93.1640625,
+      "session_recall@10": 88.3718532986111,
+      "chance_session_hit@10": 43.975466392129555,
+      "turn_hit@10": 69.46614583333333
+    },
+    "MemPalace raw, per turn, bge-small": {
+      "n": 1536,
+      "session_hit@5": 86.26302083333333,
+      "session_recall@5": 80.22370515046296,
+      "chance_session_hit@5": 23.63368946140571,
+      "turn_hit@5": 62.760416666666664,
+      "session_hit@10": 93.81510416666667,
+      "session_recall@10": 89.86191199570106,
+      "chance_session_hit@10": 43.975466392129555,
+      "turn_hit@10": 72.33072916666667
+    },
+    "MemPalace hybrid v5, per turn, bge-small": {
+      "n": 1536,
+      "session_hit@5": 89.77864583333333,
+      "session_recall@5": 83.71576864252646,
+      "chance_session_hit@5": 23.63368946140571,
+      "turn_hit@5": 67.83854166666667,
+      "session_hit@10": 94.98697916666667,
+      "session_recall@10": 91.1183449074074,
+      "chance_session_hit@10": 43.975466392129555,
+      "turn_hit@10": 76.7578125
+    },
+    "MemPalace raw, per session, bge-small": {
+      "n": 1536,
+      "session_hit@5": 64.453125,
+      "session_recall@5": 57.47114231977513,
+      "chance_session_hit@5": 23.63368946140571,
+      "session_hit@10": 77.5390625,
+      "session_recall@10": 71.85182601686508,
+      "chance_session_hit@10": 43.975466392129555
+    },
+    "MemPalace hybrid v5, per session, bge-small": {
+      "n": 1536,
+      "session_hit@5": 87.36979166666667,
+      "session_recall@5": 80.61290922619048,
+      "chance_session_hit@5": 23.63368946140571,
+      "session_hit@10": 94.79166666666667,
+      "session_recall@10": 90.12362041170634,
+      "chance_session_hit@10": 43.975466392129555
+    }
+  },
+  "longmemeval_all": {
+    "dense bge-small, per turn": {
+      "n": 500,
+      "session_hit@5": 97.8,
+      "session_hit@10": 99.0
+    },
+    "BM25, per turn": {
+      "n": 500,
+      "session_hit@5": 94.8,
+      "session_hit@10": 97.6
+    },
+    "MemPalace raw": {
+      "n": 500,
+      "session_hit@5": 96.4,
+      "session_hit@10": 98.2
+    },
+    "MemPalace hybrid v4": {
+      "n": 500,
+      "session_hit@5": 98.2,
+      "session_hit@10": 99.8
+    },
+    "collivind raw vector store (bypasses the engine)": {
+      "n": 500,
+      "session_hit@5": 98.0
+    }
+  },
+  "longmemeval_sample": {
+    "dense bge-small, per turn": {
+      "n": 90,
+      "session_hit@5": 97.77777777777777,
+      "session_hit@10": 98.88888888888889
+    },
+    "BM25, per turn": {
+      "n": 90,
+      "session_hit@5": 91.11111111111111,
+      "session_hit@10": 95.55555555555556
+    },
+    "MemPalace raw": {
+      "n": 90,
+      "session_hit@5": 95.55555555555556,
+      "session_hit@10": 97.77777777777777
+    },
+    "MemPalace hybrid v4": {
+      "n": 90,
+      "session_hit@5": 97.77777777777777,
+      "session_hit@10": 98.88888888888889
+    },
+    "collivind raw vector store (bypasses the engine)": {
+      "n": 90,
+      "session_hit@5": 97.77777777777777
+    }
+  },
+  "longmemeval_sample_ids": 90
+}

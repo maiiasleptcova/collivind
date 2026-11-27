@@ -31,6 +31,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import random
 import subprocess
 import sys
@@ -43,10 +44,22 @@ from pathlib import Path
 from typing import Dict, List
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from locomo_bench import ADVERSARIAL, ingest, make_manager, parse_evidence, sessions_of  # noqa: E402
+from locomo_bench import (  # noqa: E402
+    ADVERSARIAL,
+    ingest,
+    make_manager,
+    parse_evidence,
+    parse_search_overrides,
+    sessions_of,
+    turn_text,
+)
 
 CATEGORIES = {1: "multi-hop", 2: "temporal", 3: "open-domain", 4: "single-hop"}
 ARMS = ("turns50", "routed", "hook_turns", "hook_summ")
+# 0.21 re-benchmark arms: the old hook setting, the shipped hook default (read from
+# config), search at 30, each without and with summaries, and two references that
+# never touch the engine (the whole conversation; the gold evidence turns only).
+EXTRA_ARMS = ("hook_old", "hook_default", "search30", "hook_default_summ", "search30_summ", "full", "oracle", "none")
 
 READER = """You are an intelligent memory assistant answering a question about a long conversation between {a} and {b}.
 
@@ -113,8 +126,11 @@ def build_contexts(data: Dict[str, dict], summaries: dict, sample: List[tuple]) 
     out: Dict[str, dict] = {f"{sid}:{i}": {} for sid, i in sample}
     stats = {"summaries": 0, "gold_summary_routed": 0, "routed_searches": 0}
     with tempfile.TemporaryDirectory(prefix="collivind-summ-") as tmp:
-        manager = make_manager(tmp, "BAAI/bge-small-en-v1.5")
+        # LOCOMO_SEARCH="dedup_threshold=0.98,rerank_pool=100" overrides [search] settings for an experiment
+        overrides = parse_search_overrides([kv for kv in os.environ.get("LOCOMO_SEARCH", "").split(",") if kv])
+        manager = make_manager(tmp, "BAAI/bge-small-en-v1.5", search=overrides or None)
         cutoff = manager.config.search.recall_min_score
+        hooks = manager.config.hooks  # the shipped hook defaults, not hardcoded
 
         def search(q, pid, limit):
             hits = manager.search(SearchQuery(query=q, project_id=pid, limit=limit, min_rerank_score=cutoff))
@@ -128,6 +144,21 @@ def build_contexts(data: Dict[str, dict], summaries: dict, sample: List[tuple]) 
             for i, q in qs:
                 out[f"{sid}:{i}"]["turns50"] = search(q, pid, 50)[0]
                 out[f"{sid}:{i}"]["hook_turns"] = [manager.get_context(q, project_id=pid, limit=20, max_tokens=800)]
+                out[f"{sid}:{i}"]["hook_old"] = [manager.get_context(q, project_id=pid, limit=5, max_tokens=800)]
+                out[f"{sid}:{i}"]["hook_default"] = [
+                    manager.get_context(q, project_id=pid, limit=hooks.recall_limit, max_tokens=hooks.recall_max_tokens)
+                ]
+                out[f"{sid}:{i}"]["search30"] = search(q, pid, 30)[0]
+                turns = [
+                    (t["dia_id"], turn_text(t, when))
+                    for _, when, ts in sessions_of(data[sid]["conversation"])
+                    for t in ts
+                ]
+                known = {d for d, _ in turns}
+                gold_turns = sorted(set(parse_evidence(data[sid]["qa"][i].get("evidence", []))) & known)
+                out[f"{sid}:{i}"]["none"] = ["(no memory was retrieved)"]  # no memory tool at all
+                out[f"{sid}:{i}"]["full"] = [text for _, text in turns]
+                out[f"{sid}:{i}"]["oracle"] = [dict(turns)[d] for d in gold_turns]
             for number, when, _ in sessions_of(data[sid]["conversation"]):
                 entry = summaries.get(f"{sid}|{number}")
                 if not entry:
@@ -139,6 +170,10 @@ def build_contexts(data: Dict[str, dict], summaries: dict, sample: List[tuple]) 
                 texts, hits = search(q, pid, 28)
                 out[f"{sid}:{i}"]["routed"] = texts
                 out[f"{sid}:{i}"]["hook_summ"] = [manager.get_context(q, project_id=pid, limit=20, max_tokens=800)]
+                out[f"{sid}:{i}"]["hook_default_summ"] = [
+                    manager.get_context(q, project_id=pid, limit=hooks.recall_limit, max_tokens=hooks.recall_max_tokens)
+                ]
+                out[f"{sid}:{i}"]["search30_summ"] = search(q, pid, 30)[0]
                 gold = {int(e[1:].split(":")[0]) for e in parse_evidence(data[sid]["qa"][i].get("evidence", []))}
                 routed = {h.memory.session_id for h in hits if h.memory.category == "summary"}
                 stats["routed_searches"] += bool(routed)
@@ -224,7 +259,9 @@ def run_qa(data, sample, contexts, model, cache_path: Path, arms) -> dict:
             row[name] = round(100 * sum(correct[arm][q] for q in qs) / max(1, len(qs)), 1)
             row[f"n_{name}"] = len(qs)
         report["arms"][arm] = row
-    for a, b in (("routed", "turns50"), ("hook_summ", "hook_turns")):
+    pairs = (("routed", "turns50"), ("hook_summ", "hook_turns"), ("hook_default", "hook_old"),
+             ("hook_default_summ", "hook_default"), ("search30_summ", "search30"), ("full", "hook_default_summ"))  # fmt: skip
+    for a, b in pairs:
         if a in arms and b in arms:
             wa, wb, p = mcnemar_exact([correct[a][q] for q in sample], [correct[b][q] for q in sample])
             report["mcnemar"][f"{a} vs {b}"] = {f"{a} only": wa, f"{b} only": wb, "p": round(p, 4)}
@@ -239,7 +276,14 @@ def main() -> None:
     parser.add_argument("--n", type=int, default=300)
     parser.add_argument("--qa", action="store_true", help="also run reader + judge through the Claude CLI")
     parser.add_argument("--model", default="sonnet")
-    parser.add_argument("--arms", default=",".join(ARMS))
+    parser.add_argument(
+        "--arms", default=",".join(ARMS), help=f"comma-separated; also available: {', '.join(EXTRA_ARMS)}"
+    )
+    parser.add_argument(
+        "--cache",
+        default=None,
+        help="reader/judge cache file name inside --work (a second name = an independent repeat)",
+    )
     args = parser.parse_args()
     assert ADVERSARIAL not in CATEGORIES
 
@@ -258,8 +302,10 @@ def main() -> None:
         words = [sum(len(t.split()) for t in contexts[f"{sid}:{i}"][arm]) for sid, i in sample]
         print(f"{arm:11} mean words in context {sum(words) / len(words):6.0f}")
     if args.qa:
-        report = run_qa(data, sample, contexts, args.model, work / f"cache_{args.model}.jsonl", arms)
-        (work / "report.json").write_text(json.dumps(report, indent=2))
+        report = run_qa(data, sample, contexts, args.model, work / (args.cache or f"cache_{args.model}.jsonl"), arms)
+        (work / (f"report_{Path(args.cache).stem}.json" if args.cache else "report.json")).write_text(
+            json.dumps(report, indent=2)
+        )
         print(json.dumps(report, indent=2))
 
 

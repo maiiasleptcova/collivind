@@ -450,22 +450,50 @@ Collivind stores memories as nodes in a knowledge graph with vector embeddings f
 
 ## Benchmarks
 
-**LongMemEval-S session retrieval, Recall@5: 98.0%** (500/500 questions,
-standard split, raw mode — local embeddings, no LLM, no reranking, no API
-keys). Fully reproducible: methodology, per-question results, and honest
-caveats in [benchmarks/BENCHMARKS.md](benchmarks/BENCHMARKS.md).
-**LoCoMo turn-level retrieval through the full engine: strict hit@5 72.4%,
-hit@10 77.5%** with the 0.19 hybrid keyword + cross-encoder rerank stage
-(0.18: 57.6% / 67.2%; 1,536 non-adversarial questions, a much harder,
-turn-level task, same doc).
-**Summary memories (0.20)** lift LoCoMo QA through the engine from 75.7% to
-83.7% at about 1,800 words of context (300 questions, Claude Sonnet 5.5
-reader and judge, p = 0.0002), and the prompt hook's recall at 800 tokens (the old default;
-now 2,400, not re-measured) from 74.3% to 81.3%; multi-hop did not improve measurably. Summaries cost one
-agent call per session at save time.
-We publish
-no side-by-side numbers against other memory tools — different projects
-measure different things on different splits.
+Measured on v0.21.0, embedded mode, default config. Systems in one table were
+run through the same harness and scoring code; full method, caveats and
+reproduction steps are in [benchmarks/BENCHMARKS.md](benchmarks/BENCHMARKS.md).
+
+**LoCoMo, find the exact evidence turn** (1,536 questions, no LLM):
+
+| System | Embedder | top 5 | top 10 |
+|---|---|---|---|
+| **collivind 0.21.0** (hybrid candidates + local reranker) | bge-small | **72.4%** | **77.5%** |
+| MemPalace 3.12.0, hybrid v5, stored per turn, same embedder | bge-small | 67.8% | 76.8% |
+| MemPalace 3.12.0, hybrid v5, stored per turn, its default embedder | all-MiniLM-L6-v2 | 60.5% | 69.5% |
+| BM25 | none | 57.9% | 65.4% |
+| plain dense search | bge-small | 56.8% | 66.2% |
+| MemPalace 3.12.0, raw, stored per turn | all-MiniLM-L6-v2 | 49.6% | 58.5% |
+
+Read the gap with care. The MemPalace rows are its published benchmark
+pipeline (its own scripts), not its product path. With the same embedder,
+collivind's lead over MemPalace's hybrid mode is 4.6 points at top 5
+(significant) and 0.7 at top 10 (not significant). The systems also index
+different text (collivind includes the session date and photo captions). At
+session level they are closer still (collivind 91.9% / 96.2%, MemPalace hybrid
+with the same embedder 89.8% / 95.0%, BM25 89.8% / 95.4%).
+
+**LongMemEval-S, find the right session**: collivind, MemPalace, dense search
+and BM25 all score 94.8% to 98.2% at top 5 (collivind 97.8% through the engine
+on a 90-question sample, 98.0% through the raw vector store on all 500). The
+benchmark is saturated for retrieval and does not separate memory tools.
+
+**LoCoMo answers end to end** (300 questions, Claude Haiku 5.5 as reader and
+judge, scored twice): the prompt hook's default recall answers 70-72%; with
+summary memories about 79%; the whole conversation in context 76%. The
+summaries-against-whole-conversation difference is not significant, and with a
+stronger reader the whole conversation scored higher. Summaries cost one agent
+call per session at save time.
+
+**Cost**: default recall gives the answering model about 1,600 tokens per
+question, against about 41,500 for pasting the whole conversation (roughly
+$3 against $83 per 1,000 questions at Sonnet 5.5 list price) and answers 70%
+against 76%; with summary memories about 3,300 tokens and 80%. With no memory
+at all the model answers 10%.
+
+Mem0, Zep, Letta and LangMem were not run here; their own published figures are
+listed separately in the benchmark notes and are not comparable with the table
+above.
 
 ## Architecture
 
