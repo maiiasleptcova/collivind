@@ -6,6 +6,7 @@ binding a socket. Every handler returns (status, payload).
 
 from typing import Any, Dict, Optional, Tuple
 
+from collivind.engine.descriptions import describe_entity
 from collivind.engine.memory_manager import LINKABLE
 from collivind.engine.projects import list_projects, set_project_meta, validate_project_id
 from collivind.models import MemoryCategory, MemoryCreate, RelType, SearchQuery
@@ -14,6 +15,7 @@ from collivind.models.relations import MEANINGS
 from collivind.web.graph import DEFAULT_LIMIT, MAX_LIMIT, build_graph
 from collivind.web.local import LOCAL_LIMIT, MAX_LOCAL_LIMIT, chain, neighbourhood
 from collivind.web.overlap import overlapping
+from collivind.web.wiki import MAX_PAGE, PAGE_SIZE, SECTIONS, Wiki
 
 Result = Tuple[int, Dict[str, Any]]
 
@@ -69,6 +71,13 @@ def _rel_type(value: Any) -> RelType:
         return RelType(value)
     except ValueError:
         raise ValueError(f"unknown relationship type {value!r}") from None
+
+
+def _query(params: Dict[str, str]) -> str:
+    query = params.get("q", "")
+    if len(query) > MAX_QUERY:
+        raise ValueError(f"q is longer than {MAX_QUERY} characters")
+    return query
 
 
 def _int_param(params: Dict[str, str], key: str, default: int, low: int, high: int) -> int:
@@ -211,6 +220,34 @@ class MemoryAPI:
     def get_versions(self, memory_id: str) -> Result:
         chain = self.manager.get_version_chain(memory_id)
         return 200, {"versions": [_memory_dict(n) for n in chain]}
+
+    # --- wiki -------------------------------------------------------------
+    # ponytail: one full read of the store per request, like /api/graph and
+    # /api/local; a cache keyed on a store revision if stores grow past ~50k.
+
+    def wiki_index(self, project: Optional[str]) -> Result:
+        return 200, Wiki(self.manager.graph_store, project).index()
+
+    def wiki_page(
+        self,
+        topic_id: str,
+        project: Optional[str] = None,
+        within: Optional[str] = None,
+        section: Optional[str] = None,
+        offset: int = 0,
+        limit: int = PAGE_SIZE,
+        query: str = "",
+    ) -> Result:
+        page = Wiki(self.manager.graph_store, project).page(topic_id, within, section, offset, limit, query)
+        if page is None:
+            return 404, {"error": f"No topic {topic_id}"}
+        return 200, page
+
+    def describe(self, body: Dict[str, Any]) -> Result:
+        try:
+            return 200, describe_entity(self.manager, _id(body.get("name"), "name"), body.get("description"))
+        except LookupError as e:
+            return 404, {"error": str(e.args[0])}
 
     def get_entity(self, name: str) -> Result:
         entity = self.manager.get_entity(name)
@@ -403,6 +440,33 @@ def _dispatch(api: MemoryAPI, method: str, parts: list, params: Dict[str, str], 
             expand=set(expand),
             project=project,
         )
+
+    if parts == ["wiki"] and method == "GET":
+        project = params.get("project") or None
+        if project is not None:
+            validate_project_id(project)
+        return api.wiki_index(project)
+
+    if parts == ["wiki", "page"] and method == "GET":
+        project = params.get("project") or None
+        if project is not None:
+            validate_project_id(project)
+        section = params.get("section") or None
+        if section is not None and section not in {key for key, _, _ in SECTIONS}:
+            raise ValueError(f"section must be one of {', '.join(key for key, _, _ in SECTIONS)}")
+        within = params.get("within") or None
+        return api.wiki_page(
+            _id(params.get("id"), "id"),
+            project,
+            _id(within, "within") if within else None,
+            section,
+            _int_param(params, "offset", 0, 0, 1_000_000),
+            _int_param(params, "limit", PAGE_SIZE, 1, MAX_PAGE),
+            _query(params),
+        )
+
+    if parts == ["wiki", "describe"] and method == "POST":
+        return api.describe(body)
 
     if parts == ["projects"] and method == "GET":
         return api.projects()

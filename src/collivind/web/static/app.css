@@ -400,3 +400,84 @@ dialog .actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-
 .chain-self { font-weight: 600; }
 .dup-actions { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.25rem; }
 #summaries-empty p { margin: 0 0 0.6rem; }
+
+/* ---------- wiki view: reader first, index left, topic map right ----------
+   Layout after OpenWiki's visualizer (langchain-ai/openwiki): the page is what
+   you read, the index and the map are how you get to the next one. */
+
+.wiki-view { display: grid; grid-template-columns: var(--rail) minmax(0, 1fr) minmax(16rem, 26rem); min-height: 0; }
+.wiki-index { border-right: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; min-height: 0; padding: 0.9rem 0.6rem 0.6rem; gap: 0.6rem; }
+.wiki-index input { width: 100%; }
+.w-index { overflow-y: auto; flex: 1; min-height: 0; }
+.w-index h2 { font-size: var(--step--1); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0.9rem 0.4rem 0.3rem; font-weight: 600; }
+.w-index ul { list-style: none; margin: 0; padding: 0; }
+.w-index a { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.22rem 0.45rem; border-radius: 7px; color: var(--ink-2); text-decoration: none; font-size: var(--step--1); }
+.w-index a span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.w-index a:hover { background: var(--sunk); color: var(--ink); }
+.w-index a[aria-current="page"] { background: var(--chip); color: var(--ink); font-weight: 600; }
+.wiki-view .count { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 400; font-size: 0.85em; }
+.w-keys kbd { border: 1px solid var(--line); border-radius: 4px; padding: 0 0.3rem; }
+
+.wiki-page { overflow-y: auto; min-height: 0; padding: 1.6rem clamp(1rem, 3vw, 2.6rem) 4rem; background: var(--paper); }
+.wiki-page > * { max-width: 46rem; }
+.w-head h1 { font-family: var(--display); font-size: var(--step-3); line-height: 1.15; margin: 0.1rem 0 0.5rem; }
+.w-type { margin: 0; color: var(--muted); font-size: var(--step--1); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+.w-desc { font-size: var(--step-1); color: var(--ink); margin: 0 0 0.5rem; }
+.w-meta { color: var(--ink-2); font-size: var(--step--1); margin: 0 0 0.6rem; display: flex; flex-wrap: wrap; gap: 0.25rem 0.9rem; align-items: center; }
+.w-src { color: var(--muted); }
+.w-meta button { min-height: 28px; }
+.w-within { background: var(--sunk); border-radius: var(--radius-sm); padding: 0.55rem 0.8rem; margin: 0.4rem 0 0.8rem; }
+.w-toc { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.4rem 0 0.6rem; position: sticky; top: -1.6rem; background: var(--paper); padding: 0.5rem 0; z-index: 2; }
+.w-toc a, .chip { border: 1px solid var(--line-2); border-radius: 100px; padding: 0.1rem 0.65rem; font-size: var(--step--1); color: var(--ink-2); text-decoration: none; background: var(--surface); }
+.w-toc a:hover, .chip:hover { border-color: var(--ink-2); color: var(--ink); }
+.w-section { margin: 1.4rem 0 0; }
+.w-section h2 { font-family: var(--display); font-size: var(--step-2); font-weight: 600; margin: 0 0 0.5rem; border-bottom: 1px solid var(--line); padding-bottom: 0.3rem; }
+.w-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.55rem; }
+.w-mem { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 0.55rem 0.8rem; }
+.w-mem-head { display: flex; align-items: baseline; gap: 0.55rem; }
+.w-mem-head time { margin-left: auto; color: var(--muted); font-size: var(--step--1); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.w-kind { flex: none; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--steel); min-width: 6.2rem; }
+.kind-error { color: var(--danger); }
+.kind-decision { color: var(--green-ink); }
+.w-label { all: unset; cursor: pointer; font-weight: 600; color: var(--ink); line-height: 1.35; }
+.w-label:hover { text-decoration: underline; }
+.w-label:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 3px; }
+.w-gist { margin: 0.2rem 0 0 6.75rem; color: var(--ink-2); }
+.w-att, .w-links, .w-full { margin: 0.25rem 0 0 6.75rem; font-size: var(--step--1); color: var(--muted); }
+.w-links { list-style: none; padding: 0; }
+.w-links .rel { color: var(--ink-2); font-weight: 600; margin-right: 0.25rem; }
+.w-links button { min-height: 0; padding: 0; font-size: inherit; text-align: left; text-decoration: underline; text-underline-offset: 2px; }
+.w-note { color: var(--ink-2); }
+.w-full { color: var(--ink); font-size: var(--step-0); border-left: 2px solid var(--line-2); padding-left: 0.7rem; white-space: pre-wrap; }
+.w-full p { margin: 0.2rem 0; }
+.w-full-meta { color: var(--muted); font-size: var(--step--1); white-space: normal; }
+.topic-link { color: var(--ink); text-underline-offset: 2px; }
+.w-pair { border-left: 3px solid var(--danger); padding-left: 0.6rem; display: grid; gap: 0.35rem; }
+.w-fix, .w-cause { margin-left: 1.4rem; }
+.w-pair-head { margin: 0 0 0.15rem; font-size: var(--step--1); font-weight: 700; color: var(--green-ink); }
+.w-cause .w-pair-head { color: var(--cause); }
+.w-nofix { margin: 0 0 0 1.4rem; font-size: var(--step--1); color: var(--muted); font-style: italic; }
+.w-more { margin-top: 0.5rem; }
+.w-related, .w-topics, .w-facts { margin: 0; padding-left: 1.1rem; display: grid; gap: 0.3rem; }
+.w-type-chip { font-size: 0.72rem; color: var(--muted); border: 1px solid var(--line); border-radius: 100px; padding: 0 0.45rem; }
+.w-reason { color: var(--ink-2); }
+.w-narrow { font-size: var(--step--1); margin-left: 0.3rem; color: var(--steel); }
+.w-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; margin: 0; }
+
+.wiki-map { position: relative; border-left: 1px solid var(--line); background: var(--canvas); min-height: 0; display: flex; flex-direction: column; }
+.wiki-map canvas { flex: 1; width: 100%; min-height: 0; display: block; }
+.wiki-map-tools { position: absolute; top: 0.6rem; right: 0.6rem; display: flex; gap: 0.25rem; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.wiki-map .hint { padding: 0.45rem 0.8rem; border-top: 1px solid var(--line); }
+
+@media (max-width: 1180px) { .wiki-view { grid-template-columns: var(--rail) minmax(0, 1fr) 15rem; } }
+@media (max-width: 960px) { .wiki-view { grid-template-columns: var(--rail) minmax(0, 1fr); } .wiki-map { display: none; } }
+@media (max-width: 700px) {
+  .wiki-view { grid-template-columns: 1fr; grid-template-rows: auto 1fr; overflow-y: auto; }
+  .wiki-index { border-right: 0; border-bottom: 1px solid var(--line); max-height: 35vh; }
+  .w-gist, .w-att, .w-links, .w-full { margin-left: 0; }
+  .w-mem-head { flex-wrap: wrap; }
+}
+.w-find { margin: 1rem 0 0.2rem; }
+.w-find input { width: 100%; max-width: 28rem; }
+.w-section details summary { cursor: pointer; color: var(--steel); font-size: var(--step--1); margin-top: 0.4rem; }
+.w-section details .w-related { margin-top: 0.3rem; }

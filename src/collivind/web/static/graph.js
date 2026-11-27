@@ -13,6 +13,7 @@ const EDGE_STYLE = {
   // how entities fit together: the structural edges, drawn heavier
   USES: "relation", PART_OF: "relation", IMPLEMENTS: "relation", INTERACTS_WITH: "relation", RELATED_TO: "relation",
   SUMMARIZES: "summary",
+  TOPIC: "summary", // the wiki's topic map: the reason is in the reader, not on the line
 };
 const isSummary = (d) => d.kind === "memory" && d.category === "summary";
 const LABEL_BUDGET = 220;
@@ -23,12 +24,16 @@ const EDGE_LABEL_BUDGET = 24;
 const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
 export class GraphView {
-  constructor(canvas, { onSelect, onConnect, colorOf }) {
+  // contextLabels (the wiki's topic map, after OpenWiki's visualizer): no
+  // labels at rest, only the hovered node, or the selected one and its neighbours.
+  constructor(canvas, { onSelect, onConnect, colorOf, contextLabels = false, edgeLabels = true }) {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
     this.onSelect = onSelect;
     this.onConnect = onConnect;
     this.colorOf = colorOf;
+    this.contextLabels = contextLabels;
+    this.edgeLabels = edgeLabels;
     this.byId = new Map();      // every node ever loaded, keeps positions across reloads
     this.nodes = [];            // visible
     this.links = [];            // visible, with node refs
@@ -105,7 +110,8 @@ export class GraphView {
       this.adj.get(s.id).add(t.id); this.adj.get(t.id).add(s.id);
     }
     for (const n of this.nodes) {
-      n.r0 = n.data.kind === "cluster" ? n.data.r : n.data.kind === "entity" ? (n.data.hub ? 7 : 3.6)
+      n.r0 = n.data.size !== undefined ? Math.min(16, 3 + Math.sqrt(n.data.size) * 0.9) // a topic, by its memories
+        : n.data.kind === "cluster" ? n.data.r : n.data.kind === "entity" ? (n.data.hub ? 7 : 3.6)
         : isSummary(n.data) ? Math.min(18, 8 + Math.sqrt(n.data.members || 0) * 1.4)
         : Math.min(11, 4 + Math.sqrt(n.degree) * 1.1);
     }
@@ -311,7 +317,7 @@ export class GraphView {
   // node, so 13k edges never all speak at once.
   drawEdgeLabels() {
     const anchor = this.hover || this.selected;
-    if (!anchor || !this.links.length || this.nodes[0]?.data.kind === "cluster") return;
+    if (!this.edgeLabels || !anchor || !this.links.length || this.nodes[0]?.data.kind === "cluster") return;
     const { ctx, k, tx, ty, dpr, theme: t } = this;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.font = `500 11px "Instrument Sans", system-ui, sans-serif`;
@@ -428,7 +434,10 @@ export class GraphView {
     const anchor = this.hover || this.selected;
     let pool;
     if (this.nodes.length && this.nodes[0].data.kind === "cluster") { this.drawClusterLabels(anchor); return; }
-    if (focus) pool = this.nodes.filter((n) => focus.has(n.id));
+    if (this.contextLabels) {
+      const shown = new Set([this.hover, this.selected, ...(this.selected ? this.neighbours(this.selected) : [])]);
+      pool = this.nodes.filter((n) => shown.has(n.id));
+    } else if (focus) pool = this.nodes.filter((n) => focus.has(n.id));
     else if (k >= 1.1 || this.nodes.length <= 300) pool = this.nodes; // small sets: label what fits at any zoom
     else pool = [];
     pool = pool

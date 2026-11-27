@@ -30,7 +30,7 @@ def test_server_tools_list(mock_load, mock_backends):
 
     assert response["id"] == 2
     assert "tools" in response["result"]
-    assert len(response["result"]["tools"]) == 15
+    assert len(response["result"]["tools"]) == 16
 
 
 @patch("collivind.mcp.server.create_all_backends")
@@ -43,7 +43,7 @@ def test_degraded_server_still_lists_tools(mock_load, mock_backends):
     response = server.handle_request({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
     names = [t["name"] for t in response["result"]["tools"]]
     assert "collivind_add_memory" in names
-    assert len(names) == 15
+    assert len(names) == 16
 
     call = server.handle_request(
         {

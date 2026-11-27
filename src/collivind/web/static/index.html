@@ -14,7 +14,8 @@
 <header class="topbar">
   <div class="brand"><span class="mark" aria-hidden="true"></span><span>Collivind</span></div>
   <nav class="views" aria-label="Views">
-    <button data-view="graph" aria-current="page" title="Graph (g)">Graph</button>
+    <button data-view="wiki" aria-current="page" title="Wiki: a page per topic (w)">Wiki</button>
+    <button data-view="graph" aria-current="false" title="Graph (g)">Graph</button>
     <button data-view="list" aria-current="false" title="List (l)">List</button>
     <button data-view="projects" aria-current="false" title="Projects (p)">Projects</button>
   </nav>
@@ -31,7 +32,25 @@
 <div id="error" class="error" hidden role="alert"><span id="error-text"></span><button id="error-close" class="icon" aria-label="Dismiss error">×</button></div>
 
 <main id="main">
-  <section id="view-graph" class="view graph-view" aria-label="Graph">
+  <section id="view-wiki" class="view wiki-view" aria-label="Wiki">
+    <aside class="wiki-index" aria-label="Topics by type">
+      <label class="sr-only" for="w-filter">Filter topics</label>
+      <input id="w-filter" type="search" placeholder="Filter topics (t)" autocomplete="off" spellcheck="false">
+      <div id="w-index" class="w-index"></div>
+      <p class="hint w-keys"><kbd>w</kbd> wiki · <kbd>t</kbd> filter topics · <kbd>m</kbd> topic map · <kbd>g</kbd> graph</p>
+    </aside>
+    <article id="w-page" class="wiki-page" aria-live="polite"><div class="skeleton"></div><div class="skeleton"></div></article>
+    <aside class="wiki-map" aria-label="Topic map">
+      <canvas id="w-canvas" tabindex="0" aria-label="Topic map: every topic, sized by its memories, linked to its closest topics. Click one to open its page. Arrow keys pan, plus and minus zoom, 0 fits."></canvas>
+      <div class="wiki-map-tools">
+        <button class="icon" id="w-fit" aria-label="Fit the topic map">⤢</button>
+        <button class="icon" id="w-find" aria-label="Center the map on the open topic">◎</button>
+      </div>
+      <p class="hint">Labels show around the topic you point at. Opening a page leaves the map where it is.</p>
+    </aside>
+  </section>
+
+  <section id="view-graph" class="view graph-view" hidden aria-label="Graph">
     <aside class="rail" aria-label="Filters and matches">
       <div class="views mode" role="group" aria-label="Graph mode">
         <button data-mode="overview" aria-pressed="true" title="Clusters you can open (v)">Overview</button>

@@ -262,14 +262,19 @@ Call `collivind_batch_add` ONCE with `checkpoint_id: "{checkpoint_id}"` and the 
    saved before, find its id with `collivind_search` (recalled context shows no ids) and use `target_id`. Without
    this edge the next reader finds the error and never learns it was fixed.
 5. Skip trivial chatter, secrets/credentials, and raw transcript dumps.
-6. If the response lists `possible_conflicts`, check each against the source of truth (code, docs, git
-   history, the user's words). Retire the stale or wrong memory with `collivind_invalidate` (superseded_by =
-   the one that is right). Ignore compatible ones. Only if you still cannot tell, ask the user one short
-   question (even when saving quietly), then invalidate the wrong one and save their answer.
+6. If the response lists `possible_conflicts`, check each one. If it states the same fact as a memory just
+   saved (said differently, or with other detail around it), or that memory is a newer state of it, retire it
+   with `collivind_invalidate` (superseded_by = the memory just saved); keep both only if the existing one holds
+   detail the new one lacks. Ignore a different fact that only looks similar. If they genuinely disagree, check
+   the source of truth (code, docs, git history, the user's words) and invalidate the wrong one the same way.
+   Only if you still cannot tell, ask the user one short question (even when saving quietly), then invalidate
+   the wrong one and save their answer.
 7. If the response has `summary_due`, this session has enough memories for a summary: call
    `collivind_summarize` (no `summary`) to read them, then call it again with `summary` and the `member_ids`
    it returned. The summary is a list of self-contained dated facts ("- " per line), detailed enough that
    each member's key point survives; it is what recall reads first.
+8. If the response has `description_due`, those topics have enough memories but no description: call
+   `collivind_describe_topic` for each with one or two sentences on what it is and what it is for here.
 If nothing new is worth saving, still call `collivind_batch_add` with `checkpoint_id: "{checkpoint_id}"` and
 an empty `memories` list, so the checkpoint is recorded as checked.
 {tone}

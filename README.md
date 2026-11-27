@@ -109,10 +109,34 @@ collivind web            # on the host, any mode
 
 Opens a local explorer on `127.0.0.1:8765` over the same store your hooks and
 MCP tools use (it reads `~/.collivind/config.toml` and names the mode in the
-header). Three views, keyboard reachable (`/` search, `g` `l` `p` to switch,
-`v` `e` `s` for the graph's Overview, Everything and Summaries modes, `o` for the
-selection's local graph, `Esc` to deselect):
+header). Four views, keyboard reachable (`/` search, `w` `g` `l` `p` to switch,
+`t` to filter the wiki's topics, `m` for its topic map, `v` `e` `s` for the
+graph's Overview, Everything and Summaries modes, `o` for the selection's local
+graph, `Esc` to deselect):
 
+- **Wiki** (the view it opens on): the store read as pages, one per topic: every
+  entity memories are about, every summary, every project. A page says what the
+  topic is (one or two sentences an agent stored with `collivind_describe_topic`,
+  else a sentence built from its type and typed links, such as "Docker is a tool
+  that uses Colima"), then its memories grouped by purpose: **Problems and fixes**
+  (each error shown with the memories that caused it and the fixes that resolve
+  it, wherever those are filed, with the note on each link), **Decisions**, **How
+  it works**, **Facts**, **Preferences**, **Snippets**. Each memory is one row:
+  what kind it is, its label, its date, a one-line gist from its text that the
+  label does not already say, the other topics it is under, and its links to other
+  memories in words ("is resolved by …: more disk"); click the label for the full
+  text. **Related topics** give the reason for each relation ("Docker uses Colima:
+  on the Mac", "27 shared memories", "its summary covers 8 of these") with a link
+  that narrows the page to the shared memories; **Linked from** lists the pages
+  that point here. A hub such as the project or Docker is read in pages of eight
+  per section, newest first. The sidebar indexes every topic by type with counts
+  and a filter; the topic map on the right is navigation: nothing is labelled at
+  rest, the topic you point at or open is labelled with its neighbours, opening a
+  page never moves the map, and clicking empty map does nothing. Pages have
+  addresses (`#wiki/docker`), so the browser's back button works. The layout and
+  these navigation rules follow [OpenWiki](https://github.com/langchain-ai/openwiki)'s
+  visualizer; no code or CDN is used: the explorer still loads nothing from
+  outside the machine.
 - **Graph**: memories and the entities they mention, with entity links,
   `RELATES_TO`/`DEPENDS_ON`, `CONTRADICTS` (dashed), cause and fix
   (`RESOLVES` solid green, `CAUSED_BY` dashed amber, both with arrows) and
@@ -337,7 +361,7 @@ collivind init
 
 - **SessionStart** — injects a compact index (~100 tokens) of your project's stored knowledge at the start of every session; after a compaction it also asks for the compaction checkpoint
 - **UserPromptSubmit** — searches memory with every prompt you type and injects the relevant context: up to `recall_limit` memories (`[hooks]`, default 20), packed into a `recall_max_tokens` budget (default 2,400; `--max-tokens` overrides it). On a 356-memory synthetic coding store a relevant prompt injects about 15 memories (about 2,100 tokens), and an unrelated one about 10. With the reranker on, memories it scores below `recall_min_score` (`[search]`, default 0.00002) are dropped. Two opt-in settings make recall leaner (both off by default): `recall_window` drops memories more than that many logits below a confident best match, and `recall_fallback_min_score` drops low scorers when the reranker finds no confident match at all. Measured (BENCHMARKS.md, "Recall precision"): `recall_window = 12` with `recall_limit = 10` halves recall tokens on LoCoMo, but QA accuracy on held-out conversations came out 3.4 points lower (not shown to be within the 1.5-point tolerance); `recall_fallback_min_score = 0.001` empties about half of unrelated coding prompts, but 13% of relevant prompts lost every relevant memory. When nothing passes, the hook prints nothing.
-- **Stop** — every `save_interval` responses (default 15, per session), asks the agent to checkpoint; once a session holds `summary_after` (default 8) memories no summary covers, the save's response asks the agent to write the session summary too
+- **Stop** — every `save_interval` responses (default 15, per session), asks the agent to checkpoint; once a session holds `summary_after` (default 8) memories no summary covers, the save's response asks the agent to write the session summary too, and once a topic the save touched has `describe_after` (default 5) memories and no description, it asks for a one-to-two-sentence description (`description_due`)
 - **PreCompact** — marks a compaction checkpoint due (see *Compaction* above)
 
 Registered for Claude Code (via the plugin, or `~/.claude/settings.json`), for Codex in `~/.codex/hooks.json` when `~/.codex` exists, and for GitHub Copilot in `~/.copilot/hooks/collivind.json` (camelCase events: sessionStart, userPromptTransformed, agentStop, preCompact). If any hook finds the store down it says so in the session instead of recalling nothing.
@@ -378,6 +402,7 @@ Once connected, Claude Code gets these tools:
 | `collivind_mark_conflict` | Flag two memories as a genuine, unresolved conflict for later review |
 | `collivind_get_version_chain` | Full supersession history of a memory |
 | `collivind_summarize` | Read a session's (or topic's) member memories, then store the summary the agent writes for them |
+| `collivind_describe_topic` | Store one or two sentences saying what a topic (entity) is; the memory wiki opens its page with them |
 | `collivind_extract` | Get an extraction prompt for raw text |
 | `collivind_extract_save` | Parse and store an LLM extraction response |
 
@@ -407,6 +432,8 @@ collivind web               # Local memory explorer on 127.0.0.1:8765
 collivind hook install      # Register Claude Code hooks
 collivind summarize --session <id>     # A session's memories and its current summary
 collivind summarize --session <id> --text - < summary.txt  # Store the summary you wrote (one "- " fact per line)
+collivind describe Docker   # A topic's description; add a second argument to store one ("-" reads stdin)
+collivind export --okf ./memory-wiki  # The memory wiki as Open Knowledge Format Markdown (one page per topic)
 ```
 
 Memory verbs take `--json` for scripting and agent use.
@@ -414,6 +441,27 @@ Memory verbs take `--json` for scripting and agent use.
 ### Projects
 
 Memories are filed under the project of the directory the agent works in, so an agent never has to pass `project_id`. The first of these wins: the `COLLIVIND_PROJECT` environment variable, `project = "name"` in a `.collivind.toml` at or above the directory (up to the repo root), the repo name of the `origin` remote, the main checkout's folder name (worktrees count as their repo), the directory's own name outside git, then `default`. Recall searches the current project first and falls back to `default`, where memories saved before 0.15 sit until you relabel them with `collivind projects rename`. It is a dry run unless you add `--apply`; every version of a memory moves together, ids, links and vectors are kept, and an interrupted run finishes when you run it again.
+
+### The memory wiki as Markdown (OKF)
+
+`collivind export --okf DIR [-p PROJECT]` writes the explorer's wiki pages as a directory of Markdown files in
+Google's [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
+(OKF v0.2): `entities/`, `summaries/` and `projects/`, one file per topic, an `index.md` in every directory, and the
+root `index.md` carrying `okf_version: "0.2"`. Each page has frontmatter with `type` (Tool, Service, Summary,
+Project ...), `title`, a one-sentence `description`, `tags`, `generated: {by: collivind/<version>, at: <newest memory
+on the page>}` and, for the memories whose full text is on that page, `sources` entries pointing at
+`collivind://memory/<id>`. Every relation is an ordinary relative Markdown link with its reason in the text. A memory
+is not a page of its own (on a 3,000-memory store that would be 3,000 files beside about a hundred topics): its full
+text sits once, under an anchor, on its most specific topic's page, and every other page that lists it links there.
+The output is deterministic (no clock is read; same store, same bytes), so the directory can be committed and
+diffed. Re-exporting into the same directory replaces the pages it wrote; any other non-empty directory is refused.
+
+Any OKF reader can open it. With [OpenWiki](https://github.com/langchain-ai/openwiki) installed
+(`npm install -g openwiki`), `openwiki visualize ./memory-wiki` serves a graph, sidebar and reader for it, and
+`--export site/` writes a static copy; neither needs an API key (do not run OpenWiki's generating agent on it).
+That viewer loads its scripts (force-graph, marked, DOMPurify) from the jsDelivr CDN and its font from Google Fonts,
+so the wiki text stays on your machine but the page is not offline. Collivind's own explorer loads nothing from
+outside.
 
 ### Backup and restore
 
@@ -536,6 +584,7 @@ summary_routes = 3        # top summaries returned with their best members; 0 = 
 [hooks]
 save_interval = 15        # responses between capture checkpoints, per session
 summary_after = 8         # ask for a session summary after this many uncovered memories; 0 = never
+describe_after = 5        # ask the agent to describe a topic once this many memories are about it; 0 = never
 enable_precompact = true
 enable_stop = true
 quiet_capture = true      # save without announcing routine checkpoints

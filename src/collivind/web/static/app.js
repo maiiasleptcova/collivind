@@ -8,6 +8,7 @@ import { initPanel, openNode, closePanel, currentId, refreshPanel } from "./pane
 import { initProjects, renderProjects } from "./projects.js";
 import { CATEGORY, OPEN_LIMIT, OTHER, categoryClusters, entityClusters, entityLinks, membersAt, openIds, projectClusters } from "./overview.js";
 import { railHint } from "./search.js";
+import { initWiki, loadWiki, focusFilter, focusMap, resizeMap, themeChanged } from "./wiki.js";
 
 // Off until asked for: on a real store CONTRADICTS is ~40% of all edges, and
 // drawn by default it paints the whole graph red.
@@ -18,7 +19,8 @@ const LOCAL_LIMIT = 60;  // nodes in a local graph before "Show more"
 const LOCAL_STEP = 40;
 
 const state = {
-  view: "graph",
+  view: "wiki",
+  wikiLoaded: false,
   graph: { nodes: [], edges: [], total_memories: 0, truncated: false },
   byId: new Map(),
   projects: [],
@@ -77,6 +79,13 @@ initPanel({
   confirmForget: (id) => confirmForget(id),
   confirm: (opts) => confirmAction(opts),
   duplicatesFound: (of, found) => { state.duplicates = { of, likely: new Map(found.map((d) => [d.id, d.likely])) }; updateHighlight(); },
+});
+
+initWiki({
+  colorOf,
+  project: () => state.filters.project,
+  showWiki: () => { if (state.view !== "wiki") setView("wiki"); },
+  showMemory: (id) => showOnGraph(id),
 });
 
 initProjects({
@@ -559,7 +568,9 @@ function select(id, { center = false } = {}) {
 
 function setView(name) {
   state.view = name;
-  for (const v of ["graph", "list", "projects"]) {
+  // the wiki's address is its page; any other view leaves it
+  if (name !== "wiki" && location.hash.startsWith("#wiki")) history.replaceState(null, "", location.pathname);
+  for (const v of ["wiki", "graph", "list", "projects"]) {
     $(`#view-${v}`).hidden = v !== name;
     const tab = $(`[data-view="${v}"]`);
     tab.setAttribute("aria-current", v === name ? "page" : "false");
@@ -567,6 +578,18 @@ function setView(name) {
   if (name === "list") loadList();
   if (name === "projects") renderProjects();
   if (name === "graph") view.resize();
+  if (name === "wiki") {
+    resizeMap();
+    if (!state.wikiLoaded) { state.wikiLoaded = true; loadWiki(); }
+  }
+}
+
+// A memory on the graph, wherever it is: drawn already, or fetched with its neighbourhood.
+function showOnGraph(id, label) {
+  setView("graph");
+  if (state.byId.has(id)) { select(id, { center: true }); return; }
+  state.search = { focus: true, query: label || id, results: [{ id, label }] };
+  refocus().then(() => { if (view.adj.has(id)) select(id, { center: true }); });
 }
 
 function setProject(id) {
@@ -576,6 +599,7 @@ function setProject(id) {
   $("#f-project").value = state.meta[id] ? id : "";
   view.userMoved = false;
   loadGraph();
+  if (state.wikiLoaded) loadWiki();
 }
 
 // ---- list view --------------------------------------------------------
@@ -653,13 +677,7 @@ function wireList() {
   $$("[data-forget]", list).forEach((b) => b.onclick = () => confirmForget(b.dataset.forget));
   $$("[data-show], [data-open]", list).forEach((b) => b.onclick = () => {
     const id = b.dataset.show || b.dataset.open;
-    setView("graph");
-    if (state.byId.has(id)) select(id, { center: true });
-    else {
-      const m = state.list.find((x) => x.id === id);
-      state.search = { focus: true, query: m?.summary || id, results: [{ id, label: m?.summary }] };
-      refocus().then(() => { if (view.adj.has(id)) select(id, { center: true }); });
-    }
+    showOnGraph(id, state.list.find((x) => x.id === id)?.summary);
   });
   const form = $("form.editor", list);
   if (form) {
@@ -843,7 +861,8 @@ function wireControls() {
     if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
     const keys = {
       "/": () => $("#q").focus(),
-      g: () => setView("graph"), l: () => setView("list"), p: () => setView("projects"),
+      g: () => setView("graph"), l: () => setView("list"), p: () => setView("projects"), w: () => setView("wiki"),
+      t: () => { setView("wiki"); focusFilter(); }, m: () => { setView("wiki"); focusMap(); },
       v: () => { setView("graph"); setMode("overview"); }, e: () => { setView("graph"); setMode("all"); },
       s: () => { setView("graph"); setMode("summaries"); },
       o: () => { if (state.selected) toggleLocal(); },
@@ -860,7 +879,7 @@ function applyTheme(name) {
   else document.documentElement.dataset.theme = name;
   $("#theme").setAttribute("aria-label", `Theme: ${name}. Change theme`);
   $("#theme-label").textContent = name === "auto" ? "Auto" : name === "light" ? "Light" : "Dark";
-  requestAnimationFrame(() => view.readTheme());
+  requestAnimationFrame(() => { view.readTheme(); themeChanged(); });
 }
 function cycleTheme() {
   const now = document.documentElement.dataset.theme || "auto";
@@ -868,7 +887,7 @@ function cycleTheme() {
   try { localStorage.setItem("collivind-theme", next); } catch { /* private mode: theme just isn't remembered */ }
   applyTheme(next);
 }
-matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => view.readTheme());
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { view.readTheme(); themeChanged(); });
 
 // ---- boot -------------------------------------------------------------
 
@@ -886,6 +905,7 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => view
     $("#store").textContent = `${s.mode} store`;
   } catch { $("#store").textContent = "store unknown"; }
   try { await loadProjects(); } catch (e) { showError(e); }
+  setView("wiki");
   await loadGraph();
 })();
 
