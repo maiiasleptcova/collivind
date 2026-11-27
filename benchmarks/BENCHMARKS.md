@@ -1079,7 +1079,11 @@ retires the first), surfaced (both kept and the first returned in
 | 0.21 | 52 of 75 (69%): 6 rejected, 33 merged, 13 surfaced | 39 of 80 (49%) |
 | 0.22 | 61 of 75 (81%): all surfaced | 0 of 80 |
 
-### Recall precision (0.22.0): a stopping rule, measured and left off
+## Recall precision (0.23.0): a stopping rule, measured and left off
+
+Measured on the 0.21.0 code (0.21 write-time dedup at cosine 0.92), before
+0.22 stopped merging near-duplicates; the "0.21" baselines below are that
+code, so they differ from the 0.22 figures in the section above.
 
 Goal: the prompt hook should give the same answers for clearly fewer tokens
 and inject nothing when nothing is relevant. Split fixed before tuning:
@@ -1153,7 +1157,7 @@ the answers is not measured: depth is a plausible suspect (on dev, memories
 window-only arm was run on held-out data, so nothing is claimed for it. The
 floor empties about half of unrelated coding prompts, but 7 of the 54
 relevant blind prompts (13%) lost every relevant memory.
-**So 0.22.0 ships both settings off** (`recall_window = 0`,
+**So 0.23.0 ships both settings off** (`recall_window = 0`,
 `recall_fallback_min_score = 0`, `recall_limit = 20`, which returns exactly
 what 0.21 returned) as opt-ins for anyone who prefers fewer tokens. Latency is unchanged (search
 bench, 10k memories, p95 192.6 ms rerank on vs 192.5 ms on 0.21 code, same
