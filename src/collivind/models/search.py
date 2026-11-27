@@ -22,6 +22,11 @@ class SearchQuery:
     # recall only: drop results whose cross-encoder score (0..1) is below this.
     # Applies only when the reranker ran; None or 0 = no cutoff.
     min_rerank_score: Optional[float] = None
+    # recall only, and only when the reranker ran (see search_engine._recall_trim):
+    # with a confident match, drop results more than this many logits below the
+    # best; with none, drop results scoring below fallback_min_score. None or 0 = off.
+    rerank_window: Optional[float] = None
+    fallback_min_score: Optional[float] = None
 
 
 @dataclass

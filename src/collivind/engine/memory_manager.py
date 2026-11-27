@@ -7,7 +7,7 @@ from collivind.config import CollivindConfig
 from collivind.engine.conflicts import MAX_CANDIDATES, is_live, same_memory
 from collivind.engine.dedup import Deduplicator, Neighbour
 from collivind.engine.enrichment import build_enriched_text
-from collivind.engine.search_engine import SearchEngine
+from collivind.engine.search_engine import SearchEngine, recall_query
 from collivind.exceptions import BatchPartiallyStoredError, GraphStoreUnavailableError
 from collivind.models import (
     EntityCreate,
@@ -518,13 +518,7 @@ class MemoryManager:
         max_tokens greedily packs results in score order using a len/4
         token estimate. Importance-aware budgeting lives in collivind-pro.
         """
-        query = SearchQuery(
-            query=query_str,
-            project_id=project_id,
-            limit=limit,
-            min_rerank_score=self.config.search.recall_min_score,
-        )
-        results, degraded = self.search_with_status(query)
+        results, degraded = self.search_with_status(recall_query(self.config.search, query_str, project_id, limit))
 
         if not results:
             return "No relevant context found in Collivind." + (f"\n{DEGRADED_NOTE}" if degraded else "")

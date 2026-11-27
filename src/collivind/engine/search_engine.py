@@ -44,6 +44,48 @@ def _sigmoid(logit: float) -> float:
     return 1.0 / (1.0 + math.exp(-max(-50.0, min(50.0, logit))))
 
 
+def _logit(p: float) -> float:
+    p = min(max(p, 1e-300), 1.0 - 1e-16)
+    return math.log(p / (1.0 - p))
+
+
+def _recall_trim(results: List[SearchResult], query: SearchQuery) -> List[SearchResult]:
+    """Recall-path stopping rule (query.rerank_window, query.fallback_min_score); a no-op when both are unset.
+
+    Two cases, told apart by the best cross-encoder score in the list. When
+    some result clears the model's relevance boundary, keep those within
+    rerank_window logits of the best: a strong match makes weak ones noise.
+    When none does, the order is the first stage's and the model is saying
+    nothing here answers the prompt; keep only results scoring at least
+    fallback_min_score, which is usually none. Order is never changed.
+    Measured in BENCHMARKS.md ("Recall precision").
+    """
+    scores = [r.rerank_score for r in results if r.rerank_score is not None]
+    if not scores or len(scores) != len(results):
+        return results  # the reranker did not score this list
+    best = max(scores)
+    if best >= _sigmoid(RERANK_GATE_LOGIT):
+        if not query.rerank_window:
+            return results
+        floor = _logit(best) - query.rerank_window
+        return [r for r in results if _logit(r.rerank_score or 0.0) >= floor]
+    if not query.fallback_min_score:
+        return results
+    return [r for r in results if (r.rerank_score or 0.0) >= query.fallback_min_score]
+
+
+def recall_query(config: SearchConfig, query: str, project_id: str, limit: int) -> SearchQuery:
+    """The query recall (get_context, the prompt hook) runs: explicit search builds a plain SearchQuery."""
+    return SearchQuery(
+        query=query,
+        project_id=project_id,
+        limit=limit,
+        min_rerank_score=config.recall_min_score,
+        rerank_window=config.recall_window,
+        fallback_min_score=config.recall_fallback_min_score,
+    )
+
+
 def _rrf(rankings: List[List[str]], k: int = RRF_K) -> List[str]:
     """Reciprocal rank fusion. Ties keep first-seen order, so dense wins ties."""
     scores: Dict[str, float] = {}
@@ -180,7 +222,7 @@ class SearchEngine:
             reranked = self._rerank(query, candidates, results, dense, now)
             if reranked is not None:
                 routed = self._route_summaries(query, vector, vector_filters, reranked, now)
-                return (routed if routed is not None else reranked[: query.limit]), degraded
+                return _recall_trim(routed if routed is not None else reranked[: query.limit], query), degraded
         return results[: query.limit], degraded
 
     def _can_rerank(self) -> bool:

@@ -11,6 +11,14 @@ from .exceptions import ConfigurationError
 # 10 unrelated prompts recall nothing. Higher values cut more noise but drop
 # indirect matches (LongMemEval preference questions) that sit at the floor.
 RECALL_MIN_SCORE_DEFAULT = 0.00002
+# Recall stopping rule, off by default (BENCHMARKS.md, "Recall precision").
+# recall_window = 12 with recall_limit = 10 halved recall tokens on held-out
+# LoCoMo, but QA accuracy came out 3.4 points lower (95% CI -6.7 to -0.1), so
+# staying within 1.5 points was not shown. The floor at 0.001 emptied half the
+# unrelated coding prompts, but 13% of relevant prompts written blind to the
+# scores lost every relevant memory.
+RECALL_WINDOW_DEFAULT = 0.0
+RECALL_FALLBACK_MIN_SCORE_DEFAULT = 0.0
 
 
 @dataclass
@@ -78,6 +86,14 @@ class SearchConfig:
     # cross-encoder score is below this, so an unrelated prompt recalls
     # nothing. 0 disables. Explicit search never applies it.
     recall_min_score: float = RECALL_MIN_SCORE_DEFAULT
+    # Recall only, after the cutoff; both 0 (off) by default. When some memory
+    # clears the reranker's relevance boundary, drop memories more than
+    # recall_window logits below the best one. When none does (the reranker
+    # finds nothing relevant), keep only memories scoring at least
+    # recall_fallback_min_score. Trades answer accuracy for fewer tokens and
+    # fewer unrelated memories; see the constants above.
+    recall_window: float = RECALL_WINDOW_DEFAULT
+    recall_fallback_min_score: float = RECALL_FALLBACK_MIN_SCORE_DEFAULT
     # When a summary memory is among the reranked candidates, return the top
     # `summary_routes` summaries followed by their best member memories (and
     # the best other memories); 0 treats summaries as ordinary results.
@@ -108,6 +124,23 @@ class SearchConfig:
             raise ConfigurationError(
                 f"[search] recall_min_score must be a number from 0 to below 1, got {self.recall_min_score!r}"
             )
+        if (
+            isinstance(self.recall_window, bool)
+            or not isinstance(self.recall_window, (int, float))
+            or not (0.0 <= self.recall_window <= 50.0)
+        ):
+            raise ConfigurationError(
+                f"[search] recall_window must be a number from 0 to 50, got {self.recall_window!r}"
+            )
+        if (
+            isinstance(self.recall_fallback_min_score, bool)
+            or not isinstance(self.recall_fallback_min_score, (int, float))
+            or not (0.0 <= self.recall_fallback_min_score < 1.0)
+        ):
+            raise ConfigurationError(
+                "[search] recall_fallback_min_score must be a number from 0 to below 1, "
+                f"got {self.recall_fallback_min_score!r}"
+            )
         for name in ("rerank", "lexical"):
             if not isinstance(getattr(self, name), bool):
                 raise ConfigurationError(f"[search] {name} must be true or false, got {getattr(self, name)!r}")
@@ -126,7 +159,9 @@ class HooksConfig:
     # memories the prompt hook recalls per prompt, packed into a token budget
     # (len/4 estimate); `hook user-prompt --max-tokens` overrides the budget.
     # 2400 fits about 20 coding-length memories (~120 tokens each); the recall
-    # cutoff runs first, so an unrelated prompt still injects nothing.
+    # cutoff runs first. 10 together with [search] recall_window = 12 halved the
+    # tokens, but held-out LoCoMo QA came out 3.4 points lower (BENCHMARKS.md,
+    # "Recall precision").
     recall_limit: int = 20
     recall_max_tokens: int = 2400
     # Ask the agent for a session summary once a session holds this many
@@ -255,6 +290,12 @@ lexical = true
 # scores below this (0..1), so an unrelated prompt recalls nothing. 0 = off.
 # Explicit search never applies it.
 recall_min_score = 0.00002
+# Recall stopping rule, off by default: with a confident match, drop memories
+# more than recall_window logits below the best (12 measured); with none, keep
+# only memories scoring at least recall_fallback_min_score (0.001 measured).
+# Fewer tokens and fewer unrelated memories, at some cost in answers.
+recall_window = 0.0
+recall_fallback_min_score = 0.0
 # A summary among the candidates returns the top N summaries plus their most
 # relevant member memories. 0 = treat summaries as ordinary results.
 summary_routes = 3

@@ -60,14 +60,15 @@ def score(question, owners, answer_texts, hits_pool, hits_k) -> Dict[str, float]
     row = {"session_r@5": float(bool(set(top_sessions(sessions, 5)) & set(question["answer_session_ids"])))}
     for k in KS:
         row[f"turn_hit@{k}"] = float(any(h.memory.content in answer_texts for h in hits_k[:k]))
+    row["returned"] = float(len(hits_k))  # memories recall returned at limit max(KS)
     return row
 
 
 def run_question(question, embedder, arms):
     from collivind.config import CollivindConfig, EmbeddingsConfig
     from collivind.engine.memory_manager import MemoryManager
-    from collivind.engine.search_engine import SearchEngine
-    from collivind.models import MemoryCategory, MemoryCreate, SearchQuery
+    from collivind.engine.search_engine import SearchEngine, recall_query
+    from collivind.models import MemoryCategory, MemoryCreate
     from collivind.storage.factory import create_all_backends
 
     with tempfile.TemporaryDirectory(prefix="collivind-lme-") as tmp:
@@ -114,8 +115,8 @@ def run_question(question, embedder, arms):
         }
         for arm, overrides in arms.items():
             engine = SearchEngine(vector, graph, embedder, replace(config.search, **overrides))
-            cutoff = engine.config.recall_min_score  # the recall path: cutoff on (inert with rerank off)
-            ask = lambda n: SearchQuery(query=question["question"], project_id="lme", limit=n, min_rerank_score=cutoff)  # noqa: E731
+            # the recall path: cutoff and stopping rule on (inert with rerank off)
+            ask = lambda n: recall_query(engine.config, question["question"], "lme", n)  # noqa: E731
             pool = engine.search(ask(POOL))
             top = engine.search(ask(max(KS)))
             row[arm] = score(question, resolved, answer_texts, pool, top)
@@ -142,6 +143,7 @@ def report(rows: List[Dict[str, Any]], arms: Sequence[str]) -> Dict[str, Any]:
                     else None
                     for k in KS
                 },
+                "returned": round(sum(r[arm].get("returned", 0.0) for r in rs) / len(rs), 2),
             }
     return summary
 
@@ -154,7 +156,14 @@ def main() -> None:
     parser.add_argument("--summary", default=None)
     args = parser.parse_args()
 
-    arms = {"rerank": {}, "no_rerank": {"rerank": False}}
+    # rerank = the shipped defaults; rerank_021 = the 0.21 recall (cutoff only, no window or
+    # floor); rerank_w12 = the 0.22 candidate's window (the 0.22 study ran it as "rerank")
+    arms = {
+        "rerank": {},
+        "rerank_021": {"recall_window": 0.0, "recall_fallback_min_score": 0.0},
+        "rerank_w12": {"recall_window": 12.0, "recall_fallback_min_score": 0.0},  # the 0.22 candidate
+        "no_rerank": {"rerank": False},
+    }
     picked = pick(json.loads(Path(args.dataset).read_text()), args.per_type)
     print(f"{len(picked)} questions", flush=True)
     rows, embedder, started = [], None, time.time()

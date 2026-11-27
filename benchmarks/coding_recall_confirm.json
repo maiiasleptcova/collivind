@@ -1,0 +1,744 @@
+{
+  "prompts": [
+    {
+      "id": "c001",
+      "project": "shopfront",
+      "prompt": "GET /api/v1/customers/me/addresses blows up:\n\npydantic_core._pydantic_core.ValidationError: 1 validation error for CustomerOut\naddresses\n  Input should be a valid list [type=list_type, input_value=<sqlalchemy.orm.dynamic.AppenderQuery object at 0x7f3a1c2d9e50>, input_type=AppenderQuery]\n\nthe schema has addresses: list[AddressOut]",
+      "relevant": [
+        "m076",
+        "m195"
+      ]
+    },
+    {
+      "id": "c002",
+      "project": "shopfront",
+      "prompt": "is it ok if I merge and deploy the coupon category restriction work tonight? it's basically done on feat/coupon-categories",
+      "relevant": [
+        "m281",
+        "m325"
+      ]
+    },
+    {
+      "id": "c003",
+      "project": "shopfront",
+      "prompt": "Rewrite rebuild_sitemaps as a celery chord: one child task per sitemap file, and when they're all finished write sitemap-index.xml.",
+      "relevant": [
+        "m216",
+        "m231"
+      ]
+    },
+    {
+      "id": "c004",
+      "project": "shopfront",
+      "prompt": "export_orders_to_kestrel failed last night: paramiko.ssh_exception.SSHException: Server 'sftp.kestrel-logistics.test' not found in known_hosts. can we just switch to AutoAddPolicy so this stops happening?",
+      "relevant": [
+        "m298"
+      ]
+    },
+    {
+      "id": "c005",
+      "project": "shopfront",
+      "prompt": "Ops tried to remove the 'EU 47 / black' option of an old trail shoe in the admin and got an error page. They just want it gone from the shop.",
+      "relevant": [
+        "m005"
+      ]
+    },
+    {
+      "id": "c006",
+      "project": "shopfront",
+      "prompt": "a support agent tried to give a customer back exactly 100 euros and the admin said forbidden. 99,99 works. bug or policy?",
+      "relevant": [
+        "m347",
+        "m308"
+      ]
+    },
+    {
+      "id": "c007",
+      "project": "shopfront",
+      "prompt": "alembic upgrade in CI:\npsycopg.errors.UndefinedObject: type \"citext\" does not exist\nLINE 1: ALTER TABLE customers ADD COLUMN newsletter_email citext\nthe migration is one op.add_column, nothing fancy",
+      "relevant": [
+        "m189"
+      ]
+    },
+    {
+      "id": "c008",
+      "project": "shopfront",
+      "prompt": "We added a per-100ml unit price for each variant on the product page and now PDPs feel sluggish on staging. Did we profile something like this before?",
+      "relevant": [
+        "m032"
+      ]
+    },
+    {
+      "id": "c009",
+      "project": "shopfront",
+      "prompt": "I need a new order state on_hold between authorized and packed for manual fraud review. Where do I add it, and what breaks if the admin view just sets order.status = 'on_hold'?",
+      "relevant": [
+        "m091",
+        "m269"
+      ]
+    },
+    {
+      "id": "c010",
+      "project": "shopfront",
+      "prompt": "write a repository fn for the last 5 orders of a customer (account page). mypy complains about the return type when I return session.scalars(...).all() typed as list[Order]",
+      "relevant": [
+        "m239",
+        "m175"
+      ]
+    },
+    {
+      "id": "c011",
+      "project": "shopfront",
+      "prompt": "When someone logs in through the mobile API with stuff already in their anonymous cart, the items vanish. Logging in on the website doesn't have that problem. What does the web do differently?",
+      "relevant": [
+        "m121"
+      ]
+    },
+    {
+      "id": "c012",
+      "project": "shopfront",
+      "prompt": "A customer paid by bank debit, the order went to authorized, we shipped it, and four days later the payment failed. Is that how it's supposed to work for us?",
+      "relevant": [
+        "m318"
+      ]
+    },
+    {
+      "id": "c013",
+      "project": "shopfront",
+      "prompt": "I'm adding product tags to search_vector with weight D. alembic autogenerate produced an empty migration — expected?",
+      "relevant": [
+        "m053",
+        "m030"
+      ]
+    },
+    {
+      "id": "c014",
+      "project": "shopfront",
+      "prompt": "Write a Celery task that emails customers when their parcel is delayed. It needs to hit ParcelHub /tracking first, which throws 503s now and then.",
+      "relevant": [
+        "m221",
+        "m209"
+      ]
+    },
+    {
+      "id": "c015",
+      "project": "shopfront",
+      "prompt": "how do I follow one customer's checkout across the web and worker logs? I have the order number and roughly the time",
+      "relevant": [
+        "m083"
+      ]
+    },
+    {
+      "id": "c016",
+      "project": "shopfront",
+      "prompt": "Show the previous price struck through next to the current one on category cards when a product is on sale.",
+      "relevant": [
+        "m285"
+      ]
+    },
+    {
+      "id": "c017",
+      "project": "shopfront",
+      "prompt": "Customer emailed asking us to delete everything we have on them, order history included. Write a service function that hard-deletes the customer with ON DELETE CASCADE.",
+      "relevant": [
+        "m148"
+      ]
+    },
+    {
+      "id": "c018",
+      "project": "shopfront",
+      "prompt": "Deploy is stuck, shopfront-migrate job is in BackoffLimitExceeded:\n\npsycopg.errors.LockNotAvailable: canceling statement due to lock timeout\n[SQL: ALTER TABLE orders ADD COLUMN gift_message TEXT NOT NULL DEFAULT '']\n\nwhat now",
+      "relevant": [
+        "m273",
+        "m113"
+      ]
+    },
+    {
+      "id": "c019",
+      "project": "shopfront",
+      "prompt": "Add ParcelHub and Stripe connectivity checks to /readyz so we notice when they're down.",
+      "relevant": [
+        "m064"
+      ]
+    },
+    {
+      "id": "c020",
+      "project": "shopfront",
+      "prompt": "add a lightbox to the product image gallery, just pull photoswipe from unpkg in base.html",
+      "relevant": [
+        "m087"
+      ]
+    },
+    {
+      "id": "c021",
+      "project": "shopfront",
+      "prompt": "Swiss customers keep asking to see prices in CHF. Add a currency dropdown in the header.",
+      "relevant": [
+        "m210"
+      ]
+    },
+    {
+      "id": "c022",
+      "project": "ferrosync",
+      "prompt": "first push to a new bucket:\nError: PermanentRedirect: The bucket you are attempting to access must be addressed using the specified endpoint. Please send all future requests to this endpoint.\nmy profile has region = \"eu-central-1\"",
+      "relevant": [
+        "m008"
+      ]
+    },
+    {
+      "id": "c023",
+      "project": "ferrosync",
+      "prompt": "my sync root is on an external SSD formatted for both mac and windows, and every push re-hashes all 200 GB even though nothing changed",
+      "relevant": [
+        "m014"
+      ]
+    },
+    {
+      "id": "c024",
+      "project": "ferrosync",
+      "prompt": "Implement #158: a --max-size flag so people can skip huge files",
+      "relevant": [
+        "m204",
+        "m085"
+      ]
+    },
+    {
+      "id": "c025",
+      "project": "ferrosync",
+      "prompt": "A user removed a folder locally by mistake and then ran push --delete. Bucket versioning is on. How do they get the files back using fsync itself?",
+      "relevant": [
+        "m065"
+      ]
+    },
+    {
+      "id": "c026",
+      "project": "ferrosync",
+      "prompt": "big initial sync of ~3M small files dies after a few minutes with SlowDown: Please reduce your request rate. (status 503)",
+      "relevant": [
+        "m186"
+      ]
+    },
+    {
+      "id": "c027",
+      "project": "ferrosync",
+      "prompt": "With KMS encryption in the profile, small files upload fine but anything over 64 MiB gets access denied. Their IAM admin swears the policy is fine.",
+      "relevant": [
+        "m346"
+      ]
+    },
+    {
+      "id": "c028",
+      "project": "ferrosync",
+      "prompt": "every request fails with RequestTimeTooSkewed on a user's Proxmox VM. can fsync just correct for the offset automatically?",
+      "relevant": [
+        "m211",
+        "m342"
+      ]
+    },
+    {
+      "id": "c029",
+      "project": "ferrosync",
+      "prompt": "I want to rename the `modified` reason in `fsync plan --json` to `content-changed`, reads better. ok to just do it?",
+      "relevant": [
+        "m044",
+        "m022"
+      ]
+    },
+    {
+      "id": "c030",
+      "project": "ferrosync",
+      "prompt": "Windows user: fsync pull fails on a key named logs/con.log and on 'notes/what?.md' with os error 123",
+      "relevant": [
+        "m202"
+      ]
+    },
+    {
+      "id": "c031",
+      "project": "ferrosync",
+      "prompt": "When a run includes a couple of 30 GB VM images, uploads of the small files start failing with connect timeouts. Network looks fine. What's blocking?",
+      "relevant": [
+        "m351"
+      ]
+    },
+    {
+      "id": "c032",
+      "project": "ferrosync",
+      "prompt": "Setting up a profile for Cloudflare R2. Multipart uploads come back NotImplemented, single puts work.",
+      "relevant": [
+        "m270"
+      ]
+    },
+    {
+      "id": "c033",
+      "project": "ferrosync",
+      "prompt": "Could fsync read the access keys from 1Password instead of ~/.aws/credentials? A few users asked for it.",
+      "relevant": [
+        "m020"
+      ]
+    },
+    {
+      "id": "c034",
+      "project": "trailmate",
+      "prompt": "Execution failed for task ':app:mergeReleaseResources'.\n> [string/app_name] /Users/ci/trailmate/android/app/src/staging/res/values/strings.xml\t[string/app_name] /Users/ci/trailmate/android/app/build/generated/res/resValues/staging/release/values/gradleResValues.xml: Error: Duplicate resources",
+      "relevant": [
+        "m073"
+      ]
+    },
+    {
+      "id": "c035",
+      "project": "trailmate",
+      "prompt": "Some users on Samsung phones see 'NaN km' as the hike distance. iOS is fine.",
+      "relevant": [
+        "m280",
+        "m114"
+      ]
+    },
+    {
+      "id": "c036",
+      "project": "trailmate",
+      "prompt": "can we ship the trail list sorting fix over the air instead of waiting for store review?",
+      "relevant": [
+        "m317"
+      ]
+    },
+    {
+      "id": "c037",
+      "project": "trailmate",
+      "prompt": "Shared hike links like https://trailmate.test/h/123 open in Chrome instead of the app on Play Store builds; locally installed debug builds open the app fine.",
+      "relevant": [
+        "m086"
+      ]
+    },
+    {
+      "id": "c038",
+      "project": "trailmate",
+      "prompt": "Library screen stutters badly when scrolling through a few hundred hikes on a Galaxy A-series phone",
+      "relevant": [
+        "m262"
+      ]
+    },
+    {
+      "id": "c039",
+      "project": "paygate",
+      "prompt": "Can two concurrent Refund calls for the same payment end up refunding more than was captured?",
+      "relevant": [
+        "m219"
+      ]
+    },
+    {
+      "id": "c040",
+      "project": "paygate",
+      "prompt": "I want to add an optional surcharge to AuthorizeRequest. Should I use google.type.Money for it, and can I reuse field number 7 that we removed last year?",
+      "relevant": [
+        "m059",
+        "m035"
+      ]
+    },
+    {
+      "id": "c041",
+      "project": "paygate",
+      "prompt": "starting on ResumeAuthorization for 3DS. besides the handler and the proto change, what does the PR need?",
+      "relevant": [
+        "m348",
+        "m097"
+      ]
+    },
+    {
+      "id": "c042",
+      "project": "paygate",
+      "prompt": "locally every payment I try for 20.05 gets declined with code 05 and 10.99 just hangs until it times out. is my setup broken?",
+      "relevant": [
+        "m245"
+      ]
+    },
+    {
+      "id": "c043",
+      "project": "paygate",
+      "prompt": "ledgerflow wants a merchant_country field on PaymentCaptured. what are the rules for changing event schemas?",
+      "relevant": [
+        "m183",
+        "m035"
+      ]
+    },
+    {
+      "id": "c044",
+      "project": "paygate",
+      "prompt": "a client retried Capture with the same idempotency-key but a different amount and got FailedPrecondition \"idempotency key reused with different request\". are we wrong here?",
+      "relevant": [
+        "m176"
+      ]
+    },
+    {
+      "id": "c045",
+      "project": "infra-live",
+      "prompt": "ExternalSecret shopfront-stripe stuck:\nSecretSyncedError: could not get secret data from provider: ResourceNotFoundException: Secrets Manager can't find the specified secret.\nremoteRef.key is arn:aws:secretsmanager:eu-central-1:000000000000:secret:prod/shopfront/stripe-AbCdE",
+      "relevant": [
+        "m106"
+      ]
+    },
+    {
+      "id": "c046",
+      "project": "infra-live",
+      "prompt": "We merged the PR that bumps the shop database to r6g.2xlarge and the atlantis apply was green, but two days later the console still shows xlarge.",
+      "relevant": [
+        "m251"
+      ]
+    },
+    {
+      "id": "c047",
+      "project": "infra-live",
+      "prompt": "Stripe issued us a new secret key. Walk me through swapping it in prod without downtime.",
+      "relevant": [
+        "m098",
+        "m355"
+      ]
+    },
+    {
+      "id": "c048",
+      "project": "infra-live",
+      "prompt": "argo: kube-prometheus-stack OutOfSync forever, sync result says metadata.annotations: Too long: must have at most 262144 bytes",
+      "relevant": [
+        "m084"
+      ]
+    },
+    {
+      "id": "c049",
+      "project": "infra-live",
+      "prompt": "tiny prod change, one security group rule. atlantis queue is backed up so I'll just terraform apply from my laptop, ok?",
+      "relevant": [
+        "m017"
+      ]
+    },
+    {
+      "id": "c050",
+      "project": "ledgerflow",
+      "prompt": "ingest_shopfront failed on COPY INTO:\nNumeric value '3,50' is not recognized\n  File 'shopfront/legacy_vouchers/manual__2026-11-25T02:00:00/part-00003.parquet', line 1, character 14",
+      "relevant": [
+        "m198"
+      ]
+    },
+    {
+      "id": "c051",
+      "project": "ledgerflow",
+      "prompt": "Security wants the Airflow service user's Snowflake credentials rotated this quarter. How do we do it without the nightly DAGs failing?",
+      "relevant": [
+        "m094",
+        "m331"
+      ]
+    },
+    {
+      "id": "c052",
+      "project": "ledgerflow",
+      "prompt": "dbt_daily should also wait for ingest_billing. I'll put an ExternalTaskSensor in front of it, fine?",
+      "relevant": [
+        "m089",
+        "m306"
+      ]
+    },
+    {
+      "id": "c053",
+      "project": "ledgerflow",
+      "prompt": "Adding marts/finance/fct_refunds. What tests, docs and meta does it need so CI and the evaluator pass?",
+      "relevant": [
+        "m040",
+        "m291"
+      ]
+    },
+    {
+      "id": "c054",
+      "project": "ledgerflow",
+      "prompt": "Write a dbt Python model that scores churn probability per customer with scikit-learn.",
+      "relevant": [
+        "m144"
+      ]
+    },
+    {
+      "id": "c055",
+      "project": "shopfront",
+      "prompt": "Add a skip-to-content link and visible focus outlines to the storefront header navigation for keyboard users.",
+      "relevant": []
+    },
+    {
+      "id": "c056",
+      "project": "shopfront",
+      "prompt": "Add a dark mode to the storefront with Tailwind's class strategy and a toggle in the header that remembers the choice in localStorage.",
+      "relevant": []
+    },
+    {
+      "id": "c057",
+      "project": "shopfront",
+      "prompt": "make a print stylesheet for the order confirmation page so customers can print a clean receipt without the nav and footer",
+      "relevant": []
+    },
+    {
+      "id": "c058",
+      "project": "shopfront",
+      "prompt": "We show the default Flask error pages on 404 and 500 for normal page loads. Build proper ones that match the storefront layout.",
+      "relevant": []
+    },
+    {
+      "id": "c059",
+      "project": "shopfront",
+      "prompt": "Product descriptions should support basic markdown (bold, lists, links). Render it safely on the product page.",
+      "relevant": []
+    },
+    {
+      "id": "c060",
+      "project": "shopfront",
+      "prompt": "we're getting lots of bot signups. add a honeypot field to the registration form",
+      "relevant": []
+    },
+    {
+      "id": "c061",
+      "project": "shopfront",
+      "prompt": "Make the storefront header sticky on scroll and collapse the category nav into a hamburger menu on mobile, using Alpine.",
+      "relevant": []
+    },
+    {
+      "id": "c062",
+      "project": "shopfront",
+      "prompt": "Add an RSS feed of the 50 newest products at /feeds/new.xml",
+      "relevant": []
+    },
+    {
+      "id": "c063",
+      "project": "shopfront",
+      "prompt": "Category pages are indexed with every ?sort= and ?page= variant. Add rel=canonical tags so search engines see one URL per category page.",
+      "relevant": []
+    },
+    {
+      "id": "c064",
+      "project": "shopfront",
+      "prompt": "Add a password strength meter (zxcvbn) under the password field on the registration and change-password forms.",
+      "relevant": []
+    },
+    {
+      "id": "c065",
+      "project": "shopfront",
+      "prompt": "add a back-to-top button that shows up after scrolling down on long category pages",
+      "relevant": []
+    },
+    {
+      "id": "c066",
+      "project": "shopfront",
+      "prompt": "Add a WhatsApp click-to-chat button on the product page with the product name prefilled in the message.",
+      "relevant": []
+    },
+    {
+      "id": "c067",
+      "project": "shopfront",
+      "prompt": "what's the difference between __str__ and __repr__ in python",
+      "relevant": []
+    },
+    {
+      "id": "c068",
+      "project": "shopfront",
+      "prompt": "write a python function that splits a list into chunks of n items",
+      "relevant": []
+    },
+    {
+      "id": "c069",
+      "project": "shopfront",
+      "prompt": "CSS grid vs flexbox — when should I use which?",
+      "relevant": []
+    },
+    {
+      "id": "c070",
+      "project": "shopfront",
+      "prompt": "explain python context managers and write one that times a block of code",
+      "relevant": []
+    },
+    {
+      "id": "c071",
+      "project": "shopfront",
+      "prompt": "git: how do I squash my last 3 commits into one?",
+      "relevant": []
+    },
+    {
+      "id": "c072",
+      "project": "shopfront",
+      "prompt": "write a debounce function in plain JS",
+      "relevant": []
+    },
+    {
+      "id": "c073",
+      "project": "ferrosync",
+      "prompt": "Write a Nix flake that builds the fsync binary and provides a dev shell.",
+      "relevant": []
+    },
+    {
+      "id": "c074",
+      "project": "ferrosync",
+      "prompt": "Set Content-Type on uploaded objects based on the file extension so files open correctly when served from the bucket.",
+      "relevant": []
+    },
+    {
+      "id": "c075",
+      "project": "ferrosync",
+      "prompt": "Add `fsync diff <path>` that downloads the remote object and shows a unified text diff against the local file.",
+      "relevant": []
+    },
+    {
+      "id": "c076",
+      "project": "ferrosync",
+      "prompt": "`fsync --version` should also print the git commit, target triple and rustc version. Use vergen or similar.",
+      "relevant": []
+    },
+    {
+      "id": "c077",
+      "project": "ferrosync",
+      "prompt": "Warn when the sync root is inside iCloud Drive or Dropbox, since those folders may contain placeholder files that aren't actually on disk.",
+      "relevant": []
+    },
+    {
+      "id": "c078",
+      "project": "ferrosync",
+      "prompt": "Design a plugin system so third parties can ship destination backends as dynamic libraries loaded at runtime.",
+      "relevant": []
+    },
+    {
+      "id": "c079",
+      "project": "ferrosync",
+      "prompt": "explain lifetime elision rules in Rust with examples",
+      "relevant": []
+    },
+    {
+      "id": "c080",
+      "project": "ferrosync",
+      "prompt": "what's the difference between Arc and Rc",
+      "relevant": []
+    },
+    {
+      "id": "c081",
+      "project": "ferrosync",
+      "prompt": "write a rust function that reverses the order of words in a string",
+      "relevant": []
+    },
+    {
+      "id": "c082",
+      "project": "ferrosync",
+      "prompt": "can you explain Pin and Unpin in async Rust? I never really got it",
+      "relevant": []
+    },
+    {
+      "id": "c083",
+      "project": "trailmate",
+      "prompt": "Show a compass heading cone on the user location puck on the map, using the magnetometer.",
+      "relevant": []
+    },
+    {
+      "id": "c084",
+      "project": "trailmate",
+      "prompt": "Replace the default white launch screen with react-native-bootsplash using our logo on both platforms.",
+      "relevant": []
+    },
+    {
+      "id": "c085",
+      "project": "trailmate",
+      "prompt": "Support landscape on tablets for the Explore map, the layout currently breaks on iPad when rotated.",
+      "relevant": []
+    },
+    {
+      "id": "c086",
+      "project": "trailmate",
+      "prompt": "explain the difference between useMemo and useCallback",
+      "relevant": []
+    },
+    {
+      "id": "c087",
+      "project": "trailmate",
+      "prompt": "write a TypeScript DeepPartial<T> type",
+      "relevant": []
+    },
+    {
+      "id": "c088",
+      "project": "paygate",
+      "prompt": "Write a Go helper that masks a PAN for logging, keeping the first 6 and last 4 digits.",
+      "relevant": []
+    },
+    {
+      "id": "c089",
+      "project": "paygate",
+      "prompt": "add govulncheck to CI and fail the build on known vulnerabilities in our dependencies",
+      "relevant": []
+    },
+    {
+      "id": "c090",
+      "project": "paygate",
+      "prompt": "Add a dependabot config for our Go modules and GitHub Actions, grouped weekly updates.",
+      "relevant": []
+    },
+    {
+      "id": "c091",
+      "project": "paygate",
+      "prompt": "explain Go's select statement with a timeout example",
+      "relevant": []
+    },
+    {
+      "id": "c092",
+      "project": "paygate",
+      "prompt": "what is a goroutine leak and how do I find one?",
+      "relevant": []
+    },
+    {
+      "id": "c093",
+      "project": "infra-live",
+      "prompt": "Write a Terraform module for an SQS queue with a dead-letter queue and a redrive policy.",
+      "relevant": []
+    },
+    {
+      "id": "c094",
+      "project": "infra-live",
+      "prompt": "Enable GuardDuty in all our AWS accounts with Terraform and send findings to a central account.",
+      "relevant": []
+    },
+    {
+      "id": "c095",
+      "project": "infra-live",
+      "prompt": "Set up cross-region replication for the shopfront media bucket to eu-west-1 for disaster recovery.",
+      "relevant": []
+    },
+    {
+      "id": "c096",
+      "project": "infra-live",
+      "prompt": "awk one-liner to sum the third column of a CSV",
+      "relevant": []
+    },
+    {
+      "id": "c097",
+      "project": "infra-live",
+      "prompt": "how does DNS TTL affect failover time? practical numbers please",
+      "relevant": []
+    },
+    {
+      "id": "c098",
+      "project": "ledgerflow",
+      "prompt": "Write a Snowflake JavaScript UDF that computes the Levenshtein distance between two strings.",
+      "relevant": []
+    },
+    {
+      "id": "c099",
+      "project": "ledgerflow",
+      "prompt": "When should I use a TRANSIENT table vs a TEMPORARY table in Snowflake?",
+      "relevant": []
+    },
+    {
+      "id": "c100",
+      "project": "ledgerflow",
+      "prompt": "Snowflake SQL to normalize German phone numbers like '0171 1234567' or '+49 (171) 123-4567' to E.164.",
+      "relevant": []
+    },
+    {
+      "id": "c101",
+      "project": "ledgerflow",
+      "prompt": "write a python script that merges several CSV files with the same header into one",
+      "relevant": []
+    },
+    {
+      "id": "c102",
+      "project": "ledgerflow",
+      "prompt": "explain ROWS vs RANGE in SQL window frames",
+      "relevant": []
+    }
+  ]
+}

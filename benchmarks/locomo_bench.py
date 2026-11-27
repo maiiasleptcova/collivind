@@ -256,10 +256,12 @@ def parse_search_overrides(pairs: Sequence[str]) -> Dict[str, Any]:
 
 
 def run(args) -> None:
-    from collivind.models import SearchQuery
+    from collivind.engine.search_engine import recall_query
 
     data = json.loads(Path(args.dataset).read_text())
     ks = sorted({int(k) for k in args.top_k.split(",")})
+    if args.convs:
+        data = [s for s in data if s["sample_id"] in args.convs.split(",")]
     pairs = select_questions(data, args.limit)
     client = make_judge_client() if args.qa else None
     metrics = [f"{m}@{k}" for k in ks for m in ("hit", "strict_hit", "recall")] + (["correct"] if args.qa else [])
@@ -304,14 +306,7 @@ def run(args) -> None:
                 skipped["evidence turn in no live memory (scored as a miss)"] += 1
 
             # the recall path (prompt hook / get_context): the recall cutoff applies
-            hits = manager.search(
-                SearchQuery(
-                    query=qa["question"],
-                    project_id=pid,
-                    limit=max(ks),
-                    min_rerank_score=manager.config.search.recall_min_score,
-                )
-            )
+            hits = manager.search(recall_query(manager.config.search, qa["question"], pid, max(ks)))
             ranked = [set(ingested[pid]["owners"].get(h.memory.id, set())) for h in hits]
             row: Dict[str, Any] = {
                 # ids only: the dataset text is CC BY-NC and is not redistributed
@@ -321,6 +316,8 @@ def run(args) -> None:
                 "category_name": CATEGORIES.get(qa["category"], str(qa["category"])),
                 "evidence": sorted(evidence),
                 "retrieved": [sorted(r) for r in ranked],
+                "returned": len(hits),
+                "returned_chars": sum(len(h.memory.content) for h in hits),
                 # the session each returned memory itself belongs to (not the turns it superseded)
                 "retrieved_sessions": [f"D{(h.memory.session_id or '').rsplit('-s', 1)[-1]}" for h in hits],
                 **score_retrieval(ranked, evidence, ks),
@@ -351,6 +348,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("dataset", help="path to locomo10.json")
     parser.add_argument("--limit", type=int, default=None, help="first N questions (smoke mode)")
+    parser.add_argument("--convs", default=None, help="comma-separated sample ids (default: all)")
     parser.add_argument("--top-k", default="5,10", help="comma-separated K values")
     parser.add_argument("--model", default="BAAI/bge-small-en-v1.5", help="local embedding model")
     parser.add_argument("--qa", action="store_true", help="also answer + LLM-judge each question (paid API)")
