@@ -7,6 +7,7 @@ binding a socket. Every handler returns (status, payload).
 from typing import Any, Dict, Optional, Tuple
 
 from collivind.engine.descriptions import describe_entity
+from collivind.engine.entity_duplicates import merge_command
 from collivind.engine.memory_manager import LINKABLE
 from collivind.engine.projects import list_projects, set_project_meta, validate_project_id
 from collivind.models import MemoryCategory, MemoryCreate, RelType, SearchQuery
@@ -254,6 +255,13 @@ class MemoryAPI:
         if entity is None:
             return 404, {"error": f"No entity named {name!r}"}
         return 200, entity
+
+    def entity_duplicates(self, entity_id: str) -> Result:
+        """Read-only: candidate duplicate groups holding this entity, with the CLI dry run that would merge them.
+        Name embeddings are skipped so a panel never waits on the embedder."""
+        groups = self.manager.find_duplicate_entities(use_embeddings=False)
+        mine = [{**g, "command": merge_command(g)} for g in groups if any(m["id"] == entity_id for m in g["members"])]
+        return 200, {"groups": mine}
 
     # --- write ------------------------------------------------------------
 
@@ -528,6 +536,9 @@ def _dispatch(api: MemoryAPI, method: str, parts: list, params: Dict[str, str], 
 
     if parts == ["entity"] and method == "GET":
         return api.get_entity(_id(params.get("name"), "name"))
+
+    if len(parts) == 3 and parts[0] == "entities" and parts[2] == "duplicates" and method == "GET":
+        return api.entity_duplicates(_id(parts[1], "entity id"))
 
     if len(parts) == 2 and parts[0] == "entities" and method == "GET":
         return api.get_entity(parts[1])

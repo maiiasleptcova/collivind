@@ -220,6 +220,11 @@ class GraphStore(ABC):
         """
         raise NotImplementedError(f"{type(self).__name__} cannot delete relationships")
 
+    def delete_entity(self, entity_id: str) -> None:
+        """Delete one entity node by id. Refuses (ValueError) while any edge still touches it,
+        so a caller that forgot to move an edge fails loudly instead of losing it."""
+        raise NotImplementedError(f"{type(self).__name__} cannot delete entities")
+
     @abstractmethod
     def get_version_chain(self, memory_id: str) -> List[MemoryNode]:
         """Walk the supersession chain for a memory, returning all versions oldest-first."""

@@ -142,6 +142,7 @@ function render() {
         <button class="quiet" id="p-wiki" title="What it is, its memories by purpose, and why it connects to other topics">Read its page</button>
         <button class="quiet" id="p-local" aria-pressed="${ctx.local() ? "true" : "false"}">Local graph</button>
       </div>
+      <section class="panel-section" id="p-edups" hidden></section>
       <section class="panel-section"><h3>Connections</h3>${connectionsMarkup(n.id)}${linkFormMarkup()}</section>`;
   }
   // the wiki opens on its own address (#wiki/<id>); app.js switches views on it
@@ -149,6 +150,24 @@ function render() {
   $$(".project-dot", body).forEach((el) => { el.style.background = ctx.colorOf(el.dataset.color); });
   wire();
   if (current.kind === "memory") loadExtras(current.data);
+  else loadEntityDuplicates(current.id);
+}
+
+// Read-only hint: other entities that may be this one under another name.
+// Merging is a CLI step (dry run first), never a click here.
+async function loadEntityDuplicates(id) {
+  const res = await api(`/api/entities/${encodeURIComponent(id)}/duplicates`).catch(() => null);
+  const box = $("#p-edups");
+  if (!box || current?.id !== id || !res?.groups?.length) return;
+  box.hidden = false;
+  box.innerHTML = `<h3>Possibly the same as</h3>
+    <ul class="dups">${res.groups.map((g) => `<li>
+      ${g.members.filter((x) => x.id !== id).map((x) =>
+        `<button class="link-like" data-goto="${esc(x.id)}">${esc(x.name)}</button> <span class="when">${x.memories} memories</span>`).join(", ")}
+      <span class="when">${esc(g.pairs.map((p) => p.evidence.map((e) => e.reason).join("+")).join(", "))}</span>
+      <p class="hint">Merge in a terminal (dry run first, add --apply to write): <code>${esc(g.command)}</code></p>
+    </li>`).join("")}</ul>`;
+  $$("[data-goto]", box).forEach((b) => b.onclick = () => ctx.select(b.dataset.goto, { center: true }));
 }
 
 // ---- cause and fix, likely duplicates -----------------------------------

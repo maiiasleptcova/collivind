@@ -225,6 +225,16 @@ class Neo4jGraphStore(GraphStore):
             record = session.run(query, source_id=source_id, target_id=target_id).single()
         return int(record["n"]) if record else 0
 
+    def delete_entity(self, entity_id: str) -> None:
+        # plain DELETE, not DETACH: Neo4j refuses while any relationship remains
+        query = "MATCH (e:Entity {id: $id}) OPTIONAL MATCH (e)-[r]-() RETURN count(r) AS n"
+        with self.driver.session(database=self.config.database) as session:
+            record = session.run(query, id=entity_id).single()
+            left = int(record["n"]) if record else 0
+            if left:
+                raise ValueError(f"entity {entity_id!r} still has {left} edges")
+            session.run("MATCH (e:Entity {id: $id}) DELETE e", id=entity_id)
+
     def get_neighbors(
         self,
         node_id: str,

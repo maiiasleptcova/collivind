@@ -1,12 +1,15 @@
 import logging
 import time
 from dataclasses import replace
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 from collivind.config import CollivindConfig
 from collivind.engine.conflicts import MAX_CANDIDATES, is_live, same_memory
 from collivind.engine.dedup import Deduplicator, Neighbour
 from collivind.engine.enrichment import build_enriched_text
+from collivind.engine.entity_duplicates import find_duplicates
+from collivind.engine.entity_merge import MergePlan, apply_merge, plan_merge
 from collivind.engine.search_engine import SearchEngine, recall_query
 from collivind.exceptions import BatchPartiallyStoredError, GraphStoreUnavailableError
 from collivind.models import (
@@ -344,6 +347,24 @@ class MemoryManager:
             }
             self._aliases_read_at = now
         return self._aliases.get(entity_slug(name), name)
+
+    def find_duplicate_entities(
+        self, project: Optional[str] = None, use_embeddings: bool = True, threshold: float = 0.92
+    ) -> List[dict]:
+        """Candidate groups of entities that may be one thing; see engine/entity_duplicates.py. Reads only."""
+        embedder = self.embedding_provider if use_embeddings else None
+        return find_duplicates(self.graph_store, embedder, project=project, threshold=threshold)
+
+    def plan_entity_merge(self, keep: str, others: Sequence[str]) -> MergePlan:
+        """What merging `others` into `keep` would change. Reads only."""
+        return plan_merge(self.graph_store, keep, others)
+
+    def merge_entities(self, plan: MergePlan, backup: Path) -> Dict[str, int]:
+        """Apply a merge plan after writing `backup`; the merged names become aliases at once."""
+        try:
+            return apply_merge(self.graph_store, plan, backup)
+        finally:
+            self._aliases_read_at = float("-inf")
 
     def _relate_entities(self, rel: EntityRelation) -> None:
         """Write '<source> <type> <target>' between two entities named by an agent."""
